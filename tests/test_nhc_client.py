@@ -7,7 +7,7 @@ import respx
 
 from eyewall.models.storm import AdvNum, Basin
 from eyewall.net import HttpError, new_client, user_agent
-from eyewall.providers.base import StormProvider
+from eyewall.providers.base import ParseError, StormProvider
 from eyewall.providers.nhc import ids
 from eyewall.providers.nhc.client import NhcClient
 from eyewall.providers.nhc.current import parse_current_storms
@@ -292,14 +292,18 @@ async def test_forecast_gis_follows_the_storms_zip_url(nhc):
 
 
 @respx.mock
-async def test_forecast_gis_is_none_when_the_zip_is_missing_or_broken(nhc):
+async def test_forecast_gis_fails_when_the_zip_is_missing_or_broken(nhc):
+    """A failure is raised, not hidden as None, so the poller asks again."""
     erin = _erin()
     route = respx.get(erin.forecast_track.zip_url).respond(404)
-    assert await nhc.forecast_gis(erin) is None
+    with pytest.raises(HttpError):
+        await nhc.forecast_gis(erin)
     route.respond(200, content=b"<html>oops</html>")
-    assert await nhc.forecast_gis(erin) is None
+    with pytest.raises(ParseError):
+        await nhc.forecast_gis(erin)
     route.respond(503)
-    assert await nhc.forecast_gis(erin) is None
+    with pytest.raises(HttpError):
+        await nhc.forecast_gis(erin)
 
 
 @respx.mock
@@ -312,7 +316,8 @@ async def test_track_is_the_storms_bdeck_keyed_by_id(nhc):
     assert route.called
     assert track.number == 22  # whatever the file holds; the URL is built from the ep id, not the CP bin
     route.respond(404)
-    assert await nhc.track(nolo) is None
+    with pytest.raises(HttpError):  # linked but not posted yet: the poller asks again
+        await nhc.track(nolo)
 
 
 @respx.mock
@@ -351,7 +356,8 @@ async def test_graphics_uses_the_landing_url_from_the_storm_and_falls_back_to_th
 
 
 @respx.mock
-async def test_graphics_failure_is_an_empty_tuple(nhc):
+async def test_graphics_failure_is_raised(nhc):
     erin = _erin()
     respx.get(erin.forecast_graphics.url).respond(500)
-    assert await nhc.graphics(erin) == ()
+    with pytest.raises(HttpError):
+        await nhc.graphics(erin)

@@ -30,7 +30,7 @@ from eyewall.models.storm import AdvNum, Basin, CurrentStorms, ProductRef, Storm
 from eyewall.models.track import BDeckFile, BestTrack, BestTrackGis
 from eyewall.models.watches import AlertsResult
 from eyewall.models.wind import WindRadiiGis
-from eyewall.net import Fetched, FetchError, fetch_bytes
+from eyewall.net import Fetched, FetchError, HttpError, fetch_bytes
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc import ids
 from eyewall.providers.nhc.alerts import parse_alerts, parse_product, parse_product_list
@@ -74,6 +74,14 @@ class Response[T]:
     @property
     def missing(self) -> bool:
         return self.fetched.missing
+
+
+def _present[T](response: Response[T]) -> T | None:
+    """The value of a product the feed links to. A 404 is an error here (NHC has not posted it yet), unlike for the
+    optional files fetched elsewhere, so the poller asks again instead of settling the advisory without it."""
+    if response.missing:
+        raise HttpError(response.fetched.url, response.fetched.status)
+    return response.value
 
 
 class NhcClient:
@@ -288,28 +296,21 @@ class NhcClient:
         )
 
     async def forecast_gis(self, storm: Storm) -> ForecastGis | None:
+        """The forecast GIS zip; None when the feed links none. A failed fetch or parse raises, so the poller asks
+        again (a zip NHC has not posted yet is an HTTP 404)."""
         ref = storm.forecast_track or storm.track_cone
         if ref is None or not ref.zip_url:
             return None
-        try:
-            return (await self.fetch_forecast_gis(ref.zip_url)).value
-        except (FetchError, ParseError):
-            return None
+        return _present(await self.fetch_forecast_gis(ref.zip_url))
 
     async def radii_gis(self, storm: Storm) -> WindRadiiGis | None:
         ref = storm.forecast_wind_radii
         if ref is None or not ref.zip_url:
             return None
-        try:
-            return (await self.fetch_radii_gis(ref.zip_url)).value
-        except (FetchError, ParseError):
-            return None
+        return _present(await self.fetch_radii_gis(ref.zip_url))
 
     async def track(self, storm: Storm) -> BestTrack | None:
-        try:
-            return (await self.fetch_bdeck(storm.id)).value
-        except (FetchError, ParseError, ValueError):
-            return None
+        return _present(await self.fetch_bdeck(storm.id))
 
     async def outlook_text(self, *, fallback: bool = False) -> tuple[OutlookText, ...]:
         """The outlook text for each basin that could be fetched and parsed (tgftp only unless `fallback`)."""
@@ -335,7 +336,4 @@ class NhcClient:
             landing = ids.graphics_landing_url(ids.parse_bin(storm.bin_number))
         if landing is None:
             return ()
-        try:
-            return (await self.fetch_graphics(landing)).value or ()
-        except (FetchError, ParseError, ValueError):
-            return ()
+        return _present(await self.fetch_graphics(landing)) or ()

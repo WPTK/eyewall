@@ -122,6 +122,13 @@ class Store:
             events += ev.watch_warning_events(state.storm, previous, advisories, now)
             events += ev.discussion_events(state.storm, previous, advisories, now)
             changes["advisories"] = advisories
+            # The cone and the wind radii belong to one advisory; never show the previous advisory's next to this text.
+            current = None if advisories.forecast is None else advisories.forecast.adv_num
+            if current is not None:
+                if state.forecast_gis is not None and state.forecast_gis.adv_num not in (None, current):
+                    changes["forecast_gis"] = None
+                if state.radii_gis is not None and state.radii_gis.adv_num not in (None, current):
+                    changes["radii_gis"] = None
         if forecast_gis is not None:
             changes["forecast_gis"] = forecast_gis
         if radii_gis is not None:

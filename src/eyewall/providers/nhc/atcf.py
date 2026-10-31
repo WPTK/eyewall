@@ -18,8 +18,8 @@ Observed behaviours the code handles:
 
 from __future__ import annotations
 
-import gzip
 import re
+import zlib
 from datetime import UTC, datetime
 
 from eyewall.models.track import BDeckFile, BestTrack, BestTrackFix
@@ -27,6 +27,7 @@ from eyewall.models.wind import QuadrantRadii, WindRadii
 from eyewall.providers.base import ParseError
 
 _GZIP_MAGIC = b"\x1f\x8b"
+MAX_BDECK_BYTES = 32 * 1024 * 1024  # a long storm's b-deck is about 1 MB; this stops a decompression bomb
 _COORD = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<hemisphere>[NSEW])$")
 _LISTING = re.compile(
     r'<a href="(?P<name>b(?P<basin>al|ep|cp)(?P<number>\d{2})(?P<year>\d{4})\.dat)">[^<]*</a>\s*'
@@ -77,10 +78,25 @@ def _quadrants(fields: list[str]) -> QuadrantRadii | None:
     return None
 
 
+def _gunzip(data: bytes) -> bytes:
+    """Decompress a gzipped b-deck, never producing more than `MAX_BDECK_BYTES`. A cut-off, corrupt or oversized body is
+    a ParseError, like any other body that cannot be read."""
+    inflater = zlib.decompressobj(wbits=31)
+    try:
+        raw = inflater.decompress(data, MAX_BDECK_BYTES + 1)
+        if len(raw) > MAX_BDECK_BYTES or inflater.unconsumed_tail:
+            raise ParseError(f"b-deck larger than {MAX_BDECK_BYTES // (1024 * 1024)} MB once decompressed")
+        if not inflater.eof:
+            raise ParseError("b-deck gzip data is cut off")
+    except zlib.error as exc:
+        raise ParseError(f"b-deck is not valid gzip data: {exc}") from exc
+    return raw
+
+
 def parse_bdeck(data: bytes | str) -> BestTrack:
     """Parse a b-deck (plain or gzipped). Raises ParseError when no line holds a usable fix."""
     if isinstance(data, bytes):
-        raw = gzip.decompress(data) if data[:2] == _GZIP_MAGIC else data
+        raw = _gunzip(data) if data[:2] == _GZIP_MAGIC else data
         text = raw.decode("utf-8", errors="replace")
     else:
         text = data

@@ -4,15 +4,16 @@ Two implementations exist, `LiveSource` (the real NOAA services through a disk c
 bundle on a virtual clock). The store, the poller and the UI cannot tell them apart.
 
 Every method is an async fetch of one feed's current content. A fetch that fails raises `eyewall.net.FetchError`; a
-product that does not exist (no GIS zip yet, a buoy that is dark) is an empty value, not an error. Sources do not
-decide when to fetch: the poller does, and calls the heavy ones (`advisory`, the GIS zips, `graphics`) only when a
-storm's advisory number changes.
+product that does not exist (a buoy that is dark, a storm with no wind radii) is an empty value, not an error; a
+product the feed links to but NOAA has not posted yet (a GIS zip, the best track) is a failure, so the poller asks
+again. Sources do not decide when to fetch: the poller does, and calls the heavy ones (`advisory`, the GIS zips,
+`graphics`) only when a storm's advisory number changes.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.forecast import ForecastGis
@@ -31,6 +32,7 @@ from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult
 from eyewall.models.wind import WindRadiiGis
+from eyewall.net import FetchError
 
 # The feed names shared by the source, the poller and the status bar.
 STORMS = "storms"
@@ -40,6 +42,16 @@ BUOYS = "buoys"
 TIDES = "tides"
 SATELLITE = "satellite"
 FEEDS = (STORMS, OUTLOOK, ALERTS, BUOYS, TIDES, SATELLITE)
+
+
+@runtime_checkable
+class ThrottleReporting(Protocol):
+    """A source that can tell the poller its last poll of a feed was answered from the disk cache because the server
+    said 429 or 5xx. The data is old but usable; the poller backs off as it would after a failure."""
+
+    def throttle(self, feed: str) -> tuple[FetchError, float | None] | None:
+        """The error and the server's Retry-After seconds (None if absent), or None when the poll was not throttled."""
+        ...
 
 
 class DataSource(Protocol):

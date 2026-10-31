@@ -76,12 +76,13 @@ class LiveSource:
     ) -> None:
         self._clock: Clock = clock or SystemClock()
         self.cache = Cache(cache_dir)
-        self.cache.prune(CACHE_MAX_AGE, self._clock.now())
+        self._pruned: asyncio.Task[int] | None = None  # the first request starts it; every request waits for it
         self._http = new_client(transport=CachingTransport(self.cache, transport))
         self.nhc = NhcClient(self._http)
         self.ndbc = NdbcClient(self._http)
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
+        self._throttled: dict[str, tuple[FetchError, float | None]] = {}
         self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
         self._shared: dict[str, tuple[asyncio.Task[Any], float]] = {}  # request key -> (its task, when it started)
 
@@ -94,17 +95,33 @@ class LiveSource:
     def stale(self, feed: str) -> bool:
         return self._stale.get(feed, False)
 
+    def _prune(self) -> int:
+        try:
+            return self.cache.prune(CACHE_MAX_AGE, self._clock.now())
+        except Exception:  # the cache is an optimization; a broken directory is not a reason to fail a request
+            return 0
+
     def start_poll(self, feed: str) -> None:
         self._stale[feed] = False
+        self._throttled.pop(feed, None)
+
+    def throttle(self, feed: str) -> tuple[FetchError, float | None] | None:
+        """The 429 or 5xx the cache covered for in this feed's last poll, and the server's Retry-After."""
+        return self._throttled.get(feed)
 
     @contextlib.asynccontextmanager
     async def _feed(self, feed: str) -> AsyncIterator[None]:
         """Record whether any request made for this feed was answered from the cache instead of the network."""
+        if self._pruned is None:  # old cache entries go on a worker thread, before the first request reads any
+            self._pruned = asyncio.ensure_future(asyncio.to_thread(self._prune))
+        await asyncio.shield(self._pruned)
         with watch_stale() as marker:
             try:
                 yield
             finally:
                 self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
+                if marker.failure is not None and feed not in self._throttled:
+                    self._throttled[feed] = (marker.failure, marker.retry_after)
 
     async def _shared_call[T](self, key: str, call: Callable[[], Awaitable[T]], reuse: float = 0.0) -> T:
         """One request for every caller that asks for `key` while it is in flight, and for `reuse` seconds after it

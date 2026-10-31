@@ -61,3 +61,6 @@ and move an item into a milestone brief when it is scheduled.
 - Footer (#16): `t` now works only on the Advisory tab (it used to jump there from any tab), and `p` does nothing off the Buoys and Tides tabs (the toast that explained it is gone).
 - Footer (#16): the keys that fit depend on the status text's width, so a key can appear or vanish at the edge when the `next` countdown changes length; pin the status width if it distracts.
 - Footer (#16): `q`, `g`, `O`, `A`, `w`, `S`, `/`, `r`, `u` and the replay keys are in `?` help only; the snapshot tests pin the status line, so `tests/test_footer.py` checks the footer instead.
+- Poller: the feeds are still polled one after another; `FEED_DEADLINE` bounds a hung host, but independent feeds (buoys, tides, satellite) could run concurrently. Parked: it changes the ordering the store and the alert engine rely on.
+- Poller: when a new advisory arrives the old cone and wind radii are dropped (they carry their advisory number); the graphics links are not, because a graphics page lists intermediate advisories under their own numbers. They are refetched with the cone and retried like it.
+- Cache: parsing a large body (the 1 MB NESDIS listing, the zips) still happens on the UI loop; only the disk reads, writes and the startup prune moved to a thread.

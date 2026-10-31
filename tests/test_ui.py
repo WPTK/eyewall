@@ -190,7 +190,10 @@ async def test_quiet_source_shows_outlook_areas_and_opens_the_outlook() -> None:
         assert "Central Pacific" in screen_text(app) or "Hawaiian" in screen_text(app)
 
 
-async def test_a_dead_network_marks_feeds_stale_without_crashing() -> None:
+async def test_a_dead_network_marks_feeds_stale_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "eyewall.poll.REFRESH_MIN_GAP", 0.0
+    )  # `r` is throttled on live data; this test presses it at once
     source = ScriptedSource()
     app = scripted_app(source)
     async with running(app) as pilot:

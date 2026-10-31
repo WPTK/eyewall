@@ -17,12 +17,17 @@ succeeding or stop happening, or when the source had to answer from its disk cac
 
 **Intervals.** Away mode triples every interval; coming back from it makes the feeds due a few seconds apart. After a
 failed poll the delay doubles per consecutive failure up to `backoff_max` and never drops below the normal
-interval. `refresh()` wakes the loop and makes every feed due.
+interval. A server that says 429 or 5xx counts as a failure even when the disk cache answered for it, and its
+Retry-After sets a floor on the wait. `refresh()` wakes the loop and makes every feed due, but never sooner than
+`REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. A feed that runs past
+`FEED_DEADLINE` seconds is cut off, so one hung host cannot hold up the others.
 
 **What is refetched.** `CurrentStorms` is polled on the storms interval; a storm's advisory text, GIS zips, best track
 and graphics are fetched only when its advisory number or last-update time changes. The api.weather.gov copy of the
 text is a gated fallback: asked for only when tgftp still serves the previous advisory, from the second attempt on, and
-given up after `FALLBACK_ATTEMPTS`. The alerts feed is polled only while a storm is a US threat.
+given up after `FALLBACK_ATTEMPTS`. A product that fails (a GIS zip not posted yet, a 503) is asked for again on
+the next polls, up to `PRODUCT_ATTEMPTS`; the advisory is not settled before. The alerts feed is polled only while
+a storm is a US threat.
 """
 
 from __future__ import annotations
@@ -41,10 +46,9 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.obs import TideStation
 from eyewall.models.watches import AlertsResult
-from eyewall.net import FetchError
-from eyewall.providers.base import ParseError
+from eyewall.net import RateLimited
 from eyewall.sources import protocol
-from eyewall.sources.protocol import DataSource
+from eyewall.sources.protocol import DataSource, ThrottleReporting
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.events import current_adv, fetched_adv, missing_products
 from eyewall.state.store import Store, storm_key
@@ -52,6 +56,9 @@ from eyewall.state.store import Store, storm_key
 STALE_FACTOR = 2.5
 AWAY_FACTOR = 3.0
 FALLBACK_ATTEMPTS = 3
+PRODUCT_ATTEMPTS = 12  # polls (about an hour at the default interval) a failing product is asked for before giving up
+REFRESH_MIN_GAP = 30.0  # seconds between attempts of one feed, however often the refresh key is pressed
+FEED_DEADLINE = 300.0  # seconds one feed's poll may take in all
 MAX_IN_FLIGHT = 4
 STAGGER_SECONDS = 0.25
 RETURN_STAGGER_SECONDS = 3.0  # between the feeds' first polls after the user comes back from away mode
@@ -112,6 +119,7 @@ class _FeedState:
     next_at: float = 0.0
     from_cache: bool = False
     polls: int = 0
+    last_attempt: float | None = None
 
 
 async def no_sleep(_seconds: float) -> None:
@@ -161,6 +169,8 @@ class Poller:
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
         self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
+        self.feed_deadline = FEED_DEADLINE
+        self._partial: list[Event] = []  # events a feed produced before its deadline cut it off
 
     # ---- timing -----------------------------------------------------------------------------------------------
 
@@ -245,10 +255,15 @@ class Poller:
 
     # ---- running ----------------------------------------------------------------------------------------------
 
-    def refresh(self) -> None:
-        """Make every feed due now and wake the loop."""
+    def refresh(self, *, throttled: bool = False) -> None:
+        """Make every feed due now and wake the loop. With `throttled` (the refresh key on live data) a feed attempted
+        less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead."""
+        now = self.clock.monotonic()
         for state in self._feeds.values():
-            state.next_at = 0.0
+            if throttled and state.last_attempt is not None and now < state.last_attempt + REFRESH_MIN_GAP:
+                state.next_at = min(state.next_at, state.last_attempt + REFRESH_MIN_GAP)
+            else:
+                state.next_at = 0.0
         if not self.polling:
             self._wake.set()
 
@@ -280,13 +295,27 @@ class Poller:
         events: list[Event] = []
         error: Exception | None = None
         self.fetch_counts[feed] = self.fetch_counts.get(feed, 0) + 1
+        state.last_attempt = self.clock.monotonic()
         self.source.start_poll(feed)
+        self._partial = []
+        retry_after: float | None = None
         try:
-            events = await self._fetchers[feed]()
+            async with asyncio.timeout(self.feed_deadline):
+                events = await self._fetchers[feed]()
         except asyncio.CancelledError:
             raise
+        except TimeoutError:
+            error = TimeoutError(f"the {feed} feed took more than {self.feed_deadline:.0f} s")
+            events = self._partial
         except Exception as exc:  # a parser bug must not kill the poll loop either
             error = exc
+            events = self._partial
+        if error is None and isinstance(self.source, ThrottleReporting):
+            throttled = self.source.throttle(feed)
+            if throttled is not None:  # a 429 or 5xx the cache answered for: old data, but still a failure
+                error, retry_after = throttled
+        if isinstance(error, RateLimited):
+            retry_after = error.retry_after
         state.polls += 1
         if error is None:
             state.failures = 0
@@ -296,7 +325,10 @@ class Poller:
         else:
             state.failures += 1
             state.last_error = error
-        state.next_at = self.clock.monotonic() + self.delay(feed)
+        wait = self.delay(feed)
+        if retry_after:
+            wait = max(wait, min(retry_after, self.config.backoff_max))
+        state.next_at = self.clock.monotonic() + wait
         shown: list[Event] = []
         try:
             shown = self.engine.process(events, self.source.now()) if events else []
@@ -333,11 +365,15 @@ class Poller:
     async def _poll_storms(self) -> list[Event]:
         now = self.source.now()
         events = self.store.apply_storms(await self.source.storms(), now)
+        self._partial = events  # the store has moved on; these events must survive a failure or a deadline below
         for storm_id, state in list(self.store.storms.items()):
             key = storm_key(state.storm)
             if state.fetched_key == key:
                 continue
-            events += await self._fetch_products(storm_id, key)
+            try:
+                events += await self._fetch_products(storm_id, key)
+            except Exception:  # one storm's bad product must not cost the others theirs, nor the events above
+                log.exception("fetching the products of %s failed", storm_id)
         if not self.store.us_threat():
             self.store.apply_alerts(AlertsResult())  # the alerts feed is off now; do not keep showing its last answer
         return events
@@ -369,7 +405,7 @@ class Poller:
             if name in pending:
                 value = await self._optional(getattr(self.source, name)(storm), name, failed)
                 got[name] = value
-        retry = bool(failed) and attempt < FALLBACK_ATTEMPTS  # a failed product is asked for again, within the cap
+        retry = bool(failed) and attempt < PRODUCT_ATTEMPTS  # a failed product is asked for again, within the cap
         if retry:
             self._pending[(storm_id, key)] = failed
         else:
@@ -391,7 +427,8 @@ class Poller:
         """A product that fails does not discard the others; it is noted in `failed` so the storm is tried again."""
         try:
             return await call
-        except (FetchError, ParseError, ValueError):
+        except Exception:  # a failure of any kind: the other products still count, and this one is asked for again
+            log.warning("the %s of a storm could not be fetched", name, exc_info=True)
             failed.add(name)
             return None
 
@@ -426,8 +463,8 @@ class Poller:
                 await self._sleep(index % MAX_IN_FLIGHT * STAGGER_SECONDS)
                 try:
                     self.store.apply_series(await self.source.ndbc_series(station_id))
-                except (FetchError, ParseError):
-                    return
+                except Exception:  # one station's bad answer must not fail the others
+                    log.debug("the series of buoy %s could not be fetched", station_id, exc_info=True)
 
         await asyncio.gather(*(one(i, sid) for i, sid in enumerate(wanted)))
         return self.store.buoy_events(self.source.now())
@@ -438,7 +475,9 @@ class Poller:
             self._stations_at["coops"] = self.clock.monotonic()
         gauges: dict[str, TideStation] = {}
         for storm_id in self.store.storms:
-            for entry in self.store.nearby_tides(storm_id)[:MAX_TIDE_GAUGES]:
+            for entry in self.store.nearby_tides(storm_id):
+                if len(gauges) >= MAX_TIDE_GAUGES:
+                    break
                 gauges[entry.station.id] = entry.station
         known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
@@ -453,8 +492,8 @@ class Poller:
                 await self._sleep(index % MAX_IN_FLIGHT * STAGGER_SECONDS)
                 try:
                     self.store.apply_tide_series(await self.source.coops_series(station, datum))
-                except (FetchError, ParseError) as exc:
-                    self.store.apply_tide_error(station.id, str(exc))
+                except Exception as exc:  # one gauge's bad answer must not fail the others
+                    self.store.apply_tide_error(station.id, str(exc) or type(exc).__name__)
 
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
         return []
@@ -463,6 +502,6 @@ class Poller:
         for storm_id, state in list(self.store.storms.items()):
             try:
                 self.store.apply_satellite(storm_id, await self.source.satellite(state.storm))
-            except (FetchError, ParseError):
-                continue
+            except Exception:
+                log.debug("the satellite listing of %s could not be fetched", storm_id, exc_info=True)
         return []

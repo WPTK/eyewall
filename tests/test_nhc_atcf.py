@@ -165,3 +165,16 @@ def test_btk_listing_recognises_invest_files():
 def test_btk_listing_ignores_other_links():
     html = '<a href="cphc/">cphc/</a> 2014-07-08 23:42  -\n<a href="readme.txt">readme.txt</a> 2020-01-01 00:00 1K\n'
     assert parse_btk_index(html) == ()
+
+
+def test_a_cut_off_gzip_b_deck_is_a_parse_error():
+    whole = gzip.compress(nhc_bytes("atcf/bep222026.dat"))
+    for cut in (whole[:4], whole[:40], whole[:-8]):
+        with pytest.raises(ParseError):
+            parse_bdeck(cut)
+
+
+def test_a_b_deck_that_inflates_past_the_cap_is_a_parse_error(monkeypatch):
+    monkeypatch.setattr("eyewall.providers.nhc.atcf.MAX_BDECK_BYTES", 1000)
+    with pytest.raises(ParseError, match="larger than"):
+        parse_bdeck(gzip.compress(b"x" * 5000))

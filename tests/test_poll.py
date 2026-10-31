@@ -1,5 +1,6 @@
 """The poller on a virtual clock: intervals, backoff, away mode, change-triggered refetch and the gated fallback."""
 
+import asyncio
 from datetime import timedelta
 
 import pytest
@@ -7,13 +8,22 @@ import pytest
 from eyewall.clock import VirtualClock
 from eyewall.config import Config, PollConfig, WatchlistConfig
 from eyewall.models.advisory import AdvisorySet
+from eyewall.models.events import EventKind
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
-from eyewall.poll import FALLBACK_ATTEMPTS, RETURN_STAGGER_SECONDS, FreshnessState, Poller, no_sleep
+from eyewall.poll import (
+    FALLBACK_ATTEMPTS,
+    PRODUCT_ATTEMPTS,
+    REFRESH_MIN_GAP,
+    RETURN_STAGGER_SECONDS,
+    FreshnessState,
+    Poller,
+    no_sleep,
+)
 from eyewall.sources import protocol
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.store import Store
-from tests.state_support import T0, FakeSource, advisories, area, gauge, make_public, obs, series, station
+from tests.state_support import T0, FakeSource, advisories, area, gauge, make_public, make_storm, obs, series, station
 
 
 def build(source=None, config=None, **kw):
@@ -168,6 +178,20 @@ async def test_refresh_makes_every_feed_due():
     poller.refresh()
     assert protocol.STORMS in poller.due()
     assert protocol.OUTLOOK in poller.due()
+
+
+async def test_refresh_waits_out_the_minimum_gap_since_the_last_attempt():
+    poller, source, _, clock, _ = build()
+    await poller.tick()
+    clock.advance(REFRESH_MIN_GAP / 3)
+    for _ in range(5):  # holding the key
+        poller.refresh(throttled=True)
+    assert poller.due() == []
+    assert poller.seconds_until_next() == pytest.approx(REFRESH_MIN_GAP * 2 / 3)
+    before = source.count("storms")
+    clock.advance(REFRESH_MIN_GAP * 2 / 3)
+    await poller.tick()
+    assert source.count("storms") == before + 1
 
 
 # ---- change-triggered refetch -------------------------------------------------------------------------------------
@@ -410,9 +434,9 @@ async def test_a_product_that_always_fails_stops_being_retried_at_the_cap():
     source.set_storm("1")
     source.texts["1"] = advisories("1")
     source.fail_products.add("track")
-    for _ in range(FALLBACK_ATTEMPTS + 3):
+    for _ in range(PRODUCT_ATTEMPTS + 3):
         await step(poller, clock, 300)
-    assert source.count("track") == FALLBACK_ATTEMPTS
+    assert source.count("track") == PRODUCT_ATTEMPTS
     assert store.storms["al012026"].fetched_key is not None
 
 
@@ -482,3 +506,70 @@ async def test_watchlisted_gauges_share_the_cap_with_a_storms_gauges():
     source.tide_stations = tuple(gauge(i, 28.0 + n / 10, -80.0) for n, i in enumerate(ids))
     await poller.tick()
     assert len(source.datums) == MAX_TIDE_GAUGES
+
+
+async def test_the_gauge_cap_is_overall_not_per_storm():
+    from eyewall.poll import MAX_TIDE_GAUGES
+
+    poller, source, *_ = build()
+    source.current = CurrentStorms(
+        (
+            make_storm("1", storm_id="al012026", lat=25.0, lon=-75.0),
+            make_storm("1", storm_id="al022026", name="Bea", lat=27.0, lon=-76.0),
+        )
+    )
+    source.texts["1"] = advisories("1")
+    near_first = [gauge(f"87{n:05d}", 25.0 + n / 100, -75.0) for n in range(20)]
+    near_second = [gauge(f"88{n:05d}", 27.0 + n / 100, -76.0) for n in range(20)]
+    source.tide_stations = tuple(near_first + near_second)
+    await poller.tick()
+    assert len(source.datums) == MAX_TIDE_GAUGES
+
+
+class Hang:
+    """Awaiting it never finishes, like a host that accepts the connection and sends nothing."""
+
+    async def __call__(self, *args, **kwargs):
+        await asyncio.Event().wait()
+
+
+async def test_a_feed_that_hangs_is_cut_off_and_the_others_still_poll():
+    poller, source, _, _, _ = build()
+    poller.feed_deadline = 0.05
+    source.storms = Hang()
+    results = await poller.tick()
+    by_feed = {r.feed: r for r in results}
+    assert isinstance(by_feed[protocol.STORMS].error, TimeoutError)
+    assert by_feed[protocol.OUTLOOK].ok
+    assert poller.freshness(protocol.STORMS).state is FreshnessState.ERROR
+
+
+async def test_the_new_storm_events_survive_a_product_fetch_that_hangs():
+    poller, source, store, _, got = build()
+    poller.feed_deadline = 0.05
+    source.set_storm("1")
+    source.advisory = Hang()
+    await poller.tick()
+    assert "al012026" in store.storms  # the store has moved on, so the events must not be lost
+    assert any(e.kind is EventKind.NEW_STORM for e in got)
+
+
+async def test_an_unexpected_error_in_one_storm_does_not_cost_the_events_or_the_other_storm():
+    poller, source, store, _clock, got = build()
+    source.current = CurrentStorms(
+        (make_storm("1", storm_id="al012026"), make_storm("1", storm_id="al022026", name="Bea", lat=30.0))
+    )
+    source.texts["1"] = advisories("1")
+    original = source.advisory
+
+    async def advisory(storm, *, fallback=False):
+        if storm.id == "al012026":
+            raise EOFError("truncated")
+        return await original(storm, fallback=fallback)
+
+    source.advisory = advisory
+    results = await poller.tick()
+    assert results[0].ok
+    assert sum(e.kind is EventKind.NEW_STORM for e in got) == 2
+    assert store.storms["al022026"].fetched_key is not None  # its products arrived
+    assert store.storms["al012026"].fetched_key is None  # asked for again on the next poll

@@ -388,7 +388,7 @@ class EyewallApp(App[None]):
             self.push_screen(AlertLogScreen())
 
     async def action_refresh(self) -> None:
-        self.poller.refresh()
+        self.poller.refresh(throttled=self.replay is None)  # NOAA is asked at most once per gap; a replay asks nobody
         if self.replay is not None:
             await self._tick()
         self.notify("Refreshing every feed.", timeout=3)
