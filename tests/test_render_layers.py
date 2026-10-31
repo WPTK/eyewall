@@ -435,6 +435,26 @@ def test_the_extent_to_fit_is_the_cone_or_else_the_track():
     assert StormScene().extent() == []
 
 
+def test_the_near_extent_stops_at_72_hours_and_takes_in_the_wind_radii():
+    scene = StormScene(
+        center=TrackPoint(30.0, -70.0),
+        forecast=(
+            ForecastPoint(32.0, -70.0, tau=24),
+            ForecastPoint(36.0, -68.0, tau=72),
+            ForecastPoint(57.0, -40.0, tau=120),
+            ForecastPoint(40.0, -60.0),  # no time given: kept
+        ),
+        cone=(((30.0, -70.0), (60.0, -30.0)),),
+        radii=(WindRadii(30.0, -70.0, kt34=(120.0, 80.0, 60.0, 100.0), kt64=(30.0, 30.0, 30.0, 30.0)),),
+    )
+    points = scene.near_extent()
+    assert (36.0, -68.0) in points and (40.0, -60.0) in points and (30.0, -70.0) in points
+    assert (57.0, -40.0) not in points and (60.0, -30.0) not in points  # neither the 120 hour point nor the cone
+    lat, lon = destination((30.0, -70.0), 90.0, 120.0)
+    assert any(abs(p[0] - lat) < 1e-9 and abs(p[1] - lon) < 1e-9 for p in points)  # the widest radius, to the east
+    assert StormScene().near_extent() == []
+
+
 def test_scene_bounds_cover_every_storm():
     scene = erin_like_scene()
     bounds = scene_bounds(scene)

@@ -18,7 +18,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Tab", "move between the list, the map and the panels"),
             ("1 2 3 a", "Atlantic, East Pacific, Central Pacific, all"),
             ("m  M", "map on or off; full-screen map"),
-            ("+ -  arrows  c f", "zoom, pan, center on the storm, fit the cone"),
+            ("+ -  arrows  c f", "zoom, pan, center on the storm, fit the storm"),
             ("l  b  g", "map layers; buoys; graphics"),
         ),
     ),
