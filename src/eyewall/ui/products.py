@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime, tzinfo
 
+from rich.console import Group
+from rich.table import Table as RichTable
 from rich.text import Text
 
 from eyewall.clock import format_when, format_zulu
@@ -45,14 +47,17 @@ def fmt_radii(radii: QuadrantRadii | None) -> str:
     return "/".join(MISSING if v is None else str(v) for v in (radii.ne, radii.se, radii.sw, radii.nw))
 
 
-def _line(out: Text, label: str, value: str, *, style: str = "") -> None:
-    out.append(f"{label:<14}", style=DIM)
-    out.append(value + "\n", style=style)
+def _line(table: RichTable, label: str, value: str, *, style: str = "") -> None:
+    table.add_row(Text(label, style=DIM), Text(value, style=style))
 
 
-def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None) -> Text:
+def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None) -> Group:
+    """Label and value columns: a long value (the next advisory times) wraps under itself, not under its label."""
     storm = state.storm
-    out = Text()
+    out = RichTable.grid(padding=(0, 2))
+    out.add_column(no_wrap=True)
+    out.add_column(ratio=1)
+    headlines = Text()
     adv = state.advisories.adv_num or storm.adv_num
     age, _ = advisory_age(storm, now)
     _line(out, "Advisory", f"{adv or MISSING}  ({age})")
@@ -76,10 +81,10 @@ def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None)
         if public.forecaster:
             _line(out, "Forecaster", public.forecaster)
         if public.headlines:
-            out.append("\n")
+            headlines.append("\n")
             for headline in public.headlines:
-                out.append(collapse(headline) + "\n", style="bold")
-    return out
+                headlines.append(collapse(headline) + "\n", style="bold")
+    return Group(out, headlines)
 
 
 def _fix_row(fix: ForecastFix, preset: Preset, tz: tzinfo | None) -> tuple[str, ...]:

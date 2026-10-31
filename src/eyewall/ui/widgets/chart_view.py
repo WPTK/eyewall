@@ -7,11 +7,12 @@ from collections.abc import Sequence
 from rich.segment import Segment
 from rich.style import Style as RichStyle
 from textual import events
+from textual.message import Message
 from textual.strip import Strip
 from textual.widget import Widget
 
 from eyewall.render.canvas import Mode
-from eyewall.render.chart import ChartSeries, Tick, render_chart
+from eyewall.render.chart import ChartSeries, Tick, gutter_width, render_chart
 from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.strips import blank, canvas_strips
 
@@ -19,7 +20,10 @@ from eyewall.ui.widgets.strips import blank, canvas_strips
 class ChartView(Widget):
     """One chart on shared axes. `set_chart` replaces everything it draws; an empty chart says so in `empty`."""
 
-    DEFAULT_CSS = "ChartView { height: 1fr; min-height: 5; }"
+    DEFAULT_CSS = "ChartView { height: 1fr; min-height: 4; }"
+
+    class Measured(Message):
+        """The width of this chart's y labels changed: stacked charts widen to the widest so their plots line up."""
 
     def __init__(self, *, mode: Mode = Mode.BRAILLE, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -30,6 +34,8 @@ class ChartView(Widget):
         self._x_ticks: tuple[Tick, ...] = ()
         self._empty = "No data"
         self._strips: list[Strip] | None = None
+        self.natural_gutter = 0  # the y label width this chart needs on its own
+        self.min_gutter = 0  # the width its siblings need
 
     def set_chart(
         self,
@@ -46,7 +52,21 @@ class ChartView(Widget):
         self._x_ticks = tuple(x_ticks)
         self._empty = empty
         self._strips = None
+        self._measure()
         self.refresh()
+
+    def align(self, gutter: int) -> None:
+        """Use at least this y label width, so the plot starts in the same column as the charts around it."""
+        if gutter != self.min_gutter:
+            self.min_gutter = gutter
+            self._strips = None
+            self.refresh()
+
+    def _measure(self) -> None:
+        natural = gutter_width(self._series, self.size.height, title=self._title) if self._has_data() else 0
+        if natural != self.natural_gutter:
+            self.natural_gutter = natural
+            self.post_message(self.Measured())
 
     def _has_data(self) -> bool:
         return any(y is not None for s in self._series for _, y in s.points)
@@ -68,6 +88,7 @@ class ChartView(Widget):
             x_range=self._x_range,
             x_ticks=self._x_ticks,
             title=self._title,
+            min_gutter=self.min_gutter,
         )
         return canvas_strips(canvas, width)
 
@@ -80,3 +101,4 @@ class ChartView(Widget):
 
     def on_resize(self, event: events.Resize) -> None:
         self._strips = None
+        self._measure()

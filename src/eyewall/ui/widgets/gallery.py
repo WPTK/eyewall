@@ -70,17 +70,19 @@ class ImageView(Widget):
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
         self._lines: list[Strip] = []
-        self._offset = 0
+        self._is_picture = False
 
     def show(self, frame: FallbackFrame) -> None:
         self._lines = [
             Strip([Segment(text, RichStyle(color=s.fg, bgcolor=s.bg)) for text, s in row], frame.width)
             for row in frame.rows
         ]
+        self._is_picture = True
         self.refresh()
 
     def say(self, message: str) -> None:
         self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in message.splitlines() or [""]]
+        self._is_picture = False
         self.refresh()
 
     def on_resize(self, event: events.Resize) -> None:
@@ -88,7 +90,8 @@ class ImageView(Widget):
 
     def render_line(self, y: int) -> Strip:
         width = self.size.width
-        top = max(0, (self.size.height - len(self._lines)) // 2)
+        # A picture sits under the caption, so a tall area leaves one empty band below it; a message is centered.
+        top = 0 if self._is_picture else max(0, (self.size.height - len(self._lines)) // 2)
         index = y - top
         if not 0 <= index < len(self._lines):
             return blank(width)

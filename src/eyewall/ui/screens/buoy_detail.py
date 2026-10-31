@@ -149,6 +149,13 @@ class BuoyDetailScreen(Screen[None]):
             Text("\n").append_text(st.extremes_text(ext, self.hours, preset, tz, supl_note=self.supl_note))
         )
 
+    def on_chart_view_measured(self, event: ChartView.Measured) -> None:
+        event.stop()
+        charts = list(self.query(ChartView))
+        widest = max((c.natural_gutter for c in charts), default=0)
+        for chart in charts:
+            chart.align(widest)
+
     # ---- actions ----------------------------------------------------------------------------------------------
 
     def action_back(self) -> None:

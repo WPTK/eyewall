@@ -39,7 +39,6 @@ PRESSURE_COLOR = "#4aa3ff"
 WIND_COLOR = "#3ddc84"
 GUST_COLOR = "#ffa63d"
 WAVE_COLOR = "#8fd3ff"
-NAME_WIDTH = 20
 
 BUOY_COLUMNS = ("ID", "Name", "Dist", "Brg", "Wind", "Gust", "Pres", "dP 3h", "Wave", "WTMP", "Age", "Closest")
 TIDE_COLUMNS = ("ID", "Name", "Dist", "Brg", "Observed", "Predicted", "Residual", "Wind", "Pres", "Age", "Closest")
@@ -155,9 +154,8 @@ def _position(entry: Entry[Station] | Entry[TideStation], preset: Preset) -> tup
     return preset.fmt_distance(entry.distance_nm), compass_point(entry.bearing_deg)
 
 
-def short_name(name: str, width: int = NAME_WIDTH) -> str:
-    name = " ".join(name.split())
-    return name if len(name) <= width else name[: width - 1] + "…"
+def clean_name(name: str) -> str:
+    return " ".join(name.split())
 
 
 def _signed(value: float, unit: str, decimals: int) -> str:
@@ -175,7 +173,7 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
     station = entry.station
     state = buoy_state(store, station.id, now)
     distance, bearing = _position(entry, preset)
-    name = short_name(station.name) or MISSING
+    name = clean_name(station.name) or MISSING  # the table cuts it to the room it has
     pin = "*" if entry.watchlisted else " "
     ident = Text(f"{pin}{station.id}", style="bold")
     obs = newest_observation(store, station.id)
@@ -199,7 +197,7 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
         banded(preset.fmt_wind(gust), gust),
         Text(preset.fmt_pressure(obs.pressure_hpa, "hpa")),
         delta_text(None if tendency is None else tendency.delta_hpa, preset, g),
-        Text(preset.fmt_length(obs.wave_height_m, "m")),
+        Text(preset.fmt_length(last_reading(store, station.id, obs, now, "wave_height_m").wave_height_m, "m")),
         Text(preset.fmt_temperature(obs.water_temp_c, "c")),
         Text(format_age(age.total_seconds())),
         Text(closest_text(entry, preset)),
@@ -233,7 +231,7 @@ def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Pre
     series = store.tide_series.get(gauge.id)
     distance, bearing = _position(entry, preset)
     ident = Text(f"{'*' if entry.watchlisted else ' '}{gauge.id}", style="bold")
-    name = short_name(gauge.name) or MISSING
+    name = clean_name(gauge.name) or MISSING
     if series is None or series.latest_level is None or tide_is_silent(series, now):
         failed = gauge.id in store.tide_errors or (series is not None and series.latest_level is None)
         note = NOT_REPORTING if failed or series is not None else WAITING
@@ -345,6 +343,20 @@ def _kv(out: Text, label: str, value: str, *, style: str = "") -> None:
     out.append(value + "\n", style=style)
 
 
+WAVE_LOOKBACK = timedelta(hours=3)
+
+
+def last_reading(store: Store, station_id: str, obs: Observation, now: datetime, field: str) -> Observation:
+    """The row to read a wave field from: the newest one, or when it lacks the field the newest row in the past few
+    hours that has it (NDBC reports waves on some rows only). The table, the panel and the chart then agree."""
+    if getattr(obs, field) is not None:
+        return obs
+    series = store.series.get(station_id.upper())
+    rows = [] if series is None else [o for o in series.observations if getattr(o, field) is not None]
+    recent = [o for o in rows if now - WAVE_LOOKBACK <= o.time <= now]
+    return max(recent, key=lambda o: o.time, default=obs)
+
+
 def latest_observation_text(
     obs: Observation | None, store: Store, station_id: str, now: datetime, preset: Preset, g: UiGlyphs
 ) -> Text:
@@ -364,9 +376,14 @@ def latest_observation_text(
     out.append(f"{'Change 3h':<12}", style=DIM)
     out.append_text(change)
     out.append("\n")
-    _kv(out, "Wave height", preset.fmt_length(obs.wave_height_m, "m"))
-    if obs.wave_height_m is not None or obs.dominant_period_s is not None:
-        period = MISSING if obs.dominant_period_s is None else f"{obs.dominant_period_s:.0f} s"
+    waves = last_reading(store, station_id, obs, now, "wave_height_m")
+    height = preset.fmt_length(waves.wave_height_m, "m")
+    if waves.wave_height_m is not None and waves.time != obs.time:  # the newest row has none: say how old this is
+        height += f"  ({format_age((now - waves.time).total_seconds())} ago)"
+    _kv(out, "Wave height", height)
+    swell = last_reading(store, station_id, obs, now, "dominant_period_s")
+    if waves.wave_height_m is not None or swell.dominant_period_s is not None:
+        period = MISSING if swell.dominant_period_s is None else f"{swell.dominant_period_s:.0f} s"
         _kv(out, "Wave period", period)
     _kv(out, "Water temp", preset.fmt_temperature(obs.water_temp_c, "c"))
     _kv(out, "Air temp", preset.fmt_temperature(obs.air_temp_c, "c"))

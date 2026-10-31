@@ -75,6 +75,47 @@ def _valid(value: float | None) -> bool:
     return value is not None and math.isfinite(value)
 
 
+def _rows(rows: int, title: str | None, series: Sequence[ChartSeries]) -> tuple[int, int]:
+    legend_rows = 1 if rows >= 6 and (title or any(s.name for s in series)) else 0
+    return legend_rows, max(1, rows - legend_rows - 2)
+
+
+def _y_axis(
+    series: Sequence[ChartSeries],
+    plot_rows: int,
+    y_range: tuple[float, float] | None,
+    y_ticks: Sequence[Tick] | None,
+) -> tuple[Sequence[Tick], float, float]:
+    ys = [y for s in series for _, y in s.points if y is not None and math.isfinite(y)]
+    if y_ticks is None:
+        data_lo, data_hi = y_range if y_range else ((min(ys), max(ys)) if ys else (0.0, 1.0))
+        values, step = nice_ticks(data_lo, data_hi, max(2, plot_rows // 3), cover=y_range is None)
+        y_ticks = [Tick(v, label) for v, label in zip(values, format_values(values, step), strict=True)]
+        y_lo, y_hi = (values[0], values[-1]) if y_range is None and len(values) > 1 else (data_lo, data_hi)
+    else:
+        y_lo, y_hi = y_range if y_range else ((min(ys), max(ys)) if ys else (0.0, 1.0))
+    if not y_hi > y_lo:
+        y_lo, y_hi = y_lo - 0.5, y_hi + 0.5
+    return y_ticks, y_lo, y_hi
+
+
+def _gutter(y_ticks: Sequence[Tick]) -> int:
+    return max((len(t.label) for t in y_ticks), default=0)
+
+
+def gutter_width(
+    series: Sequence[ChartSeries],
+    rows: int,
+    *,
+    title: str | None = None,
+    y_range: tuple[float, float] | None = None,
+    y_ticks: Sequence[Tick] | None = None,
+) -> int:
+    """The y label gutter `render_chart` would use for these series at this height."""
+    _, plot_rows = _rows(rows, title, series)
+    return _gutter(_y_axis(series, plot_rows, y_range, y_ticks)[0])
+
+
 def render_chart(
     series: Sequence[ChartSeries],
     cols: int,
@@ -88,33 +129,23 @@ def render_chart(
     title: str | None = None,
     grid: bool = True,
     style: ChartStyle = DEFAULT_STYLE,
+    min_gutter: int = 0,
 ) -> Canvas:
     """Draw series on shared axes. The layout, top to bottom: a legend row (when there is a title or a named series),
     the plot, an axis line and a row of x labels; y labels sit in a gutter to the left.
 
     x_range and y_range default to the data; the default y axis is stretched to its outer ticks. Rows of data with a
-    None or NaN y break the line there. A canvas too small to hold the plot just comes out with the plot clipped."""
+    None or NaN y break the line there. `min_gutter` widens the y label gutter so charts stacked together share one
+    plot edge (see `gutter_width`). A canvas too small to hold the plot just comes out with the plot clipped."""
     canvas = Canvas(cols, rows, mode)
     glyphs = canvas.glyphs
     xs = [x for s in series for x, y in s.points if _valid(y) and math.isfinite(x)]
-    ys = [y for s in series for _, y in s.points if y is not None and math.isfinite(y)]
     x_lo, x_hi = x_range if x_range else ((min(xs), max(xs)) if xs else (0.0, 1.0))
     if not x_hi > x_lo:
         x_lo, x_hi = x_lo - 0.5, x_hi + 0.5
-    legend_rows = 1 if rows >= 6 and (title or any(s.name for s in series)) else 0
-    plot_rows = max(1, rows - legend_rows - 2)
-
-    if y_ticks is None:
-        data_lo, data_hi = y_range if y_range else ((min(ys), max(ys)) if ys else (0.0, 1.0))
-        values, step = nice_ticks(data_lo, data_hi, max(2, plot_rows // 3), cover=y_range is None)
-        y_ticks = [Tick(v, label) for v, label in zip(values, format_values(values, step), strict=True)]
-        y_lo, y_hi = (values[0], values[-1]) if y_range is None and len(values) > 1 else (data_lo, data_hi)
-    else:
-        y_lo, y_hi = y_range if y_range else ((min(ys), max(ys)) if ys else (0.0, 1.0))
-    if not y_hi > y_lo:
-        y_lo, y_hi = y_lo - 0.5, y_hi + 0.5
-
-    gutter = max((len(t.label) for t in y_ticks), default=0)
+    legend_rows, plot_rows = _rows(rows, title, series)
+    y_ticks, y_lo, y_hi = _y_axis(series, plot_rows, y_range, y_ticks)
+    gutter = max(min_gutter, _gutter(y_ticks))
     plot_cols = max(1, cols - gutter - 1)
     px0, py0 = (gutter + 1) * canvas.dots_x, legend_rows * canvas.dots_y
     pw, ph = plot_cols * canvas.dots_x, plot_rows * canvas.dots_y

@@ -426,7 +426,7 @@ class ReplaySource:
 
     async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
         """The bundle keeps no `.supl` files; the buoy detail then falls back to the regular rows for its extremes."""
-        return Parsed(message="the recording has no supplemental file")
+        return Parsed(message="The recording has no supplemental file.")
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
         return self._tide_stations
