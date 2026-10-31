@@ -15,15 +15,12 @@ and move an item into a milestone brief when it is scheduled.
 ## Found along the way
 
 - M3: `Mode.HALF` (half-block glyphs) has no config value yet; `glyph_set` only offers unicode and ascii.
-- M3: the best-track line and the dashed forecast can leave a gap when `storm.center` is newer than the last best-track point (`render/layers.py` `_draw_tracks`).
-- M2: the October to December names of NDBC's monthly files are unknown until a month closes, so
-  `ndbc.client.monthly_url` refuses them; check the real names and lift the limit.
+- M2: the October to December names of NDBC's monthly files are still unverified: on 31 October 2026 the `data/stdmet/{Oct,Nov,Dec}/` directories were empty, `Sep/` held only the plain `{id}.txt` files and `Jan/`, `Jul/` and `Aug/` held `{id}{M}{yyyy}.txt.gz`. `ndbc.client.monthly_url` keeps refusing months 10 to 12; check the listings again once a month closes (October's file appears after the following month ends) and lift the limit then.
 - M1: parse the surge KML (`stormSurgeWatchWarningGIS`, `peakSurgeKML`) and the arrival-time KMZ files; M1 only keeps their URLs.
 - M1: the best track zip also holds `radii` and `windswath` layers (observed wind field over the whole life); not parsed.
 - M1: the NHC graphics landing page markup is unverified until a storm is active; revisit `providers/nhc/graphics.py` then.
-- M1: match a gtwo outlook area to its invest b-deck; the zip carries probabilities but no invest id, so it is a position match.
+- M1: match a gtwo outlook area to its invest b-deck; the zip carries probabilities but no invest id, so it is a position match. Parked: nothing consumes an invest id on an outlook shape yet, so a matcher would be unused code; do it with the UI that needs it, and match only when exactly one invest lies inside one area.
 - M1: `atcf/index/{AL,EP,CP}_storms.txt.nhc` and `master_list.txt` for id and name checks in replay tooling (M4).
-- M1 nits: import wrap_lon from providers.nhc.gis in current.py (move it to geo); no size cap on zip members in gis.py; no id dedupe in parse_current_storms.
 - M4: the `GIS`-based best track (`best_track_gis`, with the observed wind field) is not fetched; the b-deck is the only best track source.
 - M4: the poller fetches at most 24 buoy series and 12 tide gauges per poll, nearest first; the config has no key for it.
 - M4: the "US threat" test for polling alerts is a pair of latitude and longitude boxes (Atlantic and Gulf coasts, Hawaii) plus any coastal watch or warning in effect; a land-geometry test would be exact.
@@ -50,7 +47,6 @@ and move an item into a milestone brief when it is scheduled.
   the alert thresholds and the per-storm options still need the TOML file.
 - M6: the watchlist holds 60 stations per kind, but series files are capped at 24 buoys (open pages first, then the storm's nearest; a watchlist-only buoy is read from `latest_obs`) and gauges at 12 (the storm's nearest first, then the watchlist), so a long gauge watchlist is only partly polled; rotate through it.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
-- M6: a watchlisted gauge that is missing from the CO-OPS catalog shows "waiting" forever; say it is unknown.
 - M8: CI binary builds install runtime dependencies unpinned (no lock file); lock them when a lock file exists.
 - M8: binaries pass between jobs as artifacts, which drop the executable bit; the release uploads the files as built, so users `chmod +x`. Ship tar.gz archives if that bites.
 - M8: the canary issue lists only `FAIL` lines; print the last 40 lines of a traceback too. GitHub disables scheduled workflows after 60 days without repository activity, so a quiet repo needs a manual dispatch now and then.
