@@ -46,6 +46,12 @@ is nearly certain about, so a report means a real leftover.
 - Interface tests use Textual's `App.run_test()` and its `Pilot`. `tests/test_textual_api.py` shows the pattern, including
   a widget that paints its own lines the way the map will. Snapshot tests use `pytest-textual-snapshot`; update them only
   after an intentional visual change.
+- The UAT suite in `tests/uat` drives the whole app with the Pilot over the bundled Erin recording, with no network, at
+  80x24, 120x30 and (for an every-screen sweep) 100x50, 200x50 and 280x70, plus the too-small case, live resizes and the
+  command-line paths. Every step is checked (no error toast or logged error, nothing clipped, a one-row footer ending in
+  `? help`) and saved as an SVG screenshot. Run it with `python -m pytest tests/uat -m uat`, or with
+  `python scripts/uat.py [OUT_DIR]`, which also renders each screenshot to PNG through Edge (default directory: a new
+  temporary one, never the repository). Set `EYEWALL_UAT_OUT` to choose where `pytest` writes the SVG files.
 - `textual_image.renderable` and `textual_image.widget` send terminal queries when imported with stdout on a TTY. Import
   them lazily, only where images are drawn.
 
