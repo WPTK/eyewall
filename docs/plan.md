@@ -39,9 +39,9 @@ eyewall/
   scripts/build_mapdata.py  record_storm.py  record_fixtures.py  spot_check_nhc.py  spot_check_obs.py  record_obs_fixtures.py  screenshot_terminal.ps1  build_exe.ps1
   src/eyewall/
     __init__.py  __main__.py  cli.py  app.py  config.py  poll.py  units.py  geo.py  clock.py  palette.py  net.py
-    models/     storm.py forecast.py advisory.py watches.py outlook.py wind.py graphics.py obs.py events.py
+    models/     storm.py forecast.py advisory.py watches.py outlook.py wind.py graphics.py track.py obs.py events.py
     providers/  base.py (Provider protocol, the JTWC seam)
-    providers/nhc/  client.py current.py tcm.py text.py atcf.py gis.py two.py alerts.py graphics.py ids.py
+    providers/nhc/  client.py current.py tcm.py text.py atcf.py gis.py two.py alerts.py graphics.py ids.py times.py textutil.py
     ndbc/       client.py stations.py latest.py stdmet.py supl.py spec.py historical.py
     coops/      client.py stations.py data.py
     sources/    protocol.py live.py replay.py cache.py

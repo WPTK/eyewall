@@ -12,19 +12,19 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
 | Feed | URL | Used for | Cadence |
 |---|---|---|---|
 | CurrentStorms | `https://www.nhc.noaa.gov/CurrentStorms.json` | active storms in all basins, with product and GIS links. `{"activeStorms": []}` when quiet | 5 min (CDN max-age 300) |
-| TCM forecast/advisory | `https://tgftp.nws.noaa.gov/data/raw/wt/wtnt21.knhc.tcm.at{1-5}.txt`, `wtpz21.knhc.tcm.ep{n}`, `wtpa21.phfo.tcm.cp{n}` | parsed: center, max wind/gust, pressure, movement, 34/50/64 kt radii by quadrant, forecast + outlook points | on `lastUpdate` change |
-| TCP public advisory, TCD discussion, TCU update, PWS wind probabilities | same tree: `wtnt3{n}` TCP, `wtnt4{n}` TCD, `fo/font1{n}.knhc.pws.at{n}.txt` PWS (EP `fopz`, CP `fopa`); TCU via api.weather.gov | text views; headline, key messages and watch/warning text from TCP; PWS table parsed | on `lastUpdate` change |
+| TCM forecast/advisory | `https://tgftp.nws.noaa.gov/data/raw/wt/wtnt2{n}.knhc.tcm.at{n}.txt`, `wtpz2{n}.knhc.tcm.ep{n}.txt`, `wtpa2{n}.phfo.tcm.cp{n}.txt` (`{n}` is the bin index 1 to 5, so AT3 is `wtnt23.knhc.tcm.at3.txt`) | parsed: center, max wind/gust, pressure, movement, 34/50/64 kt radii by quadrant, forecast + outlook points | on `lastUpdate` change |
+| TCP public advisory, TCD discussion, TCU update, PWS wind probabilities | same tree: `wt/wtnt3{n}.knhc.tcp.at{n}.txt` TCP, `wtnt4{n}…tcd` TCD, `wtnt6{n}…tcu` TCU, `fo/font1{n}.knhc.pws.at{n}.txt` PWS (EP `wtpz`/`fopz`, CP `wtpa`/`fopa` with `phfo`); TCU can also come from api.weather.gov | text views; headline and watch/warning text from the TCP, key messages from the TCD (the TCP only points to them); PWS table parsed | on `lastUpdate` change |
 | TWO outlook | `ab/abnt20.knhc.two.at.txt`, `ab/abpz20.knhc.two.ep.txt`, `ac/acpn50.phfo.two.cp.txt` | outlook text per basin | 30 min |
 | Text fallback | `https://api.weather.gov/products/types/{TCM\|TCP\|TCD\|TCU\|PWS\|TWO}/locations/{AT1\|EP2\|CP3\|AT\|EP\|CP}` → `/products/{id}` `.productText` | when tgftp fails; location is the **bin**, never KNHC/PHFO | on demand |
 | US watches/warnings with geometry | `https://api.weather.gov/alerts/active?event=Hurricane Warning,Hurricane Watch,Tropical Storm Warning,Tropical Storm Watch,Storm Surge Warning,Storm Surge Watch,Hurricane Force Wind Warning,Extreme Wind Warning,Tropical Cyclone Statement` | WW panel with affected zones; cross-checked against TCP text | 5 min while a storm threatens US land |
 | Forecast GIS (shapefiles) | `forecastTrack.zipFile` from CurrentStorms, pattern `https://www.nhc.noaa.gov/gis/forecast/archive/{id}_5day_{adv}.zip` / `_latest.zip`; layers `*_5day_pts` (TAU, MAXWIND, GUST, DATELBL, TCDVLP), `*_5day_lin`, `*_5day_pgn` (cone), `*_ww_wwlin` (TCWW = TWA/TWR/HWA/HWR) | cone polygon, forecast points, coastal watch/warning segments | on `advNum` change |
 | Wind radii GIS | `forecastWindRadiiGIS.zipFile`, pattern `{id}_fcst_{adv}.zip`; `initialWindExtent` | 34/50/64 kt radii polygons (initial and forecast) | on `advNum` change |
-| Best track | ATCF b-deck `https://ftp.nhc.noaa.gov/atcf/btk/b{al\|ep\|cp}{nn}{yyyy}.dat` (CP may sit under `btk/cphc/`); `bestTrackGIS` zip as alternative; archive `atcf/archive/{yyyy}/b….dat.gz` | past track colored by intensity; invests are numbers 90–99 (80–89 are training, ignored) | on `lastUpdate` change |
+| Best track | ATCF b-deck `https://ftp.nhc.noaa.gov/atcf/btk/b{al\|ep\|cp}{nn}{yyyy}.dat` (CP storms are `bcp…` files in the same directory; `btk/cphc/` is a stale folder from 2014); `bestTrackGIS` zip as alternative; archive `atcf/archive/{yyyy}/b….dat.gz`. The directory page lists every file, which is how active invests are found | past track colored by intensity; invests are numbers 90–99 (80–89 are training, ignored) | on `lastUpdate` change |
 | ATCF indexes | `atcf/index/master_list.txt`, `index/{AL,EP,CP}_storms.txt.nhc` | id ↔ name sanity, replay tooling | daily / dev |
-| Invests and outlook areas | `https://www.nhc.noaa.gov/xgtwo/gtwo_shapefiles.zip` (`gtwo_areas`, `gtwo_lines`, `gtwo_points` with `PROB2DAY`, `PROB7DAY`, `RISK2DAY`, `RISK7DAY`, basin) + invest b-decks | invests on the storm list and outlook map; they are not in CurrentStorms.json | 30 min |
+| Invests and outlook areas | `https://www.nhc.noaa.gov/xgtwo/gtwo_shapefiles.zip` (`gtwo_areas_<yyyymmddhhmm>`, `gtwo_lines_…`, `gtwo_points_…` with `BASIN` (`Atlantic` or `Pacific`), `AREA`, `PROB2DAY` (`80%`), `RISK2DAY` (`High`), `PROB7DAY`, `RISK7DAY`; one combined zip for all basins since May 2026) + invest b-decks. The zip has no invest numbers | invests on the storm list and outlook map; they are not in CurrentStorms.json | 30 min |
 | Surge GIS | `stormSurgeWatchWarningGIS.kmlFile`, `potentialStormSurgeFloodingGIS` (links from CurrentStorms) | surge WW polylines parsed from KML; inundation GeoTIFFs link-only | on `advNum` change |
-| Graphics | `forecastGraphics.url` landing page (links to cone PNG/GIF, wind probabilities, arrival time, surge); `storm_graphics/api/{ID}_CONE_latest.kmz` | graphics gallery; exact PNG/GIF URL patterns are learned from the landing page during the first active storm (the `refresh/…+png` pattern 404s once a storm ends) | on `advNum` change |
-| Satellite loops | `https://cdn.star.nesdis.noaa.gov/FLOATER/data/{ID}/{GEOCOLOR\|Sandwich\|AirMass\|DayConvection\|01..16}/` listing; latest still `…1000x1000.jpg`, loops `…-ABI-{ID}-{product}-1000x1000.gif` | newest still and loop per storm | 10 min |
+| Graphics | `forecastGraphics.url` landing page (links to cone PNG/GIF, wind probabilities, arrival time, surge); `storm_graphics/api/{ID}_CONE_latest.kmz` | graphics gallery; exact PNG/GIF URL patterns are learned from the landing page during the first active storm (the `refresh/…+png` pattern 404s once a storm ends). On a quiet day the landing page links only `/graphics/notready.jpg`. Archived storms have `archive/{yyyy}/{NAME}_graphics.php?product=5day_cone_with_line_and_wind` pages listing `graphics/AL052025/AL052025_5day_cone_with_line_and_wind_{adv}.png` per advisory | on `advNum` change |
+| Satellite loops | `https://cdn.star.nesdis.noaa.gov/FLOATER/data/{ID}/{GEOCOLOR\|Sandwich\|AirMass\|DayConvection\|01..16}/` listing; latest still `…1000x1000.jpg`, loops `…-ABI-{ID}-{product}-1000x1000.gif` | newest still and loop per storm. `FLOATER/data/` lists storm directories, a storm directory lists products (`01`..`16`, `AirMass`, `GEOCOLOR`...) and a product directory lists every still and loop (1 MB for a 12 day storm); the files are `{yyyyddd}{hhmm}_GOES19-ABI-FL-GEOCOLOR-{ID}-1000x1000.jpg` (year, day of year, UTC), ranged loops `{start}-{end}-ABI-{ID}-GEOCOLOR-1000x1000.gif`, the full loop `{ID}-GEOCOLOR-1000x1000.gif` and the rolling `latest.jpg` | 10 min |
 | NHC archive | `https://www.nhc.noaa.gov/archive/{yyyy}/{al05}/al052025.{fstadv\|public\|discus}.{NNN}.shtml` + the GIS archive zips above | replay bundles only | dev script |
 
 ## Observations (NDBC / CO-OPS)
@@ -47,16 +47,27 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
   `classification` ∈ TD, STD, TS, HU, STS, PTC, PC, TY. `intensity`, `pressure` are **strings**; `latitude`
   `"17.1N"` strings with `latitudeNumeric`/`longitudeNumeric` twins; **`movementSpeed` is mph** (TCM is kt).
   Product objects carry `advNum` (`"018a"` for intermediates), `issuance`, `fileUpdateTime`, `url`; GIS objects
-  can each be `null`. The 2019 reference PDF is wrong on several of these.
+  can each be `null`; `peakSurgeKML` names its file `peakSurgeKMLFile`. The 2019 reference PDF is wrong on several of
+  these.
 - **Text products:** `.shtml` pages keep a dead storm's last advisory, so parsed text is checked against
   `lastUpdate`/`advNum` before replacing the current advisory.
 - **TCM parsing:** anchor on `CENTER LOCATED NEAR`; forecast hours count from the synoptic time 3 h before the
   advisory; radii lines are omitted when a threshold does not apply; `OUTLOOK VALID` points carry only 50/34 kt
   radii; `…DISSIPATED` and `…POST-TROP/REMNT LOW` suffixes; longitudes flip to `E` near the dateline.
-- **b-deck:** up to three lines per time (one per radii threshold), early rows `DB`/genesis, DIR/SPEED often 0,
-  `E` longitudes possible. OFCL forecast lives in the a-deck (stretch: model "spaghetti").
+  Also observed: the center phrase is `HURRICANE`, `POST-TROPICAL CYCLONE`, `REMNANTS OF` or `POTENTIAL TROP CYCLONE`; fix
+  suffixes include `…INLAND`, `…TROPICAL CYCLONE`, `…POST-TROP/EXTRATROP`; seas are `4 M SEAS` or `12 FT SEAS`; a radius of
+  `0` means none in that quadrant while a missing line means the threshold does not apply; one product can mix W and E
+  (`AT 04/1800Z CENTER WAS LOCATED NEAR 24.0N 179.2W` then `24.2N 180.0E`); a final advisory says `THIS IS THE LAST
+  FORECAST/ADVISORY` and the wind probability product then has an empty table. A bin keeps the last advisory of the
+  most recent storm to use it, so tgftp always has examples of the odd cases.
+- **b-deck:** up to three lines per time (one per radii threshold), early rows `DB`/genesis (name `INVEST` or
+  `GENESISnnn`), DIR/SPEED often 0, `E` longitudes possible (`1771E`), 0 for an unknown wind or pressure. OFCL forecast
+  lives in the a-deck (stretch: model "spaghetti").
 - **Shapefiles:** parsed with `pyshp` straight from the zip (`zipfile` + `shapefile.Reader(shp=…, dbf=…)`);
-  intermediate advisories use an `A` suffix (`_5day_010A.zip`).
+  intermediate advisories use an `A` suffix (`_5day_010A.zip`, ADVISNUM `10A`). Unknown numbers are `9999` (`MSLP`, `TCDIR`,
+  `TCSPD` on every point after the first). Across the dateline the layers disagree: the track line and points continue
+  west of -180 (`-182.3`), the cone continues east of 180, and radii polygons use either; eyewall wraps every vertex to
+  (-180, 180]. The points layer spells the name out (`Hurricane Erin`), the other layers do not.
 - **NDBC:** winds are m/s 8-minute (buoy) or 2-minute (C-MAN) averages, never equated with NHC's 1-minute kt.
   Missing is `MM` in realtime files but `99.0`/`999`/`9999` fills in historical and `.cwind` files. Parse by
   header name, not position (PTDY sits in different places in `latest_obs.txt` and `realtime2`). Waves are often

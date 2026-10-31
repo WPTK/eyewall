@@ -15,4 +15,8 @@ and move an item into a milestone brief when it is scheduled.
 
 ## Found along the way
 
-(none yet)
+- M1: parse the surge KML (`stormSurgeWatchWarningGIS`, `peakSurgeKML`) and the arrival-time KMZ files; M1 only keeps their URLs.
+- M1: the best track zip also holds `radii` and `windswath` layers (observed wind field over the whole life); not parsed.
+- M1: the NHC graphics landing page markup is unverified until a storm is active; revisit `providers/nhc/graphics.py` then.
+- M1: match a gtwo outlook area to its invest b-deck; the zip carries probabilities but no invest id, so it is a position match.
+- M1: `atcf/index/{AL,EP,CP}_storms.txt.nhc` and `master_list.txt` for id and name checks in replay tooling (M4).
