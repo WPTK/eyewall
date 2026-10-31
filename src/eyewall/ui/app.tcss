@@ -33,11 +33,12 @@ Screen {
 }
 
 #storms:focus {
-    border: round $accent;
+    border: heavy $accent;
 }
 
 #storms > .option-list--option-highlighted {
     background: $primary 30%;
+    text-style: underline;
 }
 
 #map-pane {
@@ -47,7 +48,7 @@ Screen {
 }
 
 #map-pane:focus-within {
-    border: round $accent;
+    border: heavy $accent;
 }
 
 MapView {
@@ -80,7 +81,7 @@ MapView {
 }
 
 .panel:focus {
-    border: round $accent;
+    border: heavy $accent;
 }
 
 .panel Static {
