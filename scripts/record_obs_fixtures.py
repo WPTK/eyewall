@@ -5,7 +5,7 @@ rows the tests need without changing a byte of what is kept, and writes them und
 tests/fixtures/coops together with a manifest of where and when each came from. Run it again when a feed changes shape,
 then fix whatever the tests say.
 
-    python scripts/record_obs_fixtures.py            # everything, about 25 requests
+    python scripts/record_obs_fixtures.py            # everything, about 17 requests
     python scripts/record_obs_fixtures.py --only ndbc
 """
 

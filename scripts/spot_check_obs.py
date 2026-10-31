@@ -1,7 +1,7 @@
 """Fetch every NDBC and CO-OPS feed once, parse it with eyewall's parsers and print a summary.
 
 This is the check to run after a milestone, or when a parser starts failing, to see whether the live services still
-look the way the code expects. It makes about 16 requests, a second apart, with the eyewall User-Agent. It exits 1 when
+look the way the code expects. It makes about 14 requests, a second apart, with the eyewall User-Agent. It exits 1 when
 a feed fails to fetch or parse to anything.
 
     python scripts/spot_check_obs.py
@@ -106,7 +106,13 @@ async def check_ndbc(ndbc: NdbcClient, report: Report) -> list[Station]:
         low, peak = trends.extremes.min_pressure_hpa, trends.extremes.peak_gust_mps
         report.ok("extremes (72 h)", f"lowest pressure {low} hPa, peak gust {peak} m/s, silent={trends.silent}")
 
-    for candidate in [c for c in DARK_CANDIDATES if c not in live_ids][:3]:
+    dark = [c for c in DARK_CANDIDATES if c not in live_ids]
+    dark += [
+        s.id
+        for s in stations
+        if s.type == "buoy" and s.owner == "NDBC" and s.met is False and s.id not in live_ids and s.id not in dark
+    ]
+    for candidate in dark[:3]:
         result = (await polite(partial(ndbc.series, candidate))).value
         if result is not None and not result.reporting:
             report.ok(f"dark buoy {candidate}", "not reporting (404 for its file)")
