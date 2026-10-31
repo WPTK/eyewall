@@ -1,0 +1,14 @@
+{
+    "@context": {
+        "@version": "1.1",
+        "@vocab": "https://api.weather.gov/ontology#"
+    },
+    "@id": "https://api.weather.gov/products/3ae4e478-d4e6-4c83-b209-60fbef9a5e73",
+    "id": "3ae4e478-d4e6-4c83-b209-60fbef9a5e73",
+    "wmoCollectiveId": "ABNT20",
+    "issuingOffice": "KNHC",
+    "issuanceTime": "2026-10-31T05:07:00+00:00",
+    "productCode": "TWO",
+    "productName": "Tropical Weather Outlook and Summary",
+    "productText": "\n000\nABNT20 KNHC 310507\nTWOAT \n\nTropical Weather Outlook\nNWS National Hurricane Center Miami FL\n200 AM EDT Sat Oct 31 2026\n\nFor the North Atlantic...Caribbean Sea and the Gulf of America:\n\nTropical cyclone formation is not expected during the next 7 days.\n\n$$\nForecaster Gibbs\n"
+}

@@ -1,0 +1,533 @@
+{
+    "@context": [
+        "https://geojson.org/geojson-ld/geojson-context.jsonld",
+        {
+            "@version": "1.1",
+            "wx": "https://api.weather.gov/ontology#",
+            "@vocab": "https://api.weather.gov/ontology#"
+        }
+    ],
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.97a87a4a525aaa7d5e98f9ba134f759d9bdfa37f.001.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.97a87a4a525aaa7d5e98f9ba134f759d9bdfa37f.001.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.97a87a4a525aaa7d5e98f9ba134f759d9bdfa37f.001.1",
+                "areaDesc": "Salem; Gloucester; Camden; Cumberland; Cape May; Eastern Chester; Eastern Montgomery; Lower Bucks",
+                "geocode": {
+                    "SAME": [
+                        "034033",
+                        "034015",
+                        "034007",
+                        "034011",
+                        "034009",
+                        "042029",
+                        "042091",
+                        "042017"
+                    ],
+                    "UGC": [
+                        "NJZ016",
+                        "NJZ017",
+                        "NJZ018",
+                        "NJZ021",
+                        "NJZ023",
+                        "PAZ102",
+                        "PAZ104",
+                        "PAZ106"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/NJZ016",
+                    "https://api.weather.gov/zones/forecast/NJZ017",
+                    "https://api.weather.gov/zones/forecast/NJZ018",
+                    "https://api.weather.gov/zones/forecast/NJZ021",
+                    "https://api.weather.gov/zones/forecast/NJZ023",
+                    "https://api.weather.gov/zones/forecast/PAZ102",
+                    "https://api.weather.gov/zones/forecast/PAZ104",
+                    "https://api.weather.gov/zones/forecast/PAZ106"
+                ],
+                "references": [],
+                "sent": "2026-10-31T01:26:00-04:00",
+                "effective": "2026-10-31T01:26:00-04:00",
+                "onset": "2026-11-01T00:00:00-04:00",
+                "expires": "2026-10-31T16:00:00-04:00",
+                "ends": "2026-11-01T09:00:00-04:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Minor",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Frost Advisory",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Mount Holly NJ",
+                "headline": "Frost Advisory issued October 31 at 1:26AM EDT until November 1 at 8:00AM EST by NWS Mount Holly NJ",
+                "description": "* WHAT...Temperatures as low as 34 degrees will result in areas of\nfrost formation.\n\n* WHERE...In New Jersey, Camden, Cape May, Cumberland, Gloucester,\nand Salem Counties. In Pennsylvania, Eastern Chester, Eastern\nMontgomery, and Lower Bucks Counties.\n\n* WHEN...From midnight EDT tonight to 8 AM EST Sunday.\n\n* IMPACTS...Frost could harm sensitive outdoor vegetation. Sensitive\noutdoor plants may be killed if left uncovered.",
+                "instruction": "Take steps now to protect tender plants from the cold.",
+                "response": "Prepare",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "NPWPHI"
+                    ],
+                    "WMOidentifier": [
+                        "WWUS71 KPHI 310526"
+                    ],
+                    "NWSheadline": [
+                        "FROST ADVISORY IN EFFECT FROM MIDNIGHT EDT TONIGHT TO 8 AM EST SUNDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KPHI.FR.Y.0012.261101T0400Z-261101T1300Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-11-01T09:00:00-04:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "FRY"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0e27084b325fe2971dc1bafd8d9bde59ccb2fab6.001.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0e27084b325fe2971dc1bafd8d9bde59ccb2fab6.001.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.0e27084b325fe2971dc1bafd8d9bde59ccb2fab6.001.1",
+                "areaDesc": "Clatsop County Coast; Tillamook County Coast; Central Coast of Oregon; Central Oregon Coast Range Lowlands; Central Oregon Coast Range; Lower Columbia River; Tualatin Valley; Inner Portland Metro; East Portland Metro; Outer Southeast Portland Metro; West Central Willamette Valley; East Central Willamette Valley; West Columbia River Gorge of Oregon above 500 ft; Clackamas County Cascade Foothills; Cascade Foothills of Marion and Linn Counties; Lane County Cascade Foothills; Willapa Hills; Cowlitz County Lowlands; North Clark County Lowlands; Inner Vancouver Metro; East Clark County Lowlands",
+                "geocode": {
+                    "SAME": [
+                        "041007",
+                        "041057",
+                        "041041",
+                        "041039",
+                        "041003",
+                        "041053",
+                        "041009",
+                        "041067",
+                        "041051",
+                        "041005",
+                        "041071",
+                        "041047",
+                        "041027",
+                        "041043",
+                        "053049",
+                        "053069",
+                        "053015",
+                        "053011"
+                    ],
+                    "UGC": [
+                        "ORZ101",
+                        "ORZ102",
+                        "ORZ103",
+                        "ORZ105",
+                        "ORZ107",
+                        "ORZ108",
+                        "ORZ109",
+                        "ORZ111",
+                        "ORZ112",
+                        "ORZ113",
+                        "ORZ114",
+                        "ORZ115",
+                        "ORZ119",
+                        "ORZ123",
+                        "ORZ124",
+                        "ORZ125",
+                        "WAZ203",
+                        "WAZ204",
+                        "WAZ205",
+                        "WAZ206",
+                        "WAZ207"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/ORZ101",
+                    "https://api.weather.gov/zones/forecast/ORZ102",
+                    "https://api.weather.gov/zones/forecast/ORZ103",
+                    "https://api.weather.gov/zones/forecast/ORZ105",
+                    "https://api.weather.gov/zones/forecast/ORZ107",
+                    "https://api.weather.gov/zones/forecast/ORZ108",
+                    "https://api.weather.gov/zones/forecast/ORZ109",
+                    "https://api.weather.gov/zones/forecast/ORZ111",
+                    "https://api.weather.gov/zones/forecast/ORZ112",
+                    "https://api.weather.gov/zones/forecast/ORZ113",
+                    "https://api.weather.gov/zones/forecast/ORZ114",
+                    "https://api.weather.gov/zones/forecast/ORZ115",
+                    "https://api.weather.gov/zones/forecast/ORZ119",
+                    "https://api.weather.gov/zones/forecast/ORZ123",
+                    "https://api.weather.gov/zones/forecast/ORZ124",
+                    "https://api.weather.gov/zones/forecast/ORZ125",
+                    "https://api.weather.gov/zones/forecast/WAZ203",
+                    "https://api.weather.gov/zones/forecast/WAZ204",
+                    "https://api.weather.gov/zones/forecast/WAZ205",
+                    "https://api.weather.gov/zones/forecast/WAZ206",
+                    "https://api.weather.gov/zones/forecast/WAZ207"
+                ],
+                "references": [
+                    {
+                        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.8aeb6e8dcb643182351efe8a564b5f7a69b93749.001.2",
+                        "identifier": "urn:oid:2.49.0.1.840.0.8aeb6e8dcb643182351efe8a564b5f7a69b93749.001.2",
+                        "sender": "w-nws.webmaster@noaa.gov",
+                        "sent": "2026-10-30T10:23:00-07:00"
+                    },
+                    {
+                        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.8aeb6e8dcb643182351efe8a564b5f7a69b93749.002.1",
+                        "identifier": "urn:oid:2.49.0.1.840.0.8aeb6e8dcb643182351efe8a564b5f7a69b93749.002.1",
+                        "sender": "w-nws.webmaster@noaa.gov",
+                        "sent": "2026-10-30T10:23:00-07:00"
+                    }
+                ],
+                "sent": "2026-10-30T22:13:00-07:00",
+                "effective": "2026-10-30T22:13:00-07:00",
+                "onset": "2026-10-31T00:00:00-07:00",
+                "expires": "2026-10-31T09:00:00-07:00",
+                "ends": "2026-10-31T09:00:00-07:00",
+                "status": "Actual",
+                "messageType": "Update",
+                "category": "Met",
+                "severity": "Minor",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Frost Advisory",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Portland OR",
+                "headline": "Frost Advisory issued October 30 at 10:13PM PDT until October 31 at 9:00AM PDT by NWS Portland OR",
+                "description": "* WHAT...Temperatures of 36 degrees or lower will result in frost\nformation.\n\n* WHERE...Portions of northwest and west central Oregon and southwest\nWashington.\n\n* WHEN...Until 9 AM PDT Saturday.\n\n* IMPACTS...Frost could harm sensitive outdoor vegetation. Sensitive\noutdoor plants may be killed if left uncovered.\n\n* ADDITIONAL DETAILS...There is a 20-30% chance that temperatures\nwill fall below 32 degrees, especially for locations that do not\ndevelop fog. Frost and freeze headlines are only issued through the\ngrowing season of April 1 through October 31. Therefore, frost or\nfreeze headlines will not be issued beginning November 1, even\nthough similar low temperatures are possible. Frost and freeze\nheadlines will no longer be issued this growing season for the\nUpper Hood River Valley, southern Willamette Valley, south\nWashington Cascade Foothills, and north Oregon Coast Range as these\nlocations have already experienced a hard freeze earlier in\nOctober.",
+                "instruction": "Take steps now to protect tender outdoor plants from the cold.\nConsider temporarily moving outdoor potted plants indoors if they are\nsensitive to cold temperatures.\n\nConsider temporarily covering sensitive plants with a lightweight\ncotton fabric (i.e., bedsheets, thin blankets), as this will help\nretain heat and provide frost protection for your plants.",
+                "response": "Prepare",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "NPWPQR"
+                    ],
+                    "WMOidentifier": [
+                        "WWUS76 KPQR 310513"
+                    ],
+                    "NWSheadline": [
+                        "FROST ADVISORY REMAINS IN EFFECT UNTIL 9 AM PDT SATURDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.CON.KPQR.FR.Y.0017.261031T0700Z-261031T1600Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-10-31T09:00:00-07:00"
+                    ],
+                    "expiredReferences": [
+                        "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.3683bebe5477d4a2af210bf53679002f8f77cd1a.001.1,2026-10-30T04:42:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.092e4523b733aa21cc0d9bd93379325290940da3.001.1,2026-10-29T11:14:00-07:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "FRY"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.001.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.001.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.001.1",
+                "areaDesc": "Lowlands of Lewis and Southern Thurston Counties; Middle Chehalis River Valley",
+                "geocode": {
+                    "SAME": [
+                        "053067",
+                        "053041",
+                        "053027",
+                        "053045"
+                    ],
+                    "UGC": [
+                        "WAZ318",
+                        "WAZ319"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/WAZ318",
+                    "https://api.weather.gov/zones/forecast/WAZ319"
+                ],
+                "references": [
+                    {
+                        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.6ccb25b19ef2c6c42ce33a16d773c1864ba31c02.001.2",
+                        "identifier": "urn:oid:2.49.0.1.840.0.6ccb25b19ef2c6c42ce33a16d773c1864ba31c02.001.2",
+                        "sender": "w-nws.webmaster@noaa.gov",
+                        "sent": "2026-10-30T08:50:00-07:00"
+                    }
+                ],
+                "sent": "2026-10-30T17:43:00-07:00",
+                "effective": "2026-10-30T17:43:00-07:00",
+                "onset": "2026-10-31T00:00:00-07:00",
+                "expires": "2026-10-31T05:00:00-07:00",
+                "ends": "2026-10-31T09:00:00-07:00",
+                "status": "Actual",
+                "messageType": "Update",
+                "category": "Met",
+                "severity": "Severe",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Freeze Warning",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Seattle WA",
+                "headline": "Freeze Warning issued October 30 at 5:43PM PDT until October 31 at 9:00AM PDT by NWS Seattle WA",
+                "description": "* WHAT...Sub-freezing temperatures around 29 to 32 expected.\nTemperatures may vary due to clearing or fog development in\nlocalized areas.\n\n* WHERE...Middle Chehalis River Valley and Lowlands of Lewis and\nSouthern Thurston Counties.\n\n* WHEN...From midnight tonight to 9 AM PDT Saturday.\n\n* IMPACTS...Frost and freeze conditions could kill crops, other\nsensitive vegetation and possibly damage unprotected outdoor\nplumbing.\n\n* ADDITIONAL DETAILS...The growing season officially ends on October\n31, after which no further frost or freeze headlines will be\nissued.",
+                "instruction": "Take steps now to protect tender plants from the cold.",
+                "response": "Execute",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "NPWSEW"
+                    ],
+                    "WMOidentifier": [
+                        "WWUS76 KSEW 310043"
+                    ],
+                    "NWSheadline": [
+                        "FREEZE WARNING REMAINS IN EFFECT FROM MIDNIGHT TONIGHT TO 9 AM PDT SATURDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.CON.KSEW.FZ.W.0002.261031T0700Z-261031T1600Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-10-31T09:00:00-07:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "FZW"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.002.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.002.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.67affa47eb21b55830088ef4ea016a592cde61b4.002.1",
+                "areaDesc": "Foothills and Valleys of the North Cascades; Foothills and Valleys of Snohomish and Northern King Counties; Foothills and Valleys of Central King County; Lowlands of Western Whatcom County; Lowlands of Western Skagit and Northwestern Snohomish Counties; Downtown Everett / Marysville Area; Shoreline / Lynnwood / South Everett Area; Eastside; Eastern Kitsap County; Eastern Strait of Juan de Fuca; Western Strait of Juan de Fuca; Lake Crescent Area Including US 101",
+                "geocode": {
+                    "SAME": [
+                        "053073",
+                        "053057",
+                        "053061",
+                        "053033",
+                        "053035",
+                        "053009"
+                    ],
+                    "UGC": [
+                        "WAZ305",
+                        "WAZ306",
+                        "WAZ307",
+                        "WAZ310",
+                        "WAZ311",
+                        "WAZ312",
+                        "WAZ313",
+                        "WAZ314",
+                        "WAZ323",
+                        "WAZ325",
+                        "WAZ326",
+                        "WAZ327"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/WAZ305",
+                    "https://api.weather.gov/zones/forecast/WAZ306",
+                    "https://api.weather.gov/zones/forecast/WAZ307",
+                    "https://api.weather.gov/zones/forecast/WAZ310",
+                    "https://api.weather.gov/zones/forecast/WAZ311",
+                    "https://api.weather.gov/zones/forecast/WAZ312",
+                    "https://api.weather.gov/zones/forecast/WAZ313",
+                    "https://api.weather.gov/zones/forecast/WAZ314",
+                    "https://api.weather.gov/zones/forecast/WAZ323",
+                    "https://api.weather.gov/zones/forecast/WAZ325",
+                    "https://api.weather.gov/zones/forecast/WAZ326",
+                    "https://api.weather.gov/zones/forecast/WAZ327"
+                ],
+                "references": [],
+                "sent": "2026-10-30T17:43:00-07:00",
+                "effective": "2026-10-30T17:43:00-07:00",
+                "onset": "2026-10-31T00:00:00-07:00",
+                "expires": "2026-10-31T05:00:00-07:00",
+                "ends": "2026-10-31T09:00:00-07:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Minor",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Frost Advisory",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Seattle WA",
+                "headline": "Frost Advisory issued October 30 at 5:43PM PDT until October 31 at 9:00AM PDT by NWS Seattle WA",
+                "description": "* WHAT...Temperatures as low as 34 will result in frost formation.\nTemperatures may vary due to clearing or fog development in\nlocalized areas.\n\n* WHERE...Portions of northwest and west central Washington.\n\n* WHEN...From midnight tonight to 9 AM PDT Saturday.\n\n* IMPACTS...Frost could harm sensitive outdoor vegetation. Sensitive\noutdoor plants may be killed if left uncovered.\n\n* ADDITIONAL DETAILS...The growing season officially ends on October\n31, after which no further frost or freeze headlines will be\nissued.",
+                "instruction": "Take steps now to protect tender plants from the cold.",
+                "response": "Prepare",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "NPWSEW"
+                    ],
+                    "WMOidentifier": [
+                        "WWUS76 KSEW 310043"
+                    ],
+                    "NWSheadline": [
+                        "FROST ADVISORY IN EFFECT FROM MIDNIGHT TONIGHT TO 9 AM PDT SATURDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KSEW.FR.Y.0011.261031T0700Z-261031T1600Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-10-31T09:00:00-07:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "FRY"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.23794f3e90287620c597db69e9c5bd600b1ef95e.001.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.23794f3e90287620c597db69e9c5bd600b1ef95e.001.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.23794f3e90287620c597db69e9c5bd600b1ef95e.001.1",
+                "areaDesc": "Northwestern Interior Mendocino; Northeastern Interior Mendocino; Northern Lake",
+                "geocode": {
+                    "SAME": [
+                        "006045",
+                        "006033"
+                    ],
+                    "UGC": [
+                        "CAZ110",
+                        "CAZ111",
+                        "CAZ114"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/CAZ110",
+                    "https://api.weather.gov/zones/forecast/CAZ111",
+                    "https://api.weather.gov/zones/forecast/CAZ114"
+                ],
+                "references": [],
+                "sent": "2026-10-30T11:54:00-07:00",
+                "effective": "2026-10-30T11:54:00-07:00",
+                "onset": "2026-10-30T20:00:00-07:00",
+                "expires": "2026-10-31T10:00:00-07:00",
+                "ends": "2026-10-31T10:00:00-07:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Minor",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Frost Advisory",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Eureka CA",
+                "headline": "Frost Advisory issued October 30 at 11:54AM PDT until October 31 at 10:00AM PDT by NWS Eureka CA",
+                "description": "* WHAT...Temperatures as low as 33 will result in frost formation.\n\n* WHERE...Northern Mendocino Interior, and Northern Lake.\n\n* WHEN...From 8 PM this evening to 10 AM PDT Saturday.\n\n* IMPACTS...Frost could harm sensitive outdoor vegetation. Sensitive\noutdoor plants may be killed if left uncovered.",
+                "instruction": "Take steps now to protect tender plants from the cold.",
+                "response": "Prepare",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "NPWEKA"
+                    ],
+                    "WMOidentifier": [
+                        "WWUS76 KEKA 301854"
+                    ],
+                    "NWSheadline": [
+                        "FROST ADVISORY IN EFFECT FROM 8 PM THIS EVENING TO 10 AM PDT SATURDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KEKA.FR.Y.0031.261031T0300Z-261031T1700Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-10-31T10:00:00-07:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "FRY"
+                    ]
+                }
+            }
+        }
+    ],
+    "title": "Current watches, warnings, and advisories",
+    "updated": "2026-10-31T08:52:49+00:00"
+}

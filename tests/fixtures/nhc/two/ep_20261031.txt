@@ -1,0 +1,23 @@
+ABPZ20 KNHC 310502
+TWOEP 
+
+Tropical Weather Outlook
+NWS National Hurricane Center Miami FL
+1100 PM PDT Fri Oct 30 2026
+
+For the eastern and central North Pacific east of 180 longitude:
+
+Well Southeast of the Hawaiian Islands:
+A broad area of low pressure is forecast to develop well to the 
+southeast of the Hawaiian Islands by early next week. Thereafter, 
+environmental conditions appear generally favorable for gradual 
+development of this system, and a tropical depression could form by 
+the end of next week as it moves westward to west-northwestward over 
+the Central Pacific basin.
+* Formation chance through 48 hours...low...near 0 percent.
+* Formation chance through 7 days...medium...40 percent.
+
+$$
+Forecaster Evans/Gibbs
+
+

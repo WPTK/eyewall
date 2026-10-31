@@ -1,0 +1,86 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Erin Discussion Number  30
+NWS National Hurricane Center Miami FL       AL052025
+500 PM EDT Mon Aug 18 2025
+ 
+Erin's cloud pattern has become somewhat less organized than 
+earlier today, likely as a result of some dry air intrusion over 
+the northwestern portion of the circulation and increased northerly 
+shear.  An AMSR microwave image from the GCOM satellite showed the 
+dry air intrusion which is consistent with the presence of arc 
+clouds emanating northwestward from the system.  The northerly 
+shear has also begun to restrict the outflow to the north of Erin.  
+The intensity is held at 120 kt for now, pending observations from 
+another Air Force Hurricane Hunter aircraft in a few hours.  This 
+intensity estimate is also consistent with a blend of objective 
+values from UW-CIMSS.
+
+After a west-northwestward wobble earlier today, the hurricane has 
+resumed its northwest course with a motion estimate of 310/9 kt.  
+The track forecast reasoning remains basically unchanged.  Over 
+the next 72 hours or so, Erin should turn northward and move 
+through a weakness in the subtropical ridge, and on the western 
+side of a mid-level anticyclone.  Later in the forecast period, an 
+approaching mid-level trough should cause Erin to accelerate
+northeastward over the northern Atlantic.
+
+The model guidance and low-level water vapor imagery suggests that 
+the dry air incursion into Erin is probably temporary.  However, 
+given the degraded cloud pattern and the less conducive shear over 
+the system, not much additional strengthening is likely.  In any 
+event since the system will remain over warm waters for at least 
+the next 72 hours, Erin will likely retain major hurricane status 
+through the middle of the week.  The official intensity forecast is 
+at the high end of the model guidance.
+  
+Erin's continued expanding wind field will result in rough ocean 
+conditions over much of the western Atlantic. It should be noted 
+that the 34- and 50-kt wind speed probabilities beyond 36 hours in 
+the text and graphical products are likely underestimating the risk 
+of those winds occurring.  This is because the forecast wind field 
+of Erin is considerably larger than average compared to the wind 
+field used to derive the wind speed probability product.
+ 
+KEY MESSAGES:
+ 
+1. Bands of heavy rainfall are expected over portions of Hispaniola 
+this evening, and through Tuesday for the Turks and Caicos, the 
+southeast Bahamas, and the easternmost central Bahamas.  Flash and 
+urban flooding are possible.
+ 
+2. Tropical storm conditions are expected in the Turks and Caicos 
+Islands and in the southeast Bahamas through this evening.  Tropical 
+storm conditions are possible in portions of the central Bahamas 
+tonight through Tuesday.
+ 
+3. Erin is expected to produce life-threatening surf and rip 
+currents along the beaches of the Bahamas, much of the east coast of 
+the U.S., Bermuda, and Atlantic Canada during the next several days. 
+Beachgoers in those areas should follow advice from lifeguards, 
+local authorities, and beach warning flags. 
+ 
+4. Tropical storm conditions and coastal flooding are possible in 
+the North Carolina Outer Banks beginning late Wednesday where 
+Tropical Storm and Storm Surge Watches are in effect.  Interests in 
+Bermuda should also monitor the progress of Erin as strong winds are 
+possible beginning on Thursday.
+
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  18/2100Z 24.0N  71.3W  120 KT 140 MPH
+ 12H  19/0600Z 24.9N  71.9W  120 KT 140 MPH
+ 24H  19/1800Z 26.5N  72.8W  115 KT 130 MPH
+ 36H  20/0600Z 28.4N  73.5W  105 KT 120 MPH
+ 48H  20/1800Z 30.5N  73.7W  100 KT 115 MPH
+ 60H  21/0600Z 32.7N  73.0W  100 KT 115 MPH
+ 72H  21/1800Z 34.8N  71.2W   95 KT 110 MPH
+ 96H  22/1800Z 38.0N  64.0W   85 KT 100 MPH
+120H  23/1800Z 41.0N  56.5W   75 KT  85 MPH
+ 
+$$
+Forecaster Pasch
+ 
+NNNN
