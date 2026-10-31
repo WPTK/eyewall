@@ -1,0 +1,244 @@
+/* eyewall layout. Widths: wide (110+) shows the panels beside the map; narrow folds them into tabs; compact (< 90)
+   hides the map until `m`. The screen carries the matching classes: narrow, compact, show-map, hide-map, full-map. */
+
+Screen {
+    background: $background;
+    color: $foreground;
+}
+
+/* ---- dashboard ---- */
+
+#main {
+    height: 1fr;
+}
+
+#storms {
+    width: 36;
+    height: 100%;
+    border: round $primary 50%;
+    background: $surface;
+    padding: 0;
+}
+
+#storms:focus {
+    border: round $accent;
+}
+
+#storms > .option-list--option-highlighted {
+    background: $primary 30%;
+}
+
+#map-pane {
+    width: 1fr;
+    height: 100%;
+    border: round $primary 50%;
+}
+
+#map-pane:focus-within {
+    border: round $accent;
+}
+
+MapView {
+    height: 1fr;
+}
+
+.legend {
+    height: 1;
+    color: $text-muted;
+}
+
+#side-stack {
+    width: 44;
+    height: 100%;
+}
+
+#side-tabs {
+    display: none;
+    width: 38;
+    height: 100%;
+}
+
+.panel {
+    height: auto;
+    min-height: 3;
+    max-height: 12;
+    border: round $primary 50%;
+    padding: 0 1;
+    background: $surface;
+}
+
+.panel:focus {
+    border: round $accent;
+}
+
+.panel Static {
+    width: 100%;
+    height: auto;
+}
+
+#side-stack .wind {
+    max-height: 15;
+}
+
+#side-tabs .panel {
+    max-height: 100%;
+    height: 100%;
+}
+
+#side-tabs Tab {
+    padding: 0 1;
+}
+
+#side-tabs TabPane {
+    padding: 0;
+}
+
+#side-tabs .panel {
+    border: none;
+}
+
+#status, #detail-status, #outlook-status {
+    dock: bottom;
+    height: 1;
+    background: $panel;
+    padding: 0;
+}
+
+DashboardScreen.narrow #side-stack {
+    display: none;
+}
+
+DashboardScreen.narrow #side-tabs {
+    display: block;
+}
+
+DashboardScreen.narrow #storms {
+    width: 32;
+}
+
+DashboardScreen.compact #map-pane {
+    display: none;
+}
+
+DashboardScreen.compact #side-tabs {
+    width: 1fr;
+}
+
+DashboardScreen.compact.show-map #map-pane {
+    display: block;
+}
+
+DashboardScreen.compact.show-map #side-tabs {
+    display: none;
+}
+
+DashboardScreen.hide-map #map-pane {
+    display: none;
+}
+
+DashboardScreen.hide-map #side-tabs {
+    width: 1fr;
+}
+
+DashboardScreen.hide-map #side-stack {
+    width: 1fr;
+}
+
+DashboardScreen.full-map #storms,
+DashboardScreen.full-map #side-stack,
+DashboardScreen.full-map #side-tabs {
+    display: none;
+}
+
+DashboardScreen.full-map #map-pane {
+    display: block;
+}
+
+/* ---- storm detail ---- */
+
+#detail-title {
+    height: 1;
+    background: $panel;
+}
+
+#detail-tabs {
+    height: 1fr;
+}
+
+.note {
+    height: 1;
+    padding: 0 1;
+}
+
+StormDetailScreen DataTable {
+    height: 1fr;
+}
+
+.detail-text {
+    padding: 0 1;
+}
+
+/* ---- outlook ---- */
+
+#outlook-main {
+    height: 1fr;
+}
+
+#outlook-left {
+    width: 1fr;
+    height: 100%;
+    border: round $primary 50%;
+}
+
+#outlook-scroll {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#watchlist-title {
+    height: 1;
+    padding: 0 1;
+    text-style: bold;
+    color: $secondary;
+}
+
+#watchlist {
+    height: 7;
+}
+
+#outlook-map {
+    width: 1fr;
+    height: 100%;
+    border: round $primary 50%;
+}
+
+/* ---- alert log, help, layers ---- */
+
+#alert-table {
+    height: 1fr;
+}
+
+HelpScreen, LayerMenu {
+    align: center middle;
+}
+
+#help-box {
+    width: 78;
+    max-width: 96%;
+    height: auto;
+    max-height: 92%;
+    border: round $accent;
+    background: $panel;
+    padding: 0 2;
+}
+
+#layer-box {
+    width: 44;
+    height: auto;
+    border: round $accent;
+    background: $panel;
+}
+
+StormDetailScreen Tab {
+    padding: 0 1;
+}

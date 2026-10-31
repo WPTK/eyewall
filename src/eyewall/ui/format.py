@@ -1,0 +1,516 @@
+"""What the dashboard says: the storm list rows, the side panels and the status bar, as Rich text.
+
+Pure functions of the store and a few settings, so they are tested without a terminal. Units stay as NOAA reported them
+and are converted here, at display time, through a `units.Preset`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from rich.text import Text
+
+from eyewall.clock import format_age
+from eyewall.geo import compass_point
+from eyewall.models.events import Event, EventKind, Severity
+from eyewall.models.outlook import Chance, Outlook, OutlookArea, OutlookText
+from eyewall.models.storm import Classification, Storm
+from eyewall.models.watches import WatchWarningAlert
+from eyewall.models.wind import QuadrantRadii
+from eyewall.palette import (
+    NEUTRAL,
+    WATCH_WARNING_COLORS,
+    WatchWarning,
+    category_color,
+    category_for_knots,
+    risk_color,
+    wind_band_color,
+)
+from eyewall.poll import Freshness, FreshnessState
+from eyewall.sources import protocol
+from eyewall.state.store import Store, StormState
+from eyewall.ui.glyphs import UiGlyphs
+from eyewall.ui.theme import DIM, FRESHNESS_COLORS
+from eyewall.units import MISSING, Preset
+
+BASIN_NAMES = {"AL": "Atlantic", "EP": "East Pacific", "CP": "Central Pacific"}
+INVEST_LETTER = {"AL": "L", "EP": "E", "CP": "C"}
+QUIET_TEXT = "No tropical cyclones"
+OLD_ADVISORY_HOURS = 6.0
+MAX_PANEL_ALERTS = 5
+MAX_STRIP_BUOYS = 5
+EVENT_TITLES: dict[EventKind, str] = {
+    EventKind.NEW_STORM: "New storm",
+    EventKind.NEW_PTC: "Potential cyclone",
+    EventKind.NEW_INVEST: "New invest",
+    EventKind.NEW_ADVISORY: "New advisory",
+    EventKind.CLASSIFICATION: "Classification",
+    EventKind.WATCH_WARNING_ISSUED: "Watch or warning issued",
+    EventKind.WATCH_WARNING_CHANGED: "Watch or warning changed",
+    EventKind.WATCH_WARNING_DISCONTINUED: "Watch or warning ended",
+    EventKind.NEW_OUTLOOK: "Outlook",
+    EventKind.NEW_DISCUSSION: "Discussion",
+    EventKind.BUOY_THRESHOLD: "Buoy",
+    EventKind.BUOY_SILENT: "Buoy silent",
+}
+SEVERITY_COLORS = {Severity.INFO: "#8fd3ff", Severity.NOTICE: "#ffe94a", Severity.WARNING: "#ff4d4d"}
+
+
+# ----------------------------------------------------------------------------------------------------- small helpers
+
+
+def collapse(text: str) -> str:
+    """Whitespace runs to single spaces: NHC text is hard-wrapped at 69 columns."""
+    return " ".join(text.split())
+
+
+def class_label(storm: Storm) -> str:
+    """The badge text: PTC for a potential cyclone, else TD, TS or the hurricane category from the wind."""
+    if storm.classification is Classification.PTC:
+        return "PTC"
+    if storm.classification in (Classification.HU, Classification.TY, Classification.TS, Classification.TD):
+        category = category_for_knots(storm.intensity_kt)
+        if category is not None:
+            return category.value
+    return (storm.classification_text or storm.classification.value)[:3].upper()
+
+
+def storm_color(storm: Storm) -> str:
+    return category_color(storm.intensity_kt)
+
+
+def movement_text(storm: Storm, preset: Preset) -> str:
+    speed = storm.movement_speed_mph
+    if storm.movement_dir_deg is None or speed is None:
+        return "movement unknown"
+    if speed < 1:
+        return "nearly stationary"
+    return f"{compass_point(storm.movement_dir_deg)} at {preset.fmt_wind(speed, 'mph')}"
+
+
+def advisory_age(storm: Storm, now: datetime) -> tuple[str, bool]:
+    """The age of the newest product as text, and whether it is old enough to flag."""
+    if storm.last_update is None:
+        return "no advisory", True
+    seconds = (now - storm.last_update).total_seconds()
+    return format_age(max(0.0, seconds)), seconds > OLD_ADVISORY_HOURS * 3600
+
+
+def chance_text(chance: Chance | None) -> str:
+    if chance is None or chance.percent is None:
+        return "--"
+    return f"{chance.percent}%"
+
+
+def text_basins(text: OutlookText) -> tuple[str, ...]:
+    """The basins an outlook text covers, from its `For the ...:` line."""
+    region = (text.region or "").lower()
+    if "atlantic" in region:
+        return ("AL",)
+    found: list[str] = []
+    if "eastern" in region or "east pacific" in region:
+        found.append("EP")
+    if "central" in region:
+        found.append("CP")
+    return tuple(found) or ("EP",)
+
+
+# ------------------------------------------------------------------------------------------------------- storm list
+
+
+@dataclass(frozen=True, slots=True)
+class Row:
+    """One row of the storm list. `kind`: header, storm, ptc, invest or quiet; header and quiet are not selectable."""
+
+    kind: str
+    id: str
+    text: Text
+    basin: str = ""
+
+    @property
+    def selectable(self) -> bool:
+        return self.kind in ("storm", "ptc", "invest")
+
+
+def _invest_basin(area: OutlookArea, text: OutlookText, outlook: Outlook) -> str:
+    basins = text_basins(text)
+    if len(basins) == 1 or area.invest_id is None:
+        return basins[0]
+    for track in outlook.invests:
+        if f"{track.basin_code}{track.number:02d}".upper() == area.invest_id.upper() and track.latest is not None:
+            return "CP" if track.latest.lon < -140.0 else "EP"
+    return basins[0]
+
+
+def invest_label(area: OutlookArea, basin: str, index: int) -> str:
+    """`Invest 94L` when the outlook names the invest, else `Area 1` (the numbered area in the outlook text)."""
+    if area.invest_id:
+        return f"Invest {area.invest_id[2:]}{INVEST_LETTER.get(area.invest_id[:2].upper(), '')}"
+    return f"Area {area.number or index}"
+
+
+def outlook_areas_by_basin(outlook: Outlook | None) -> dict[str, list[tuple[str, OutlookArea]]]:
+    """Each basin's outlook areas as (row id, area) pairs, in the order the outlook lists them.
+
+    NHC's East Pacific outlook can also describe a Central Pacific area that the CPHC outlook lists too. Texts that
+    cover one basin are read first and claim their areas, so the broader text does not list them a second time.
+    """
+    found: dict[str, list[tuple[str, OutlookArea]]] = {}
+    if outlook is None:
+        return found
+    claimed: set[tuple[str, str]] = set()
+    for text in sorted(outlook.texts, key=lambda t: len(text_basins(t))):
+        for index, area in enumerate(text.areas, start=1):
+            marker = (collapse(area.title).lower(), collapse(area.description)[:80].lower())
+            if marker in claimed:
+                continue
+            claimed.add(marker)
+            basin = _invest_basin(area, text, outlook)
+            row_id = f"invest:{area.invest_id or f'{basin}-{area.number or index}'}"
+            found.setdefault(basin, []).append((row_id, area))
+    return found
+
+
+def _storm_row(state: StormState, now: datetime, preset: Preset, g: UiGlyphs) -> Row:
+    storm = state.storm
+    color = storm_color(storm)
+    label = class_label(storm)
+    head = Text(no_wrap=True, overflow="ellipsis")
+    head.append(f" {label:<3}", style=f"bold {color}")
+    head.append(f" {storm.name.upper()}", style="bold")
+    head.append(
+        f"  {preset.fmt_wind(storm.intensity_kt)}  {preset.fmt_pressure(storm.pressure_mb)}",
+        style=color if storm.intensity_kt is not None else DIM,
+    )
+    age, old = advisory_age(storm, now)
+    adv = state.advisories.adv_num or storm.adv_num
+    detail = Text(no_wrap=True, overflow="ellipsis")
+    detail.append(f"     {movement_text(storm, preset)} {g.sep} ", style=DIM)
+    detail.append(f"adv {adv}" if adv else "no advisory", style=DIM)
+    detail.append(f" {g.sep} {age}", style="#ffa63d" if old else DIM)
+    kind = "ptc" if storm.classification is Classification.PTC else "storm"
+    return Row(kind, storm.id, Text("\n").join([head, detail]), storm.basin.value if storm.basin else "")
+
+
+def _invest_row(row_id: str, area: OutlookArea, basin: str, index: int) -> Row:
+    head = Text(no_wrap=True, overflow="ellipsis")
+    head.append(f" {invest_label(area, basin, index)}", style="bold")
+    detail = Text(no_wrap=True, overflow="ellipsis")
+    detail.append("     2d ", style=DIM)
+    detail.append(chance_text(area.chance_48h), style=risk_color(area.chance_48h.risk if area.chance_48h else None))
+    detail.append("  7d ", style=DIM)
+    detail.append(chance_text(area.chance_7d), style=risk_color(area.chance_7d.risk if area.chance_7d else None))
+    return Row("invest", row_id, Text("\n").join([head, detail]), basin)
+
+
+def build_rows(store: Store, basins: tuple[str, ...], now: datetime, preset: Preset, g: UiGlyphs) -> list[Row]:
+    """The storm list: per basin a header, its cyclones and PTCs, its invests, and a quiet row if none."""
+    by_basin = outlook_areas_by_basin(store.outlook)
+    rows: list[Row] = []
+    for code in basins:
+        states = [s for s in store.storms.values() if s.storm.basin is not None and s.storm.basin.value == code]
+        states.sort(key=lambda s: (s.storm.classification is Classification.PTC, -(s.storm.intensity_kt or 0)))
+        header = Text(f" {BASIN_NAMES[code].upper()}", style="bold #8fd3ff", no_wrap=True)
+        rows.append(Row("header", f"header:{code}", header, code))
+        rows.extend(_storm_row(state, now, preset, g) for state in states)
+        if not states:
+            if store.storms_loaded:
+                rows.append(Row("quiet", f"quiet:{code}", Text(f"   {QUIET_TEXT}", style=DIM, no_wrap=True), code))
+            else:
+                rows.append(Row("quiet", f"quiet:{code}", Text("   loading...", style=DIM, no_wrap=True), code))
+        for index, (row_id, area) in enumerate(by_basin.get(code, []), start=1):
+            rows.append(_invest_row(row_id, area, code, index))
+    return rows
+
+
+# ------------------------------------------------------------------------------------------------------------ panels
+
+
+def _kv(text: Text, label: str, value: str, *, style: str = "") -> None:
+    text.append(f"{label} ", style=DIM)
+    text.append(value, style=style)
+
+
+def headline_panel(store: Store, selected: str | None, basins: tuple[str, ...]) -> Text:
+    """The latest headline and key messages for the selected storm; the outlook summary when nothing is selected."""
+    out = Text()
+    state = store.storms.get(selected or "")
+    if state is not None:
+        public = state.advisories.public
+        out.append(f"{state.storm.name.upper()}", style=f"bold {storm_color(state.storm)}")
+        adv = state.advisories.adv_num
+        if adv is not None:
+            out.append(f"  advisory {adv}", style=DIM)
+        out.append("\n")
+        if public is None:
+            out.append("Waiting for the public advisory.", style=DIM)
+            return out
+        for headline in public.headlines:
+            out.append(collapse(headline) + "\n")
+        messages = public.key_messages or (
+            state.advisories.discussion.key_messages if state.advisories.discussion else ()
+        )
+        for message in messages:
+            out.append("- ", style=DIM)
+            out.append(collapse(message) + "\n")
+        return out
+    area = _selected_area(store, selected)
+    if area is not None:
+        out.append(f"{invest_label(area, '', 1)}\n", style="bold")
+        out.append(collapse(area.description))
+        return out
+    if store.outlook is None:
+        out.append("Waiting for the tropical weather outlook.", style=DIM)
+        return out
+    for text in store.outlook.texts:
+        covered = [b for b in text_basins(text) if b in basins]
+        if not covered:
+            continue
+        out.append(f"{' / '.join(BASIN_NAMES[b] for b in covered)}\n", style="bold #8fd3ff")
+        out.append(collapse(text.summary) + "\n")
+        if text.active_systems:
+            out.append(collapse(text.active_systems) + "\n", style=DIM)
+    return out
+
+
+def _selected_area(store: Store, selected: str | None) -> OutlookArea | None:
+    if not selected or not selected.startswith("invest:"):
+        return None
+    for areas in outlook_areas_by_basin(store.outlook).values():
+        for row_id, area in areas:
+            if row_id == selected:
+                return area
+    return None
+
+
+def ww_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
+    """Watches and warnings in effect, each with a color chip, then the NWS zone alerts."""
+    out = Text()
+    state = store.storms.get(selected or "")
+    public = state.advisories.public if state else None
+    if public is None:
+        out.append("Select a storm for its watches and warnings.", style=DIM)
+    else:
+        blocks = public.watches_warnings
+        for area in blocks.in_effect:
+            color = WATCH_WARNING_COLORS.get(area.kind, NEUTRAL) if area.kind else NEUTRAL
+            out.append(f"{g.chip} ", style=color)
+            out.append(f"{collapse(area.label)}\n", style=f"bold {color}")
+            out.append("   " + ", ".join(collapse(a) for a in area.areas) + "\n")
+        if not blocks.in_effect:
+            out.append("No coastal watches or warnings in effect.\n", style=DIM)
+        for change in blocks.changes:
+            out.append(f"{g.sep} {collapse(change)}\n", style=DIM)
+    alerts = store.alerts.alerts
+    if alerts:
+        out.append("\nNWS alerts\n", style="bold #8fd3ff")
+        for alert in alerts[:MAX_PANEL_ALERTS]:
+            out.append(f"{g.chip} ", style=_alert_color(alert))
+            out.append(f"{alert.event}: ", style="bold")
+            out.append(collapse(alert.area_desc)[:90] + "\n")
+        if len(alerts) > MAX_PANEL_ALERTS:
+            out.append(f"+{len(alerts) - MAX_PANEL_ALERTS} more\n", style=DIM)
+    return out
+
+
+def _alert_color(alert: WatchWarningAlert) -> str:
+    return WATCH_WARNING_COLORS.get(alert.kind, NEUTRAL) if alert.kind else NEUTRAL
+
+
+def _radii_cells(radii: QuadrantRadii | None, preset: Preset) -> str:
+    if radii is None:
+        return "  --   --   --   --"
+    cells = []
+    for value in (radii.ne, radii.se, radii.sw, radii.nw):
+        cells.append(MISSING.rjust(4) if value is None else preset.fmt_distance(value, decimals=0).split()[0].rjust(4))
+    return " " + " ".join(cells)
+
+
+def top_probabilities(state: StormState) -> list[tuple[int, str, int]]:
+    """For each of 34, 50 and 64 kt, the place with the highest cumulative chance: (threshold, place, percent)."""
+    pws = state.advisories.wind_probabilities
+    if pws is None:
+        return []
+    best: dict[int, tuple[str, int]] = {}
+    for row in pws.rows:
+        peak = max((c.cumulative for c in row.cells if c is not None), default=None)
+        if peak is not None and (row.threshold_kt not in best or peak > best[row.threshold_kt][1]):
+            best[row.threshold_kt] = (row.location, peak)
+    return [(kt, *best[kt]) for kt in sorted(best)]
+
+
+def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
+    """Max wind, gusts, the radii by quadrant, and the likeliest 34, 50 and 64 knot locations."""
+    out = Text()
+    state = store.storms.get(selected or "")
+    if state is None:
+        out.append("Select a storm for its wind field.", style=DIM)
+        return out
+    storm = state.storm
+    tcm = state.advisories.forecast
+    wind = tcm.max_wind_kt if tcm and tcm.max_wind_kt is not None else storm.intensity_kt
+    _kv(out, "Max wind", preset.fmt_wind(wind), style=f"bold {category_color(wind)}")
+    if tcm is not None and tcm.gust_kt is not None:
+        out.append("  ")
+        _kv(out, "gusts", preset.fmt_wind(tcm.gust_kt))
+    out.append("\n")
+    pressure = tcm.pressure_mb if tcm and tcm.pressure_mb is not None else storm.pressure_mb
+    _kv(out, "Pressure", preset.fmt_pressure(pressure))
+    if tcm is not None and tcm.eye_diameter_nm is not None:
+        out.append("  ")
+        _kv(out, "eye", preset.fmt_distance(tcm.eye_diameter_nm))
+    out.append("\n")
+    if tcm is not None and not tcm.radii.empty:
+        unit = preset.distance
+        out.append(f"\nRadii ({unit})".ljust(11) + "  NE   SE   SW   NW\n", style=DIM)
+        for kt in (34, 50, 64):
+            radii = tcm.radii.for_threshold(kt)
+            if radii is not None:
+                out.append(f"{kt} kt".ljust(9), style=f"bold {category_color(kt)}")
+                out.append(_radii_cells(radii, preset) + "\n")
+    probabilities = top_probabilities(state)
+    if probabilities:
+        out.append("\nMost likely (5 day)\n", style=DIM)
+        for kt, place, percent in probabilities:
+            out.append(f"{kt} kt ".ljust(7), style=f"bold {category_color(kt)}")
+            out.append(f"{percent:>3}%  {place.title()}\n")
+    return out
+
+
+def surge_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
+    """Surge watches and warnings in effect, and the peak surge text from the public advisory."""
+    out = Text()
+    state = store.storms.get(selected or "")
+    public = state.advisories.public if state else None
+    if public is None:
+        out.append("Select a storm for its surge outlook.", style=DIM)
+        return out
+    surge = [
+        a for a in public.watches_warnings.in_effect if a.kind in (WatchWarning.SURGE_WATCH, WatchWarning.SURGE_WARNING)
+    ]
+    for area in surge:
+        color = WATCH_WARNING_COLORS[area.kind] if area.kind else NEUTRAL
+        out.append(f"{g.chip} ", style=color)
+        out.append(f"{collapse(area.label)}\n", style=f"bold {color}")
+        out.append("   " + ", ".join(collapse(a) for a in area.areas) + "\n")
+    if not surge:
+        out.append("No storm surge watch or warning in effect.\n", style=DIM)
+    for title, body in public.hazards:
+        if "SURGE" in title.upper():
+            out.append(f"\n{collapse(title).title()}\n", style="bold #8fd3ff")
+            out.append(collapse(body)[:600])
+            break
+    return out
+
+
+def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset, g: UiGlyphs) -> Text:
+    """The five nearest buoys with wind, pressure and the three hour pressure change."""
+    out = Text()
+    if selected not in store.storms:
+        out.append("Select a storm for the buoys near it.", style=DIM)
+        return out
+    entries = store.nearby_buoys(selected)[:MAX_STRIP_BUOYS]
+    if not entries:
+        out.append("No buoys near this storm yet.", style=DIM)
+        return out
+    for entry in entries:
+        series = store.series.get(entry.station.id.upper())
+        obs = series.latest if series else None
+        latest = store.latest.get(entry.station.id.upper())
+        if obs is None and latest is not None:
+            obs = latest.observation
+        out.append(entry.station.id.ljust(6), style="bold")
+        out.append(f"{entry.distance_nm:>4.0f}nm {compass_point(entry.bearing_deg):<3} ", style=DIM)
+        wind_kt = None if obs is None or obs.wind_speed_mps is None else obs.wind_speed_mps / 0.514444
+        out.append(preset.fmt_wind(wind_kt).rjust(7), style=wind_band_color(wind_kt) or "")
+        pressure = None if obs is None else obs.pressure_hpa
+        out.append(" " + preset.fmt_pressure(pressure, "hpa").rjust(8))
+        tendency = store.tendency(entry.station.id, now)
+        if tendency is None:
+            out.append("  --", style=DIM)
+        else:
+            arrow = g.falling if tendency.delta_hpa < -0.05 else g.rising if tendency.delta_hpa > 0.05 else g.steady
+            out.append(f" {arrow}{abs(tendency.delta_hpa):.1f}", style="#ffa63d" if tendency.delta_hpa <= -1.0 else "")
+        out.append("\n")
+    return out
+
+
+# --------------------------------------------------------------------------------------------------------- status bar
+
+FEED_LABELS = {
+    protocol.STORMS: ("storms", "sto"),
+    protocol.OUTLOOK: ("outlook", "out"),
+    protocol.ALERTS: ("alerts", "alr"),
+    protocol.BUOYS: ("buoys", "buo"),
+    protocol.TIDES: ("tides", "tid"),
+    protocol.SATELLITE: ("satellite", "sat"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class FeedStatus:
+    feed: str
+    freshness: Freshness
+    active: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayStatus:
+    paused: bool
+    speed: int
+    moment: datetime
+    adv: str | None
+
+
+def feed_glyph(freshness: Freshness, g: UiGlyphs) -> str:
+    return {
+        FreshnessState.FRESH: g.fresh,
+        FreshnessState.STALE: g.stale,
+        FreshnessState.ERROR: g.error,
+        FreshnessState.LOADING: g.loading,
+    }[freshness.state]
+
+
+def status_bar(
+    feeds: list[FeedStatus],
+    *,
+    next_poll: float | None,
+    alert_count: int,
+    replay: ReplayStatus | None,
+    away: bool,
+    width: int,
+    g: UiGlyphs,
+) -> Text:
+    """Per-feed freshness, the next poll, offline marker, the alert count and the replay transport on one line."""
+    full = width >= 130
+    show_age = width >= 100
+    out = Text(no_wrap=True, overflow="ellipsis")
+    for item in feeds:
+        name = FEED_LABELS[item.feed][0 if full else 1]
+        if not item.active:
+            out.append(f" {name} {g.idle}", style=DIM)
+            continue
+        color = FRESHNESS_COLORS[item.freshness.state]
+        out.append(f" {name} ", style=DIM)
+        out.append(feed_glyph(item.freshness, g), style=color)
+        if show_age and item.freshness.age is not None:
+            out.append(format_age(item.freshness.age), style=color)
+    if any(f.freshness.from_cache and f.active for f in feeds):
+        out.append("  OFFLINE: cached data", style="bold #ffe94a")
+    if next_poll is not None and width >= 90:
+        out.append(f"  next {format_age(next_poll)}", style=DIM)
+    if away:
+        out.append("  away", style="#ffe94a")
+    if alert_count:
+        out.append(f"  {g.alert}{alert_count}", style="bold #ffa63d")
+    if replay is not None:
+        mark = g.pause if replay.paused else g.play
+        out.append(f"  {mark} replay {replay.speed}x {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
+        if replay.adv:
+            out.append(f" adv {replay.adv}", style="#8fd3ff")
+    return out
+
+
+def event_title(event: Event) -> str:
+    return EVENT_TITLES.get(event.kind, event.kind.value)

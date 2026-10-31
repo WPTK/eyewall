@@ -216,6 +216,10 @@ class Poller:
             error = f"{type(state.last_error).__name__}: {state.last_error}"
         return Freshness(kind, age, stale_after, state.failures, error, state.from_cache)
 
+    def active(self, feed: str) -> bool:
+        """Whether the feed is being polled now: alerts only during a US threat, stations only while a storm exists."""
+        return self._enabled(feed)
+
     def _enabled(self, feed: str) -> bool:
         if feed == protocol.STORMS or feed == protocol.OUTLOOK:
             return True
