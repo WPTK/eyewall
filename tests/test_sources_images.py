@@ -117,3 +117,17 @@ async def test_the_replay_refuses_anything_outside_its_graphics_folder(demo, url
 
 async def test_the_replay_has_no_satellite_products(demo):
     assert await demo.satellite_product(_storm("al052025"), "GEOCOLOR") is None
+
+
+@pytest.mark.parametrize(
+    ("url", "nesdis"),
+    [
+        ("https://cdn.star.nesdis.noaa.gov/FLOATER/x.jpg", True),
+        ("https://www.nhc.noaa.gov/x/nesdis.png", False),
+        ("https://nesdis.example.test/x.jpg", False),
+    ],
+)
+def test_the_satellite_feed_is_chosen_by_the_parsed_host_not_a_substring(url, nesdis):
+    from eyewall.sources.live import _is_nesdis
+
+    assert _is_nesdis(url) is nesdis

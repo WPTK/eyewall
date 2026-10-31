@@ -291,3 +291,14 @@ def test_the_recorded_cone_draws_in_every_mode_without_its_legend() -> None:
     half = render_fallback(img, 100, 60, Mode.HALF, Depth.TRUE, cone=True)
     full = render_fallback(img, 100, 60, Mode.HALF, Depth.TRUE, cone=False)
     assert half.width == full.width == 100 and half.height < full.height  # the legend block is gone
+
+
+def test_limited_palettes_remember_their_nearest_colour() -> None:
+    from eyewall.render.images import Depth, _snap, quantize
+
+    _snap.cache_clear()
+    for _ in range(3):
+        assert quantize((12, 200, 77), Depth.C256) == quantize((12, 200, 77), Depth.C256)
+        assert quantize((12, 200, 77), Depth.C16) is not None
+    info = _snap.cache_info()
+    assert info.misses == 2 and info.hits == 7

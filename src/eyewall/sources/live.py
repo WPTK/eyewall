@@ -11,6 +11,7 @@ import contextlib
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -47,6 +48,15 @@ MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
 PREDICTION_DAYS_BEHIND = 2  # predictions start at midnight UTC this many days back, so the URL (and its cache entry)
 PREDICTION_HOURS = 120  # changes once a day instead of every poll, and the range reaches into the next day or two
+
+
+def _is_nesdis(url: str) -> bool:
+    """True when the address's parsed host is nesdis.noaa.gov or one of its subdomains."""
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "nesdis.noaa.gov" or host.endswith(".nesdis.noaa.gov")
 
 
 class LiveSource:
@@ -142,7 +152,7 @@ class LiveSource:
                 return None
 
     async def image(self, url: str) -> bytes:
-        async with self._feed(protocol.SATELLITE if "nesdis" in url else protocol.STORMS):
+        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS):
             return await fetch_image(self._http, url)
 
     # ---- outlook and alerts -----------------------------------------------------------------------------------

@@ -179,6 +179,13 @@ class StormDetailScreen(Screen[None]):
         if event.pane.id == "tab-graphics":
             gallery.query_one(OptionList).focus()
 
+    def on_screen_suspend(self) -> None:
+        self.query_one("#graphics-gallery", GalleryPanel).set_active(False)
+
+    def on_screen_resume(self) -> None:
+        tabs = self.query_one("#detail-tabs", TabbedContent)
+        self.query_one("#graphics-gallery", GalleryPanel).set_active(tabs.active == "tab-graphics")
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id == "buoys-table" and event.row_key.value is not None:
             event.stop()

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from eyewall.models.graphics import FloaterProduct, GraphicKind, GraphicLink
 from eyewall.state.store import StormState
@@ -142,4 +142,7 @@ def build_items(state: StormState, extras: Mapping[str, FloaterProduct | None] |
     for code, label in SATELLITE_PRODUCTS:
         product = known.get(code.lower()) or (extras or {}).get(code)
         items.extend(_satellite_items(code, label, product))
-    return items
+    # A picture with no advisory number or time of its own is stamped with the poll that listed it, so a refreshed
+    # image at the same address is fetched again (the disk cache turns an unchanged one into a 304).
+    stamp = "poll:" + "/".join(str(x) for x in (state.fetched_key or ()))
+    return [replace(i, version=stamp) if i.version in ("", "latest") else i for i in items]

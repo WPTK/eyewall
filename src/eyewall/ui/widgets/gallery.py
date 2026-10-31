@@ -12,6 +12,7 @@ import asyncio
 import logging
 import webbrowser
 from typing import TYPE_CHECKING, Any, ClassVar
+from urllib.parse import urlsplit
 
 from rich.segment import Segment
 from rich.style import Style as RichStyle
@@ -39,7 +40,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 0.25  # a key held on the list picks one image, not every image it passes
-RENDER_CACHE = 12
+NOAA_DOMAINS = ("noaa.gov", "weather.gov")
+RENDER_CACHE = 48  # a loop's worth of drawn frames at most; the colour lookups are memoised in render.images
 
 
 def image_mode(glyph_set: str, depth: Depth) -> Mode:
@@ -112,6 +114,7 @@ class GalleryPanel(Vertical):
         self._extras_asked = False
         self._rendered: dict[tuple[Any, ...], FallbackFrame] = {}
         self._failed_toast = False
+        self._failed: tuple[str, str, str] | None = None  # the picture that last failed to load
         self._inline: Widget | None = None
 
     @property
@@ -189,6 +192,7 @@ class GalleryPanel(Vertical):
             return
         picked = next((i for i in self.items if i.key == event.option_id), None)
         if picked is not None and picked != self.current:
+            self._failed = None  # picking an image again is the way to retry one that failed
             self.current = picked
             self._update_hint()
             if self.active:
@@ -240,7 +244,7 @@ class GalleryPanel(Vertical):
             self._update_caption()
             return
         wanted = (item.key, item.url, item.version)
-        if (self._shown == wanted and self._frames is not None) or self._loading == wanted:
+        if (self._shown == wanted and self._frames is not None) or self._loading == wanted or self._failed == wanted:
             return
         self._shown = None
         self._loading = wanted
@@ -262,6 +266,7 @@ class GalleryPanel(Vertical):
             data = await self.eye.load_image(item.url, item.version)
             frames = await asyncio.to_thread(Frames, data)
         except (FetchError, ImageError) as exc:
+            self._failed = (item.key, item.url, item.version)
             self._drop_picture()
             self._say(f"Could not load this image.\n\n{exc}")
             return
@@ -269,6 +274,7 @@ class GalleryPanel(Vertical):
             raise
         except Exception as exc:
             log.exception("could not load %s", item.url)
+            self._failed = (item.key, item.url, item.version)
             self._drop_picture()
             self._say(f"Could not show this image.\n\n{type(exc).__name__}: {exc}")
             return
@@ -435,13 +441,18 @@ class GalleryPanel(Vertical):
         if not item.url.startswith(("http://", "https://")):
             self.eye.notify("This image is part of the recording, so it has no web address.", timeout=5)
             return
+        if not is_noaa_url(item.url):
+            self.eye.notify("Not a NOAA link.", severity="warning", timeout=5)
+            return
         try:
             opened = webbrowser.open(item.url)
         except Exception:
             log.exception("could not open %s", item.url)
             opened = False
         if not opened:
-            self.eye.notify(f"No browser could be opened here. Address: {item.url}", severity="warning", timeout=10)
+            self.eye.notify(
+                f"No browser could be opened here. Address: {item.url}", severity="warning", timeout=10, markup=False
+            )
 
     def action_copy_url(self) -> None:
         item = self.current
@@ -451,9 +462,21 @@ class GalleryPanel(Vertical):
             self.eye.copy_to_clipboard(item.url)
         except Exception:
             log.exception("could not copy %s", item.url)
-            self.eye.notify(f"Could not use the clipboard. Address: {item.url}", severity="warning", timeout=10)
+            self.eye.notify(
+                f"Could not use the clipboard. Address: {item.url}", severity="warning", timeout=10, markup=False
+            )
             return
         self.eye.notify("Copied the address (the terminal must allow clipboard access).", timeout=4)
+
+
+def is_noaa_url(url: str) -> bool:
+    """True for an http(s) address whose parsed host is noaa.gov or weather.gov or a subdomain of either."""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return False
+    return parts.scheme in ("http", "https") and any(host == d or host.endswith("." + d) for d in NOAA_DOMAINS)
 
 
 def _option_text(item: GalleryItem) -> Text:

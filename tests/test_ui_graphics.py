@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import webbrowser
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -455,3 +456,90 @@ def test_the_terminal_is_probed_only_when_inline_graphics_are_possible(monkeypat
 
 def replay_source_for_run() -> ReplaySource:
     return ReplaySource(bundle.resolve_bundle(bundle.DEMO))
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------
+
+
+async def test_a_gallery_under_another_screen_is_inactive_and_wakes_with_its_tab() -> None:
+    app = app_for()
+    async with running(app) as pilot:
+        await into_the_storm(pilot, 14)
+        await press(pilot, "enter", "9")
+        detail = app.screen
+        assert isinstance(detail, StormDetailScreen)
+        panel = detail.query_one(GalleryPanel)
+        assert panel.active
+        await press(pilot, "question_mark")
+        assert not panel.active
+        await press(pilot, "escape")
+        assert panel.active
+        await press(pilot, "1")
+        assert not panel.active
+        await press(pilot, "question_mark", "escape")
+        assert not panel.active  # coming back to another tab does not wake it
+
+
+async def test_a_failed_image_is_not_fetched_again_by_a_refresh_only_by_a_new_version_or_a_new_pick() -> None:
+    source = ImageSource()
+    source.failures[STILL] = FetchError(STILL, "HTTP 503")
+    app = app_for(source)
+    async with running(app) as pilot:
+        panel = await open_gallery(pilot)
+        await pick(pilot, panel, "GEOCOLOR still")
+        await wait_until(pilot, lambda: "HTTP 503" in view_text(panel), 15)
+        before = source.fetched.count(STILL)
+        for _ in range(3):
+            panel.refresh_data()
+            await settle(pilot)
+        assert source.fetched.count(STILL) == before
+        await pick(pilot, panel, "GEOCOLOR loop")
+        await loaded(pilot, panel, "GEOCOLOR loop")
+        del source.failures[STILL]
+        await pick(pilot, panel, "GEOCOLOR still")
+        await loaded(pilot, panel, "GEOCOLOR still")
+        assert source.fetched.count(STILL) == before + 1
+
+
+def test_a_picture_with_no_version_is_stamped_with_the_poll_that_listed_it() -> None:
+    from tests.state_support import make_storm
+
+    storm = make_storm("1", storm_id="al052025")
+    product = FloaterProduct(storm.id, "GEOCOLOR", "https://n/", STILL, None, None, LOOP)
+    state = gallery.StormState(storm, satellite=(product,), fetched_key=("5", None))
+    first = {i.key: i.version for i in gallery.build_items(state)}
+    second = {i.key: i.version for i in gallery.build_items(replace(state, fetched_key=("6", None)))}
+    assert first["sat:GEOCOLOR:still"] != second["sat:GEOCOLOR:still"]
+    assert first["sat:GEOCOLOR:still"] not in ("", "latest")
+
+
+@pytest.mark.parametrize(
+    ("url", "ok"),
+    [
+        (STILL, True),
+        ("https://www.nhc.noaa.gov/storm_graphics/AL05/x.png", True),
+        ("https://forecast.weather.gov/x", True),
+        ("https://noaa.gov.evil.test/x", False),
+        ("https://evilnoaa.gov/x", False),
+        ("https://example.test/x?u=https://noaa.gov/", False),
+        ("file:///c:/noaa.gov/x", False),
+    ],
+)
+def test_only_noaa_hosts_are_opened(url: str, ok: bool) -> None:
+    assert gallery_widget.is_noaa_url(url) is ok
+
+
+async def test_o_refuses_a_link_that_is_not_noaa_and_notices_do_not_read_the_address_as_markup(monkeypatch) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: opened.append(url) or True)
+    app = app_for()
+    async with running(app) as pilot:
+        panel = await open_gallery(pilot)
+        await loaded(pilot, panel, "Cone, 5 day")
+        panel.current = gallery.GalleryItem("x", "forecast", "Odd", "https://example.test/[bold]x.png", "png", "1")
+        await press(pilot, "o")
+        assert opened == [] and "Not a NOAA link." in messages(app)
+        monkeypatch.setattr(app, "copy_to_clipboard", lambda text: (_ for _ in ()).throw(OSError("no")))
+        await press(pilot, "y")
+        note = next(n for n in app._notifications if "clipboard" in n.message)
+        assert note.markup is False

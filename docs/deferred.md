@@ -60,3 +60,7 @@ and move an item into a milestone brief when it is scheduled.
 - M7: Sixel and Kitty drawing, and the size of the picture inside its area, are not verified in a real terminal; see the State after of the M7 brief.
 - M7: the settings screen has no widget for `[graphics] inline`; it stays in the TOML file.
 - M7: surge KML and arrival-time KMZ files are listed as link only; parsing them is still the M1 deferred item.
+- M7: a GIF loop is decoded (frame count, first frame) on the event loop when it opens; move the decode to a thread like the stills.
+- M7: `fetch_bytes` buffers the whole body before the 24 MB size check; check `Content-Length` and stream.
+- M7: the gallery asks NESDIS for the same product listing from several panels; share one in-flight request.
+- M7: the "is inline graphics possible" test is written twice (`run_app` and `GalleryPanel.uses_inline`); keep one predicate.

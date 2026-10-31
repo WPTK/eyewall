@@ -90,7 +90,7 @@ def test_satellite_stills_and_loops_follow_the_forecast_graphics():
     still, loop = items[1], items[2]
     assert (still.url, still.version, still.loop) == ("https://n/s.jpg", "2026-10-31 15:00Z", False)
     assert (loop.media, loop.loop) == ("gif", True)
-    assert items[3].url.endswith("latest.jpg") and items[3].version == "latest"
+    assert items[3].url.endswith("latest.jpg") and items[3].version.startswith("poll:")
 
 
 def test_a_storm_with_nothing_has_an_empty_gallery():

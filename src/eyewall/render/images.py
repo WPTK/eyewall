@@ -22,6 +22,7 @@ import sys
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -239,6 +240,12 @@ def _nearest(rgb: RGB, palette: tuple[RGB, ...]) -> RGB:
     return min(palette, key=lambda p: (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2)
 
 
+@lru_cache(maxsize=1 << 17)
+def _snap(rgb: RGB, depth: Depth) -> RGB:
+    """The palette color nearest to `rgb` at a limited depth; remembered, because images repeat their colors."""
+    return _nearest(rgb, _XTERM_256 if depth is Depth.C256 else _ANSI16)
+
+
 _XTERM_256 = tuple((r, g, b) for r in _CUBE for g in _CUBE for b in _CUBE) + tuple((v, v, v) for v in range(8, 239, 10))
 
 
@@ -246,10 +253,8 @@ def quantize(rgb: RGB, depth: Depth) -> str | None:
     """A `#rrggbb` color the terminal can show at that depth (the nearest palette entry), or None for mono."""
     if depth is Depth.MONO:
         return None
-    if depth is Depth.C256:
-        rgb = _nearest(rgb, _XTERM_256)
-    elif depth is Depth.C16:
-        rgb = _nearest(rgb, _ANSI16)
+    if depth is Depth.C256 or depth is Depth.C16:
+        rgb = _snap(rgb, depth)
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
 
