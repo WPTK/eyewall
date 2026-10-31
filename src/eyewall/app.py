@@ -179,18 +179,21 @@ class EyewallApp(App[None]):
             replay = fmt.ReplayStatus(
                 self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over
             )
-        text = fmt.status_bar(
-            feeds,
-            next_poll=self.poller.seconds_until_next(),
-            alert_count=len(self.alert_log),
-            replay=replay,
-            away=self.poller.away,
-            width=width,
-            g=self.glyphs,
-        )
-        if width >= 70:  # `? help` keeps its place, then the keys; the status gives way
-            text = fmt.footer_row(text, self.footer_keys(screen), width)
-        return text
+
+        def status(room: int) -> Text:
+            return fmt.status_bar(
+                feeds,
+                next_poll=self.poller.seconds_until_next(),
+                alert_count=len(self.alert_log),
+                replay=replay,
+                away=self.poller.away,
+                width=room,
+                g=self.glyphs,
+            )
+
+        if width >= 70:  # `? help` keeps its place, then the keys; the status degrades to the room left
+            return fmt.footer_row(status, self.footer_keys(screen), width)
+        return status(width)
 
     def footer_keys(self, screen: Screen[Any]) -> list[tuple[str, str]]:
         """The keys that work where the focus is on `screen`: Textual's own active bindings, nearest widget first,

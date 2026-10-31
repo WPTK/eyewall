@@ -173,7 +173,7 @@ quadrant, top 34/50/64 kt probabilities), `surge_panel` (surge WW areas, peak su
 poll, offline/stale, alert count, replay transport. Below 110 columns the side panels collapse into tabs;
 below 90 the map hides behind `m`.
 
-**Storm detail** (`Enter`): tabs Summary · Forecast (TAU, valid Z + local, lat/lon, wind, category, radii) ·
+**Storm detail** (`Enter`): tabs Summary · Forecast (TAU, valid Z + local, lat/lon, wind, category) ·
 **Buoys** (DataTable by distance: ID, name, dist, bearing, wind, gust, pres, ΔP 3h, wave, WTMP, age, closest
 approach; thresholds colored; `p` pins; `Enter` → **buoy_detail** with braille charts of pressure, wind+gust,
 wave over 24/48/72 h, `Sparkline`s, `.supl` minima) · **Tides** (gauges near the storm: observed vs predicted,
