@@ -58,10 +58,26 @@ def test_no_config_ignores_the_file(tmp_path):
     assert config.poll.storms == 300
 
 
-def test_config_warnings_reach_stderr_and_the_stub_exits_nonzero(tmp_path, capsys):
+def test_config_warnings_reach_stderr_and_the_app_starts(tmp_path, capsys, monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append((config, source, kw)))
     path = tmp_path / "config.toml"
     path.write_text('[units]\npreset = "cubits"\n', encoding="utf-8")
-    assert main(["--config", str(path)]) == 1
-    err = capsys.readouterr().err
-    assert "config: units.preset" in err
-    assert "not built yet" in err
+    assert main(["--config", str(path)]) == 0
+    assert "config: units.preset" in capsys.readouterr().err
+    assert len(launched) == 1
+    assert launched[0][2]["closer"] is not None  # the live source is closed on exit
+
+
+def test_replay_starts_the_app_without_a_state_dir(monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append((source, kw)))
+    assert main(["--no-config", "--demo"]) == 0
+    source, kw = launched[0]
+    assert kw["state_dir"] is None
+    assert type(source).__name__ == "ReplaySource"
+
+
+def test_a_bad_replay_path_exits_two(capsys):
+    assert main(["--no-config", "--replay", "no-such-bundle-anywhere"]) == 2
+    assert capsys.readouterr().err.startswith("eyewall:")

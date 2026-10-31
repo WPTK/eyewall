@@ -34,3 +34,14 @@ and move an item into a milestone brief when it is scheduled.
 - M4: `LiveSource.satellite` makes one listing request per storm per satellite poll; cache the listing across storms.
 - M4: coming back from away mode makes every feed due at once (a burst of requests); stagger the first poll after the return.
 - M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh.
+- M5: README screenshots; `scripts/screenshot_terminal.ps1` needs a visible Windows Terminal, so take them by hand once M6 is in.
+- M5: the poller fetches buoys only for a storm, so the outlook watchlist is empty on a quiet day until M6 changes that.
+- M5: the replay serves no outlook, so the outlook screen is only populated live.
+- M5: only the current wind radii are drawn; the forecast radii at each forecast point are not.
+- M5: surge geometry (KML) is not parsed, so the map has no surge lines and the surge panel shows text only.
+- M5: on a quiet day the dashboard stays the first screen; opening on the outlook automatically is not done.
+- M5: parsing runs on the UI loop with no `asyncio.to_thread`; measure a replay at 3600x for freezes before moving the sync parses off the loop.
+- M5: the status bar crowds below 90 columns; drop segments by priority instead of truncating.
+- M5: the detail tables are cleared and rebuilt on every result; update rows in place when nothing changed.
+- M5: the snapshot tests depend on the platform's text rendering; pin the font metrics or compare structure instead.
+- M5: the map widget invalidates and redraws the whole canvas on every scene change; cache the layers that did not change.

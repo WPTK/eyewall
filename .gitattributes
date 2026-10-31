@@ -5,6 +5,9 @@
 # Saved NOAA payloads must stay byte-for-byte as recorded.
 tests/fixtures/** -text
 
+# Saved UI snapshots (SVG) keep the bytes the snapshot plugin wrote.
+tests/__snapshots__/** -text
+
 # Binary assets
 *.bin binary
 *.gz binary

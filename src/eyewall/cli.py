@@ -91,6 +91,29 @@ def _headless(args: argparse.Namespace, config: Config) -> int:
     return 0
 
 
+def _run_app(args: argparse.Namespace, config: Config) -> int:
+    from eyewall.app import run_app
+    from eyewall.sources.bundle import BundleError, resolve_bundle
+    from eyewall.sources.live import LiveSource
+    from eyewall.sources.replay import ReplaySource
+    from eyewall.state.alerts import default_state_dir
+
+    replaying = bool(args.replay or args.demo)
+    # A replay must not read or write the user's real seen set; it keeps none unless --state-dir is given.
+    state_dir = args.state_dir if args.state_dir is not None or replaying else default_state_dir()
+    if replaying:
+        try:
+            source = ReplaySource(resolve_bundle(DEMO_BUNDLE if args.demo else args.replay))
+        except BundleError as exc:
+            print(f"eyewall: {exc}", file=sys.stderr)
+            return 2
+        run_app(config, source, state_dir=state_dir)
+        return 0
+    live = LiveSource()
+    run_app(config, live, state_dir=state_dir, closer=live.aclose)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config, warnings = resolve_config(args)
@@ -98,8 +121,4 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"eyewall: config: {warning}", file=sys.stderr)
     if args.headless:
         return _headless(args, config)
-    print(
-        f"eyewall {__version__}: the terminal interface is not built yet (planned for 0.5.0).",
-        file=sys.stderr,
-    )
-    return 1
+    return _run_app(args, config)

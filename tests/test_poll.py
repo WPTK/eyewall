@@ -375,3 +375,20 @@ async def test_the_alerts_are_cleared_when_the_alerts_feed_turns_off():
     source.texts["2"] = advisories("2")
     await step(poller, clock, 300)
     assert store.alerts == AlertsResult()
+
+
+async def test_a_listener_that_raises_does_not_stop_the_poll():
+    seen = []
+
+    def bad_result(result):
+        seen.append(result.feed)
+        raise RuntimeError("screen bug")
+
+    def bad_events(events):
+        raise RuntimeError("toast bug")
+
+    poller = build(on_result=bad_result)[0]
+    poller.on_events = bad_events
+    results = await poller.tick()
+    assert results
+    assert seen

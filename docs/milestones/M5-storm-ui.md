@@ -53,4 +53,35 @@ The commands in `CLAUDE.md`, then run the replay and the live app in Windows Ter
 
 ## State after
 
-(to be filled in by the session)
+**What exists.**
+
+- `src/eyewall/app.py`: `EyewallApp(config, source, *, state_dir, local_tz, autoplay, closer)`. A replay source is driven
+  by the app, which advances the virtual clock on a 0.5 s timer at 60, 300, 1200 or 3600 times and polls what is due; any
+  other source runs `Poller.run()` in a worker. `run_app` is what `cli.py` calls; the stub is gone.
+- `ui/` holds the screens (`dashboard`, `detail`, `outlook`, `alerts`, `help`, `layers`), the widgets (`map_view`,
+  `storm_list`, `panels`), `adapt.py` (store to `MapScene`; the buoy and tide marks come from `store.nearby_*`, the hook
+  for M6), `format.py` and `products.py` (all text, no Textual), `glyphs.py`, `theme.py` and `app.tcss`.
+- `MapView` paints M3's canvas in `render_line` and picks the base map with `basemap.is_detailed`, so the 10 m Natural
+  Earth data shows below `DETAIL_SWITCH`. The legend says which tier is showing.
+- Layout classes on the dashboard: `narrow` below 110 columns (panels become tabs), `compact` below 90 (map behind `m`).
+- Tests: `tests/test_ui.py` (Pilot at 80x24 and 140x45 over the Erin replay, a quiet live-style source with the 31 October
+  outlook and a dead network), `tests/test_ui_snapshots.py` (SVG, status bar pinned), `tests/test_ui_format.py`, and the
+  launch tests in `tests/test_cli.py`.
+
+**Deviations.**
+
+- The Poller gained a public `active(feed)` so the status bar can show a feed that is switched off as idle.
+- The detail tab for watches is titled "Warnings" so the ten tabs fit in 80 columns.
+- The layer menu binds Enter with priority; the selection list otherwise swallows it and the menu cannot be applied.
+- No README screenshots: `scripts/screenshot_terminal.ps1` drives a visible Windows Terminal window and cannot run
+  headless, so the images are in `docs/deferred.md` instead of faked.
+
+**Next session must know.**
+
+- Buoy and tide marks, legend entries and the Buoys panel are wired to `store.nearby_*`; they show data once M6 makes the
+  poller fetch stations without a storm and fills the Buoys, Tides and Graphics tabs, which are placeholders.
+- Snapshots were generated on Windows and checked for repeatability only there. If a CI operating system differs,
+  regenerate with `--snapshot-update` after looking at the diff.
+- Not viewed by a person: the app in Windows Terminal. It was driven through Pilot at both sizes, `python -m eyewall --replay demo`
+  was started from a shell with no terminal attached (it drew its first frame and kept running), and the app ran against
+  the live NOAA feeds on a quiet day.
