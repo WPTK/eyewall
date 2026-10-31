@@ -17,7 +17,15 @@ from typing import Protocol
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.forecast import ForecastGis
 from eyewall.models.graphics import FloaterProduct, GraphicLink
-from eyewall.models.obs import LatestObservation, ObservationSeries, Station, TideSeries, TideStation
+from eyewall.models.obs import (
+    LatestObservation,
+    ObservationSeries,
+    Parsed,
+    Station,
+    SupplementalReading,
+    TideSeries,
+    TideStation,
+)
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
@@ -75,8 +83,12 @@ class DataSource(Protocol):
 
     async def ndbc_series(self, station_id: str) -> ObservationSeries: ...
 
+    async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        """The `.supl` file: lowest pressure and peak wind per interval. Fetched on demand by the buoy detail."""
+        ...
+
     async def coops_stations(self) -> tuple[TideStation, ...]: ...
 
     async def coops_series(self, station: TideStation, datum: str) -> TideSeries:
-        """Water level at the datum, plus wind and pressure when the gauge offers them."""
+        """Water level at the datum and the predicted tide, plus wind and pressure when the gauge offers them."""
         ...

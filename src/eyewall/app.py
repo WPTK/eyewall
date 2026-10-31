@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
 
@@ -21,9 +23,12 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
-from eyewall.config import Config
+from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
 from eyewall.models.events import Event, Severity
-from eyewall.poll import Poller, PollResult
+from eyewall.models.obs import Parsed, SupplementalReading
+from eyewall.net import FetchError
+from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
+from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
@@ -34,11 +39,15 @@ from eyewall.state.store import Store
 from eyewall.ui import format as fmt
 from eyewall.ui.glyphs import UiGlyphs, glyphs_for
 from eyewall.ui.screens.alerts import AlertLogScreen
+from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
+from eyewall.ui.screens.search import SearchChoice, SearchScreen
+from eyewall.ui.screens.settings import SettingsScreen
+from eyewall.ui.screens.watchlist import WatchlistScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
 from eyewall.units import PRESETS, Preset, next_preset
 
@@ -49,6 +58,9 @@ DEFAULT_SPEED = 1
 REPLAY_TICK = 0.5  # real seconds between clock advances
 TOAST_SECONDS = 8.0
 REPLAY_ACTIONS = frozenset({"play_pause", "speed", "step"})
+
+
+SUPL_TTL = 600.0  # seconds a buoy's supplemental file is reused
 
 
 class EyewallApp(App[None]):
@@ -63,6 +75,9 @@ class EyewallApp(App[None]):
         Binding("A", "alerts", "Alerts"),
         Binding("r", "refresh", "Refresh", show=False),
         Binding("u", "units", "Units", show=False),
+        Binding("slash", "search", "Find station", show=False),
+        Binding("w", "watchlist", "Watchlist", show=False),
+        Binding("S", "settings", "Settings", show=False),
         Binding("space", "play_pause", "Pause", show=False),
         Binding("less_than_sign", "speed(-1)", "Slower", show=False),
         Binding("greater_than_sign", "speed(1)", "Faster", show=False),
@@ -79,9 +94,21 @@ class EyewallApp(App[None]):
         local_tz: tzinfo | None = None,
         autoplay: bool = True,
         closer: Callable[[], Awaitable[None]] | None = None,
+        config_path: Path | None = None,
+        file_config: Config | None = None,
+        config_file_broken: bool = False,
     ) -> None:
+        """`config_path` is where settings and the watchlist are saved; None keeps changes for this run only.
+        `file_config` is the config as the file had it, before command-line flags: a flag is never saved unless the
+        settings screen changes that value. `config_file_broken` says the file could not be read, so it is copied to
+        a `.bak` before the first save replaces it."""
         super().__init__()
         self.config = config
+        self.config_path = config_path
+        self._launch_config = config
+        self._supl: dict[str, tuple[float, Parsed[SupplementalReading]]] = {}
+        self._file_config = file_config
+        self._file_broken = config_file_broken
         self.source = source
         self.replay: ReplaySource | None = source if isinstance(source, ReplaySource) else None
         self.local_tz = local_tz
@@ -274,9 +301,17 @@ class EyewallApp(App[None]):
     def _modal_open(self) -> bool:
         return isinstance(self.screen, ModalScreen)
 
-    def open_detail(self, storm_id: str | None) -> None:
+    def open_detail(self, storm_id: str | None, tab: str | None = None) -> None:
         if storm_id is not None and not isinstance(self.screen, StormDetailScreen):
-            self.push_screen(StormDetailScreen(storm_id))
+            self.push_screen(StormDetailScreen(storm_id, tab))
+
+    def open_buoy(self, station_id: str) -> None:
+        screen = self.screen
+        if isinstance(screen, ModalScreen) or (
+            isinstance(screen, BuoyDetailScreen) and screen.station_id == station_id.upper()
+        ):
+            return
+        self.push_screen(BuoyDetailScreen(station_id))
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:
@@ -312,6 +347,182 @@ class EyewallApp(App[None]):
         self._for_screens("refresh_data")
         self.notify(f"Units: {self.units}", timeout=3)
 
+    def action_watchlist(self) -> None:
+        if not self._modal_open() and not isinstance(self.screen, WatchlistScreen):
+            self.push_screen(WatchlistScreen())
+
+    def action_search(self) -> None:
+        if self._modal_open():
+            return
+
+        def picked(choice: SearchChoice | None) -> None:
+            if choice is None:
+                return
+            if choice.pin or choice.kind == "coops":  # a gauge has no page of its own, so opening it pins it
+                self.watch_in_background(choice.kind, choice.id, True)
+            else:
+                self.open_buoy(choice.id)
+
+        self.push_screen(SearchScreen(), picked)
+
+    def action_settings(self) -> None:
+        if self._modal_open():
+            return
+
+        def saved(config: Config | None) -> None:
+            if config is not None:
+                self.apply_config(config)
+
+        self.push_screen(SettingsScreen(self.config, self.units), saved)
+
+    # ---- settings and the watchlist ---------------------------------------------------------------------------
+
+    def apply_config(self, new: Config, *, persist: bool = True) -> bool:
+        """Make a changed config take effect everywhere and save it. False when the file could not be written."""
+        old = self.config
+        self.config = new
+        self.store.config = new
+        self.poller.config = new.poll
+        self.poller.engine.rules = new.alerts
+        if new.units != old.units:
+            self.units = new.units.preset
+        if new.map != old.map:
+            self.glyphs = glyphs_for(new.map.glyph_set)
+            self.map_mode = Mode.ASCII if new.map.glyph_set == "ascii" else Mode.BRAILLE
+            self.map_options = replace(
+                self.map_options, land=new.map.land, borders=new.map.borders, cone=new.map.cone, radii=new.map.radii
+            )
+            for screen in self.screen_stack:
+                view = getattr(screen, "map_view", None)
+                if view is not None:
+                    view.set_mode(self.map_mode)
+                    view.set_options(self.map_options)
+        if new.basins != old.basins and self.basin_filter not in new.basins.enabled:
+            self.basin_filter = None
+        due: set[str] = set()
+        if new.watchlist != old.watchlist:
+            due.update((protocol.BUOYS, protocol.TIDES))
+        if new.basins != old.basins:
+            due.update((protocol.STORMS, protocol.OUTLOOK, protocol.ALERTS))
+        if new.nearby != old.nearby:
+            due.update((protocol.BUOYS, protocol.TIDES))
+        due.update(name for name in protocol.FEEDS if getattr(new.poll, name, None) != getattr(old.poll, name, None))
+        if due:
+            self.poller.refresh_feeds(*sorted(due))
+        saved = True
+        if persist and self.config_path is not None:
+            saved = self._save(new)
+        self._for_screens("refresh_data")
+        self._for_screens("refresh_status")
+        return saved
+
+    def _for_save(self, new: Config) -> Config:
+        """The config to write: `new` with the command-line flags taken back out where the user did not change them."""
+        base, launch, out = self._file_config, self._launch_config, new
+        if base is None:
+            return out
+        if new.basins == launch.basins:
+            out = replace(out, basins=base.basins)
+        if new.map.glyph_set == launch.map.glyph_set:
+            out = replace(out, map=replace(out.map, glyph_set=base.map.glyph_set))
+        return out
+
+    def _save(self, new: Config) -> bool:
+        path = self.config_path
+        if path is None:
+            return True
+        try:
+            if self._file_broken and path.exists():
+                backup = path.with_name(path.name + ".bak")
+                for n in range(1, 100):  # never overwrite an earlier backup
+                    if not backup.exists():
+                        break
+                    backup = path.with_name(f"{path.name}.bak{n}")
+                shutil.copy2(path, backup)
+                self.notify(f"{path.name} could not be read; the original is kept as {backup.name}.", timeout=8)
+            save_config(self._for_save(new), path)
+        except OSError as exc:
+            self.notify(f"Could not save {path}: {exc.strerror or exc}", severity="error", timeout=8)
+            return False
+        self._file_broken = False
+        return True
+
+    async def fetch_series(self, station_id: str) -> None:
+        """Fetch one buoy's series now, for a page that was just opened; the rest of the buoys feed is left alone."""
+        try:
+            self.store.apply_series(await self.source.ndbc_series(station_id.upper()))
+        except (FetchError, ParseError):
+            return
+        self._for_screens("refresh_data")
+
+    async def fetch_tide(self, station_id: str) -> None:
+        """Fetch one tide gauge now (it was just pinned), not every gauge."""
+        gauge = next((g for g in self.store.tide_stations if g.id.upper() == station_id.upper()), None)
+        if gauge is None:
+            return
+        datum = DATUM_GREAT_LAKES if gauge.great_lakes else DATUM_COAST
+        try:
+            self.store.apply_tide_series(await self.source.coops_series(gauge, datum))
+        except (FetchError, ParseError) as exc:
+            self.store.apply_tide_error(gauge.id, str(exc))
+        self._for_screens("refresh_data")
+
+    async def supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        """A buoy's `.supl` file, remembered for SUPL_TTL seconds so reopening a page does not fetch it again."""
+        station_id = station_id.upper()
+        kept = self._supl.get(station_id)
+        if kept is not None and time.monotonic() - kept[0] < SUPL_TTL:
+            return kept[1]
+        result = await self.source.ndbc_supplemental(station_id)
+        self._supl[station_id] = (time.monotonic(), result)
+        return result
+
+    async def toggle_watch(self, kind: str, station_id: str) -> None:
+        """Pin a station to the watchlist, or unpin it when it is there already."""
+        station_id = station_id.upper()
+        updated, watched = toggle_watch(self.config, kind, station_id)
+        if watched and station_id not in watchlist_ids(updated, kind):
+            self.notify("The watchlist is full.", severity="warning", timeout=4)
+            return
+        self.apply_config(updated)
+        verb = "Pinned" if watched else "Removed"
+        self.notify(f"{verb} {station_id} {'to' if watched else 'from'} the watchlist.", timeout=3)
+        if not watched:
+            return
+        if kind == "coops":
+            await self.fetch_tide(station_id)
+        elif not self.store.latest:  # the buoys feed was idle, so no observation has been read yet
+            self.poller.refresh_feeds(protocol.BUOYS)
+
+    def watch_in_background(self, kind: str, station_id: str, wanted: bool) -> None:
+        """Pin or unpin from a key press. A failure is logged and shown as a toast, never an app crash."""
+
+        async def work() -> None:
+            try:
+                await self.set_watch(kind, station_id, wanted)
+            except Exception as exc:
+                log.exception("could not %s %s", "pin" if wanted else "unpin", station_id)
+                self.notify(f"Could not change the watchlist: {exc}", severity="error", timeout=8)
+
+        self.run_worker(work(), exclusive=False, exit_on_error=False)
+
+    async def set_watch(self, kind: str, station_id: str, wanted: bool) -> None:
+        if (station_id.upper() in watchlist_ids(self.config, kind)) != wanted:
+            await self.toggle_watch(kind, station_id)
+
+    async def ensure_catalogs(self) -> bool:
+        """Load the buoy and tide gauge catalogs for the search when the poller has not (a quiet day with no
+        watchlist). Returns True when either could not be fetched."""
+        failed = False
+        try:
+            if not self.store.stations:
+                self.store.apply_stations(await self.source.ndbc_stations())
+            if not self.store.tide_stations:
+                self.store.apply_tide_stations(await self.source.coops_stations())
+        except (FetchError, ParseError):
+            failed = True
+        return failed
+
     # ---- replay transport -------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
@@ -345,5 +556,16 @@ def run_app(
     *,
     state_dir: Path | None,
     closer: Callable[[], Awaitable[None]] | None = None,
+    config_path: Path | None = None,
+    file_config: Config | None = None,
+    config_file_broken: bool = False,
 ) -> None:
-    EyewallApp(config, source, state_dir=state_dir, closer=closer).run()
+    EyewallApp(
+        config,
+        source,
+        state_dir=state_dir,
+        closer=closer,
+        config_path=config_path,
+        file_config=file_config,
+        config_file_broken=config_file_broken,
+    ).run()

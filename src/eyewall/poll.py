@@ -158,6 +158,7 @@ class Poller:
         self._pending: dict[tuple[str, tuple[str | None, datetime | None]], set[str]] = {}
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
+        self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
 
     # ---- timing -----------------------------------------------------------------------------------------------
 
@@ -220,7 +221,8 @@ class Poller:
         return Freshness(kind, age, stale_after, state.failures, error, state.from_cache)
 
     def active(self, feed: str) -> bool:
-        """Whether the feed is being polled now: alerts only during a US threat, stations only while a storm exists."""
+        """Whether the feed is being polled now: alerts only during a US threat, stations while a storm exists or the
+        watchlist names a station of that kind."""
         return self._enabled(feed)
 
     def _enabled(self, feed: str) -> bool:
@@ -228,6 +230,10 @@ class Poller:
             return True
         if feed == protocol.ALERTS:
             return self.store.us_threat()
+        if feed == protocol.BUOYS:
+            return bool(self.store.storms or self.store.config.watchlist.ndbc or self.extra_buoys)
+        if feed == protocol.TIDES:
+            return bool(self.store.storms or self.store.config.watchlist.coops)
         return bool(self.store.storms)
 
     # ---- running ----------------------------------------------------------------------------------------------
@@ -236,6 +242,13 @@ class Poller:
         """Make every feed due now and wake the loop."""
         for state in self._feeds.values():
             state.next_at = 0.0
+        if not self.polling:
+            self._wake.set()
+
+    def refresh_feeds(self, *feeds: str) -> None:
+        """Make just these feeds due now (the watchlist changed) and wake the loop."""
+        for name in feeds:
+            self._feeds[name].next_at = 0.0
         if not self.polling:
             self._wake.set()
 
@@ -391,9 +404,13 @@ class Poller:
             self.store.apply_stations(await self.source.ndbc_stations())
             self._stations_at["ndbc"] = self.clock.monotonic()
         self.store.apply_latest(await self.source.ndbc_latest())
-        wanted: dict[str, None] = {}
+        # A full series is fetched only for the stations an open page shows and the ones nearest a storm, at most
+        # MAX_BUOY_SERIES in all. A watchlist-only buoy is covered by `latest_obs`, which is one file for every buoy.
+        wanted: dict[str, None] = {sid.upper(): None for sid in sorted(self.extra_buoys)[:MAX_BUOY_SERIES]}
         for storm_id in self.store.storms:
-            for entry in self.store.nearby_buoys(storm_id)[:MAX_BUOY_SERIES]:
+            for entry in self.store.nearby_buoys(storm_id):
+                if len(wanted) >= MAX_BUOY_SERIES:
+                    break
                 wanted[entry.station.id.upper()] = None
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
@@ -416,6 +433,11 @@ class Poller:
         for storm_id in self.store.storms:
             for entry in self.store.nearby_tides(storm_id)[:MAX_TIDE_GAUGES]:
                 gauges[entry.station.id] = entry.station
+        known = {g.id.upper(): g for g in self.store.tide_stations}
+        for station_id in self.store.config.watchlist.coops:
+            gauge = known.get(station_id.upper())
+            if gauge is not None and len(gauges) < MAX_TIDE_GAUGES:
+                gauges.setdefault(gauge.id, gauge)  # the storm's gauges and the watchlist share the same cap
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
         async def one(index: int, station: TideStation) -> None:

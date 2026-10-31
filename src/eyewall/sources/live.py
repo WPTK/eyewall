@@ -19,7 +19,15 @@ from eyewall.coops.client import CoopsClient
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.forecast import ForecastGis
 from eyewall.models.graphics import FloaterProduct, GraphicLink
-from eyewall.models.obs import LatestObservation, ObservationSeries, Parsed, Station, TideSeries, TideStation
+from eyewall.models.obs import (
+    LatestObservation,
+    ObservationSeries,
+    Parsed,
+    Station,
+    SupplementalReading,
+    TideSeries,
+    TideStation,
+)
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
@@ -36,6 +44,8 @@ CACHE_MAX_AGE = timedelta(days=7)
 INVEST_MAX_AGE = timedelta(hours=48)
 MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
+PREDICTION_DAYS_BEHIND = 2  # predictions start at midnight UTC this many days back, so the URL (and its cache entry)
+PREDICTION_HOURS = 120  # changes once a day instead of every poll, and the range reaches into the next day or two
 
 
 class LiveSource:
@@ -58,6 +68,7 @@ class LiveSource:
         self.ndbc = NdbcClient(self._http)
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
+        self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -167,6 +178,11 @@ class LiveSource:
             response = await self.ndbc.series(station_id)
             return response.value or ObservationSeries(station_id.upper())
 
+    async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        async with self._feed(protocol.BUOYS):
+            response = await self.ndbc.supplemental(station_id)
+            return response.value or Parsed()
+
     async def coops_stations(self) -> tuple[TideStation, ...]:
         async with self._feed(protocol.TIDES):
             return await self.coops.all_stations()
@@ -190,4 +206,27 @@ class LiveSource:
                     pressure = await self.coops.air_pressure(station.id, date="recent")
                 except FetchError as exc:
                     pressure = Parsed(message=str(exc))
-            return TideSeries(station.id, datum, level, wind, pressure)
+            predictions = await self._predictions_for(station, datum)
+            return TideSeries(station.id, datum, level, wind, pressure, predictions)
+
+    async def _predictions_for(self, station: TideStation, datum: str) -> Parsed:
+        """The gauge's 6-minute predictions, asked for once per UTC day and remembered, empty answers included: the
+        window starts at a UTC midnight, so a second request the same day would return the same thing. Great Lakes
+        gauges (IGLD) have no predictions, so none is asked for."""
+        if station.great_lakes:
+            return Parsed(message="no tide predictions for the Great Lakes")
+        begin = (self._clock.now() - timedelta(days=PREDICTION_DAYS_BEHIND)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        key = (station.id, datum, begin.date().isoformat())
+        if key in self._predictions:
+            return self._predictions[key]
+        try:
+            found: Parsed = await self.coops.predictions(
+                station.id, datum=datum, interval=None, begin=begin, hours=PREDICTION_HOURS
+            )
+        except FetchError as exc:
+            found = Parsed(message=str(exc))  # a subordinate station answers with an error; do not ask again today
+        self._predictions = {k: v for k, v in self._predictions.items() if k[2] == key[2]}
+        self._predictions[key] = found
+        return found

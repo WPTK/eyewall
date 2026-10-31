@@ -26,6 +26,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("+  -", "zoom in and out (the mouse wheel too)"),
             ("arrows", "pan the map once it has focus (click it, or Tab to it); on the list they move the cursor"),
             ("c  f", "center on the storm; fit the cone again"),
+            ("b", "the Buoys tab of the selected storm (the watchlist when there is no storm)"),
         ),
     ),
     (
@@ -34,13 +35,27 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Left / Right", "previous and next tab"),
             ("1 ... 9  0", "jump to a tab"),
             ("t", "on the advisory tab, switch between the public advisory and the forecast advisory"),
+            ("Enter", "on the Buoys tab, open the buoy's charts"),
+            ("p", "on the Buoys and Tides tabs, pin the station to the watchlist (again to unpin)"),
             ("Esc", "back to the dashboard"),
+        ),
+    ),
+    (
+        "Buoy charts",
+        (
+            ("h", "cycle the range: 24, 48 and 72 hours"),
+            ("p", "pin or unpin the buoy"),
+            ("i", "below 110 columns, switch between the charts and the observation"),
+            ("Esc", "back"),
         ),
     ),
     (
         "Anywhere",
         (
             ("O", "outlook: the text, the areas and the watchlist"),
+            ("w", "the watchlist: a adds a station, d removes it, Enter opens a buoy's charts"),
+            ("/", "find a buoy or tide gauge by id or name (Enter opens a buoy, Ctrl+P pins)"),
+            ("S", "settings: polling, units, basins, radii, alert rules and glyph set (Ctrl+S saves)"),
             ("A", "alert log"),
             ("r", "refresh every feed now"),
             ("u", "cycle the units: nautical, us, metric"),

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from eyewall.clock import VirtualClock
-from eyewall.coops.data import parse_air_pressure, parse_water_level, parse_wind
+from eyewall.coops.data import parse_air_pressure, parse_predictions, parse_water_level, parse_wind
 from eyewall.coops.stations import merge_tide_stations, parse_tide_stations
 from eyewall.models.advisory import AdvisorySet, Discussion, PublicAdvisory
 from eyewall.models.forecast import ForecastAdvisory, ForecastGis
@@ -24,7 +24,9 @@ from eyewall.models.obs import (
     LatestObservation,
     ObservationSeries,
     Parsed,
+    Prediction,
     Station,
+    SupplementalReading,
     TideSeries,
     TideStation,
 )
@@ -50,6 +52,7 @@ LINGER = timedelta(hours=6)
 SERIES_WINDOW = timedelta(days=5)
 LATEST_WINDOW = timedelta(hours=2)
 TIDE_WINDOW = timedelta(days=3)
+PREDICTION_AHEAD = timedelta(hours=24)
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,6 +404,10 @@ class ReplaySource:
 
     # ---- tide gauges ------------------------------------------------------------------------------------------
 
+    async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        """The bundle keeps no `.supl` files; the buoy detail then falls back to the regular rows for its extremes."""
+        return Parsed(message="the recording has no supplemental file")
+
     async def coops_stations(self) -> tuple[TideStation, ...]:
         return self._tide_stations
 
@@ -414,10 +421,17 @@ class ReplaySource:
         level_body = self._read(bundle.coops_path(station.id, "water_level"))
         wind_body = self._read(bundle.coops_path(station.id, "wind"))
         pressure_body = self._read(bundle.coops_path(station.id, "air_pressure"))
+        prediction_body = self._read(bundle.coops_path(station.id, "predictions"))
+        predictions: Parsed[Prediction] = Parsed(message="not recorded")
+        if prediction_body:  # a prediction is a table, so the live source serves the hours ahead as well
+            parsed = parse_predictions(prediction_body)
+            kept = tuple(p for p in parsed.items if now - TIDE_WINDOW <= p.time <= now + PREDICTION_AHEAD)
+            predictions = replace(parsed, items=kept)
         return TideSeries(
             station.id,
             datum,
             window(parse_water_level(level_body)) if level_body else Parsed(message="not recorded"),
             window(parse_wind(wind_body)) if wind_body else Parsed(message="not recorded"),
             window(parse_air_pressure(pressure_body)) if pressure_body else Parsed(message="not recorded"),
+            predictions,
         )

@@ -17,6 +17,7 @@ from eyewall.sources.live import LiveSource
 from eyewall.sources.replay import ReplaySource
 from eyewall.state.events import current_adv
 from tests.nhc_fixtures import nhc_bytes
+from tests.ui_support import FIXTURES
 
 
 def ev_adv(storm):
@@ -261,3 +262,109 @@ async def test_the_stale_flag_is_true_if_any_request_of_the_poll_was_stale_and_r
         assert not source.stale(protocol.STORMS)
     finally:
         await source.aclose()
+
+
+async def test_replay_serves_predictions_for_the_residual(demo):
+    demo.clock.set(datetime(2025, 8, 20, 12, 0, tzinfo=UTC))
+    stations = await demo.coops_stations()
+    series = await demo.coops_series(next(s for s in stations if s.id == "8651370"), "MLLW")
+    assert series.predictions.items
+    times = [p.time for p in series.predictions.items]
+    assert times == sorted(times)  # soonest first, like the CO-OPS answer
+    assert min(times) >= demo.clock.now() - timedelta(days=3)
+    assert max(times) <= demo.clock.now() + timedelta(hours=24)
+
+
+async def test_replay_has_no_supplemental_file_and_says_so(demo):
+    result = await demo.ndbc_supplemental("41002")
+    assert result.items == ()
+    assert result.message
+
+
+class Tides(httpx.AsyncBaseTransport):
+    """A gauge that answers water level from a saved payload and either serves or refuses 6-minute predictions."""
+
+    def __init__(self, predictions: bool) -> None:
+        self.urls: list[str] = []
+        self.predictions = predictions
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.urls.append(str(request.url))
+        product = request.url.params.get("product")
+        if product == "water_level":
+            return httpx.Response(
+                200, content=(FIXTURES / "coops" / "water_level_recent.json").read_bytes(), request=request
+            )
+        if product == "predictions" and self.predictions:
+            return httpx.Response(
+                200, content=(FIXTURES / "coops" / "predictions_interval.json").read_bytes(), request=request
+            )
+        return httpx.Response(404, request=request)
+
+
+async def _gauge(tmp_path, feeds):
+    from eyewall.models.obs import TideStation
+
+    source = LiveSource(cache_dir=tmp_path, transport=feeds, clock=VirtualClock(NOW))
+    try:
+        return await source.coops_series(TideStation("8651370", "Duck", 36.18, -75.75), "MLLW")
+    finally:
+        await source.aclose()
+
+
+async def test_the_live_source_asks_for_a_window_of_six_minute_predictions(tmp_path):
+    feeds = Tides(predictions=True)
+    series = await _gauge(tmp_path, feeds)
+    assert series.predictions.items
+    asked = [u for u in feeds.urls if "product=predictions" in u]
+    assert len(asked) == 1
+    assert "interval=" not in asked[0]  # no interval means the 6-minute series
+    assert "range=120" in asked[0]
+    assert "begin_date=20" in asked[0]
+
+
+async def test_a_refused_prediction_request_leaves_the_water_level_alone(tmp_path):
+    series = await _gauge(tmp_path, Tides(predictions=False))
+    assert series.water_level.items
+    assert series.predictions.items == ()
+    assert series.predictions.message
+
+
+async def test_series_requests_are_conditional_once_the_first_answer_is_cached(tmp_path):
+    seen: list[httpx.Headers] = []
+
+    class Series(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers)
+            if request.headers.get("if-none-match") == '"v1"':
+                return httpx.Response(304, request=request)
+            body = (FIXTURES / "coops" / "water_level_recent.json").read_bytes()
+            return httpx.Response(200, content=body, headers={"etag": '"v1"'}, request=request)
+
+    source = LiveSource(cache_dir=tmp_path, transport=Series(), clock=VirtualClock(NOW))
+    try:
+        await source.ndbc_series("41002")
+        await source.ndbc_series("41002")
+    finally:
+        await source.aclose()
+    assert "if-none-match" not in seen[0]
+    assert seen[1].get("if-none-match") == '"v1"'
+
+
+async def test_predictions_are_asked_once_a_day_and_never_for_the_great_lakes(tmp_path):
+    from eyewall.models.obs import TideStation
+
+    feeds = Tides(predictions=True)
+    source = LiveSource(cache_dir=tmp_path, transport=feeds, clock=VirtualClock(NOW))
+    try:
+        coast = TideStation("8651370", "Duck", 36.18, -75.75)
+        lakes = TideStation("9063063", "Cleveland", 41.5, -81.6, great_lakes=True)
+        for _ in range(3):
+            await source.coops_series(coast, "MLLW")
+        await source.coops_series(lakes, "IGLD")
+        again = await source.coops_series(lakes, "IGLD")
+    finally:
+        await source.aclose()
+    asked = [u for u in feeds.urls if "product=predictions" in u]
+    assert len(asked) == 1 and "station=8651370" in asked[0]
+    assert again.predictions.items == () and again.predictions.message

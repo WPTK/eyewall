@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 
 from eyewall.clock import VirtualClock
-from eyewall.config import Config, PollConfig
+from eyewall.config import Config, PollConfig, WatchlistConfig
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
@@ -262,10 +262,53 @@ async def test_each_tide_gauge_gets_its_datum_and_one_that_answers_400_does_not_
     assert poller.freshness(protocol.TIDES).state is FreshnessState.FRESH
 
 
-async def test_a_quiet_basin_polls_only_storms_and_outlook():
-    poller, source, *_ = build()
+async def test_a_quiet_basin_with_no_watchlist_polls_only_storms_and_outlook():
+    poller, source, *_ = build(config=Config(watchlist=WatchlistConfig(ndbc=(), coops=())))
     source.current = CurrentStorms()
     assert [r.feed for r in await poller.tick()] == [protocol.STORMS, protocol.OUTLOOK]
+
+
+async def test_a_quiet_basin_still_polls_the_watchlisted_buoys_and_gauges():
+    config = Config(watchlist=WatchlistConfig(ndbc=("41010", "42001"), coops=("8721604",)))
+    poller, source, _store, *_ = build(config=config)
+    source.current = CurrentStorms()
+    source.stations = (station("41010", 28.9, -78.5), station("42001", 25.9, -89.7), station("41002", 32.0, -75.0))
+    source.tide_stations = (gauge("8721604", 28.4, -80.6),)
+    results = await poller.tick()
+    assert [r.feed for r in results] == [protocol.STORMS, protocol.OUTLOOK, protocol.BUOYS, protocol.TIDES]
+    # A watchlist-only buoy is read from latest_obs; no series file is fetched for it.
+    assert [c for c in source.calls if c.startswith("series:")] == []
+    assert source.datums == [("8721604", "MLLW")]
+    assert not poller.active(protocol.SATELLITE) and not poller.active(protocol.ALERTS)
+
+
+async def test_only_the_gauge_side_of_the_watchlist_switches_the_tides_feed_on():
+    config = Config(watchlist=WatchlistConfig(ndbc=("41010",), coops=()))
+    poller, source, *_ = build(config=config)
+    source.current = CurrentStorms()
+    assert poller.active(protocol.BUOYS) and not poller.active(protocol.TIDES)
+
+
+async def test_a_station_an_open_screen_asks_for_is_polled_and_a_changed_watchlist_is_due_at_once():
+    config = Config(watchlist=WatchlistConfig(ndbc=(), coops=()))
+    poller, source, store, _clock, _ = build(config=config)
+    source.current = CurrentStorms()
+    source.stations = (station("41002", 32.0, -75.0),)
+    await poller.tick()
+    assert not poller.active(protocol.BUOYS)
+    poller.extra_buoys.add("41002")
+    assert poller.active(protocol.BUOYS)
+    poller.refresh_feeds(protocol.BUOYS)
+    await poller.tick()
+    assert "series:41002" in source.calls
+    # the watchlist grows: only the buoy feed is made due, the others keep their schedule
+    store.config = Config(watchlist=WatchlistConfig(ndbc=("41002",), coops=()))
+    poller.extra_buoys.clear()
+    before = source.count("ndbc_latest")
+    assert await poller.tick() == []
+    poller.refresh_feeds(protocol.BUOYS)
+    assert [r.feed for r in await poller.tick()] == [protocol.BUOYS]
+    assert source.count("ndbc_latest") == before + 1
 
 
 @pytest.mark.parametrize("away", [False, True])
@@ -392,3 +435,33 @@ async def test_a_listener_that_raises_does_not_stop_the_poll():
     results = await poller.tick()
     assert results
     assert seen
+
+
+async def test_open_pages_and_storm_buoys_share_one_cap_on_series_files():
+    from eyewall.poll import MAX_BUOY_SERIES
+
+    config = Config(watchlist=WatchlistConfig(ndbc=tuple(f"4{n:04d}" for n in range(60)), coops=()))
+    poller, source, *_ = build(config=config)
+    source.stations = tuple(station(f"4{n:04d}", 30.0 + n / 100, -75.0) for n in range(60))
+    await poller.tick()
+    fetched = [c for c in source.calls if c.startswith("series:")]
+    assert len(fetched) <= MAX_BUOY_SERIES
+    poller.extra_buoys.update({"49999", "48888"})
+    source.calls.clear()
+    poller.refresh_feeds(protocol.BUOYS)
+    await poller.tick()
+    fetched = [c for c in source.calls if c.startswith("series:")]
+    assert len(fetched) <= MAX_BUOY_SERIES
+    assert {"series:49999", "series:48888"} <= set(fetched)  # an open page comes before the storm's list
+
+
+async def test_watchlisted_gauges_share_the_cap_with_a_storms_gauges():
+    from eyewall.poll import MAX_TIDE_GAUGES
+
+    ids = [f"87{n:05d}" for n in range(40)]
+    config = Config(watchlist=WatchlistConfig(ndbc=(), coops=tuple(ids)))
+    poller, source, *_ = build(config=config)
+    source.current = CurrentStorms()
+    source.tide_stations = tuple(gauge(i, 28.0 + n / 10, -80.0) for n, i in enumerate(ids))
+    await poller.tick()
+    assert len(source.datums) == MAX_TIDE_GAUGES

@@ -44,4 +44,40 @@ The commands in `CLAUDE.md`, then the replay and a live run in Windows Terminal.
 
 ## State after
 
-(to be filled in by the session)
+**What exists.**
+
+- `ui/stations.py` (no Textual): the rows for the Buoys and Tides tables, wind banding at 34, 50 and 64 kt, the pressure
+  change flags, the residual colors, the chart series, the latest-observation and extremes text, and the station search.
+  `state/tides.py` holds the residual (observed minus the prediction for the same 6-minute moment) and the silent test.
+- `ui/widgets/station_table.py` (`StationTable`, rebuilt only when text or style changes, cursor follows the station id)
+  and `ui/widgets/chart_view.py` (M3's `render_chart` as a widget). The Buoys, Tides and outlook watchlist tables use them.
+- Screens: `buoy_detail` (Sparklines, three braille charts over 24, 48 and 72 hours with `h`, latest observation, `.supl`
+  extremes fetched once on demand, `p` pins), `watchlist` (`w`; `a` add, `d` remove), `search` (`/`; Enter opens a buoy,
+  Ctrl+P pins), `settings` (`S`; Ctrl+S saves through `parse_config`, so a bad value blocks the save and is shown).
+- `EyewallApp(config_path=...)`: `apply_config` updates the store, poller, alert rules, glyphs, map and units and saves the
+  TOML (`cli.py` passes the config path; `--no-config` keeps changes for the run). `toggle_watch`, `poll_now`, `open_buoy`.
+- Data: `TideSeries.predictions` (6-minute CO-OPS predictions, live and replay; the three Erin gauges were recorded once
+  into `coops/*.predictions.json`), `DataSource.ndbc_supplemental`, and the poller polls the watchlist (and any buoy whose
+  detail screen is open) with no storm, which closes the M5 quiet-day item.
+- Map marks: buoys by reported wind, gauges by their wind, both dim when stale; with no storm the watchlist is drawn.
+- Tests: `tests/test_ui_obs.py` (Pilot: both tabs, detail, range cycling, pinning, watchlist, search, settings, unit
+  cycling, a quiet day), `tests/test_ui_stations.py`, snapshots for the Buoys tab, Tides tab, buoy detail, watchlist and
+  settings.
+
+**Deviations.**
+
+- The 72 hour chart needs no 45-day fetch: the 5-day file the poller already reads covers it. Only `.supl` is on demand.
+- The replay bundle has no `.supl` files, so replay extremes come from the regular rows and say so.
+- Tide gauges have no detail screen; Enter on a gauge row does nothing and `p` pins it. The predicted tide overlay moved
+  out of the post-0.8 list because the predictions now exist, but the chart is not built.
+- `p` and Enter on the tabs need the table focused, so activating a tab moves focus to its station table (only for the
+  Buoys and Tides tabs, which leaves the existing Forecast snapshot unchanged).
+- The settings screen has no widget for the map layers or the alert thresholds; those stay in the TOML file.
+
+**Next session must know.**
+
+- Snapshots were generated on Windows. The status bar is pinned and toasts are cleared before the picture; if a CI system
+  differs, look at the diff before regenerating.
+- Replay tests move the clock with `into_the_storm` (in `tests/ui_support.py`) instead of one tick per advisory, which cost
+  a full poll each time.
+- Not viewed by a person: the app in Windows Terminal. It was driven through Pilot at 80x24 and 140x45.

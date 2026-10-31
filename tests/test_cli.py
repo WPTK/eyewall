@@ -81,3 +81,29 @@ def test_replay_starts_the_app_without_a_state_dir(monkeypatch):
 def test_a_bad_replay_path_exits_two(capsys):
     assert main(["--no-config", "--replay", "no-such-bundle-anywhere"]) == 2
     assert capsys.readouterr().err.startswith("eyewall:")
+
+
+def test_the_config_file_path_is_handed_to_the_app_so_settings_can_be_saved(tmp_path, monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append(kw))
+    path = tmp_path / "config.toml"
+    assert main(["--config", str(path), "--demo"]) == 0
+    assert launched[0]["config_path"] == path
+    assert main(["--no-config", "--demo"]) == 0
+    assert launched[1]["config_path"] is None
+
+
+def test_the_app_is_told_what_the_file_said_apart_from_the_flags_and_whether_it_loaded(tmp_path, monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append((config, kw)))
+    good = tmp_path / "good.toml"
+    good.write_text('[map]\nglyph_set = "unicode"\n', encoding="utf-8")
+    assert main(["--config", str(good), "--demo", "--glyphs", "ascii"]) == 0
+    config, kw = launched[0]
+    assert config.map.glyph_set == "ascii"
+    assert kw["file_config"].map.glyph_set == "unicode"
+    assert kw["config_file_broken"] is False
+    bad = tmp_path / "bad.toml"
+    bad.write_text("[poll\n", encoding="utf-8")
+    assert main(["--config", str(bad), "--demo"]) == 0
+    assert launched[1][1]["config_file_broken"] is True

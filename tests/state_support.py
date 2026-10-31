@@ -13,7 +13,9 @@ from eyewall.models.obs import (
     LatestObservation,
     Observation,
     ObservationSeries,
+    Parsed,
     Station,
+    SupplementalReading,
     TideSeries,
     TideStation,
 )
@@ -233,6 +235,10 @@ class FakeSource:
     async def ndbc_series(self, station_id: str) -> ObservationSeries:
         self.calls.append(f"series:{station_id}")
         return self.buoy_series.get(station_id.upper(), ObservationSeries(station_id.upper()))
+
+    async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        self.calls.append(f"supl:{station_id}")
+        return Parsed()
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
         self.calls.append("coops_stations")

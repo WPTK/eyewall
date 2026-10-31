@@ -11,7 +11,7 @@ suffix for intermediates, as in NHC's own GIS file names):
     ndbc/activestations.xml            the recorded stations only, without the "reported in the last 8 hours" flags
     ndbc/<station>.stdmet.txt          NDBC historical rows (oldest first) inside the window
     coops/stations.<listing>.json      CO-OPS station listings (`water_level`, `met`) trimmed to the recorded gauges
-    coops/<station>.<product>.json     raw datagetter answers: water_level, wind, air_pressure
+    coops/<station>.<product>.json     raw datagetter answers: water_level, predictions (6-minute), wind, air_pressure
     graphics/<file>                    a few stills listed in the manifest
 
 `scripts/record_storm.py` writes one; `eyewall.sources.replay.ReplaySource` reads one.
@@ -32,7 +32,7 @@ FORMAT = 1
 MANIFEST = "manifest.toml"
 TEXT_KINDS = ("tcm", "tcp", "tcd", "pws")
 GIS_LAYERS = ("5day", "fcst")
-TIDE_PRODUCTS = ("water_level", "wind", "air_pressure")
+TIDE_PRODUCTS = ("water_level", "predictions", "wind", "air_pressure")
 TIDE_LISTINGS = ("water_level", "met")
 STATIONS_XML = "ndbc/activestations.xml"
 

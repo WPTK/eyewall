@@ -39,6 +39,7 @@ class DashboardScreen(Screen[None]):
         Binding("2", "basin('EP')", "East Pacific", show=False),
         Binding("3", "basin('CP')", "Central Pacific", show=False),
         Binding("a", "basin('')", "All basins", show=False),
+        Binding("b", "buoys", "Buoys"),
         Binding("m", "toggle_map", "Map"),
         Binding("M", "full_map", "Full map", show=False),
         Binding("l", "layers", "Layers"),
@@ -156,6 +157,14 @@ class DashboardScreen(Screen[None]):
             eye.open_detail(eye.selected)
         elif eye.selected:
             eye.notify("Invests have no detail page; the outlook (O) has the full text.", timeout=4)
+
+    def action_buoys(self) -> None:
+        """The Buoys tab of the selected storm, or the watchlist when there is no storm to look at."""
+        eye = self.eye
+        if eye.selected in eye.store.storms:
+            eye.open_detail(eye.selected, "buoys")
+        else:
+            eye.action_watchlist()
 
     def action_basin(self, code: str) -> None:
         self.eye.basin_filter = code or None

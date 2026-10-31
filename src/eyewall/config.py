@@ -166,6 +166,7 @@ class LoadResult:
     config: Config
     warnings: tuple[str, ...] = ()
     path: Path | None = None
+    broken: bool = False  # the file exists but could not be read; the config is the defaults, not the file
 
 
 def default_path() -> Path:
@@ -349,7 +350,7 @@ def load_config(path: Path | None = None, *, use_file: bool = True) -> LoadResul
     try:
         data = tomllib.loads(target.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        return LoadResult(Config(), (f"could not read {target}: {exc}; using defaults",), target)
+        return LoadResult(Config(), (f"could not read {target}: {exc}; using defaults",), target, broken=True)
     config, problems = parse_config(data)
     return LoadResult(config, tuple(problems), target)
 
@@ -393,3 +394,34 @@ def apply_overrides(config: Config, *, basins: Sequence[str] | None = None, glyp
     if glyph_set is not None and glyph_set in GLYPH_SETS:
         config = replace(config, map=replace(config.map, glyph_set=glyph_set))
     return config
+
+
+WATCHLIST_KINDS = ("ndbc", "coops")
+
+
+def watchlist_ids(config: Config, kind: str) -> tuple[str, ...]:
+    return config.watchlist.ndbc if kind == "ndbc" else config.watchlist.coops
+
+
+def with_watchlist(config: Config, kind: str, ids: Sequence[str]) -> Config:
+    """The config with one watchlist replaced: ids upper-cased and de-duplicated, malformed ones dropped, capped at
+    MAX_WATCHLIST, the same rules the file loader applies."""
+    if kind not in WATCHLIST_KINDS:
+        raise ValueError(f"unknown watchlist {kind!r}; use one of {', '.join(WATCHLIST_KINDS)}")
+    clean: list[str] = []
+    for item in ids:
+        text = item.strip().upper()
+        if _STATION_ID.match(text) and text not in clean:
+            clean.append(text)
+    return replace(config, watchlist=replace(config.watchlist, **{kind: tuple(clean[:MAX_WATCHLIST])}))
+
+
+def toggle_watch(config: Config, kind: str, station_id: str) -> tuple[Config, bool]:
+    """Add the station to a watchlist, or remove it when it is there. Returns the config and whether it is watched."""
+    wanted = station_id.strip().upper()
+    current = list(watchlist_ids(config, kind))
+    if wanted in current:
+        current.remove(wanted)
+        return with_watchlist(config, kind, current), False
+    updated = with_watchlist(config, kind, [*current, wanted])
+    return updated, wanted in watchlist_ids(updated, kind)
