@@ -31,8 +31,8 @@ async def test_alert_log(journey, size) -> None:
     async with journey(size) as j:
         await j.keys("A")
         assert isinstance(j.screen, AlertLogScreen)
-        j.see("Time (Z)", "New advisory")
-        await j.shot("alert-log", footer=False)
+        j.see("Time (Z)", "New advisory", "? help")
+        await j.shot("alert-log")
         await j.keys("escape")
         assert not isinstance(j.screen, AlertLogScreen)
 
@@ -108,16 +108,23 @@ async def test_settings_edit_save_cancel_and_invalid(journey, size, tmp_path) ->
         await j.keys("ctrl+s")
         assert isinstance(j.screen, SettingsScreen)
         j.see("Not saved")
+        note, scroll = j.screen.query_one("#settings-note"), j.screen.query_one("#settings-scroll")
+        assert note.region.y >= scroll.region.bottom, "the error overlaps the settings list"
+        assert note.region.bottom < j.screen.query_one("#settings-box").region.bottom, "the error runs into the border"
         await j.shot("settings-invalid", footer=False)
-        j.screen.query_one("#poll-storms", Input).value = "120"
+        j.screen.query_one("#poll-storms", Input).value = "120"  # below the 300 s floor for the storms feed
+        await j.keys("ctrl+s")
+        assert isinstance(j.screen, SettingsScreen)
+        j.see("Not saved", "poll.storms")
+        j.screen.query_one("#poll-storms", Input).value = "600"
         switch = j.screen.query_one("#alerts-bell", Switch)
         wanted = not switch.value
         switch.value = wanted
         await j.keys("ctrl+s")
         assert not isinstance(j.screen, SettingsScreen)
-        assert app.config.poll.storms == 120 and app.config.alerts.bell is wanted
+        assert app.config.poll.storms == 600 and app.config.alerts.bell is wanted
         saved = load_config(path).config
-        assert saved.poll.storms == 120 and saved.alerts.bell is wanted
+        assert saved.poll.storms == 600 and saved.alerts.bell is wanted
         await j.shot("settings-saved")
 
 

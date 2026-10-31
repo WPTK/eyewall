@@ -128,6 +128,7 @@ class SettingsScreen(ModalScreen[Config | None]):
         box = self.query_one("#settings-box")
         box.border_title = "Settings"
         box.border_subtitle = "ctrl+s saves, esc cancels"
+        self.query_one("#settings-note").display = False
 
     def values(self) -> dict[str, Any]:
         def text(widget_id: str) -> str:
@@ -152,7 +153,8 @@ class SettingsScreen(ModalScreen[Config | None]):
         config, problems = build_config(self.current, self.values())
         note = self.query_one("#settings-note", Static)
         if problems:
-            note.update(Text("Not saved: " + "; ".join(problems[:3]), style="bold #ff4d4d"))
+            note.update(Text("Not saved: " + "; ".join(problems[:3])))
+            note.display = True
             return
         self.dismiss(config)
 
