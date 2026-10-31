@@ -6,11 +6,12 @@ import io
 import subprocess
 import sys
 
+import httpx
 import pytest
 import respx
 from PIL import Image
 
-from eyewall.net import HttpError, new_client
+from eyewall.net import HttpError, RateLimited, new_client
 from eyewall.render import images
 from eyewall.render.canvas import Mode, Style
 from eyewall.render.images import (
@@ -366,3 +367,56 @@ async def test_fetch_image_follows_a_redirect_inside_noaa_and_refuses_one_that_l
         with pytest.raises(ImageError, match="redirects"):
             await fetch_image(client, "https://www.nhc.noaa.gov/loop.png")
     assert not other.called
+
+
+async def _no_sleep(seconds: float) -> None:
+    _SLEPT.append(seconds)
+
+
+_SLEPT: list[float] = []
+
+
+@respx.mock
+async def test_fetch_image_retries_a_503_and_a_dropped_connection_then_succeeds() -> None:
+    _SLEPT.clear()
+    body = png(Image.new("RGB", (2, 2)))
+    url = "https://www.nhc.noaa.gov/retry.png"
+    route = respx.get(url).mock(
+        side_effect=[
+            httpx.Response(503, content=b"busy"),
+            httpx.ConnectError("reset"),
+            httpx.Response(200, content=body),
+        ]
+    )
+    async with new_client() as client:
+        assert await fetch_image(client, url, sleep=_no_sleep) == body
+    assert route.call_count == 3 and _SLEPT == [1.0, 2.0]
+
+
+@respx.mock
+async def test_fetch_image_gives_up_after_two_retries_and_caps_retry_after() -> None:
+    _SLEPT.clear()
+    url = "https://www.nhc.noaa.gov/down.png"
+    route = respx.get(url).respond(503, headers={"Retry-After": "9999"}, content=b"x" * 100)
+    async with new_client() as client:
+        with pytest.raises(HttpError):
+            await fetch_image(client, url, sleep=_no_sleep)
+    assert route.call_count == 3 and _SLEPT == [30.0, 30.0]
+    limited = respx.get("https://www.nhc.noaa.gov/slow.png").respond(429)
+    async with new_client() as client:
+        with pytest.raises(RateLimited):
+            await fetch_image(client, "https://www.nhc.noaa.gov/slow.png", sleep=_no_sleep)
+    assert limited.call_count == 3
+
+
+@respx.mock
+async def test_fetch_image_does_not_retry_a_404_or_a_redirect_to_another_host() -> None:
+    _SLEPT.clear()
+    gone = respx.get("https://www.nhc.noaa.gov/gone2.png").respond(404)
+    respx.get("https://www.nhc.noaa.gov/away2.png").respond(302, headers={"Location": "https://evil.example/a.png"})
+    async with new_client() as client:
+        with pytest.raises(HttpError):
+            await fetch_image(client, "https://www.nhc.noaa.gov/gone2.png", sleep=_no_sleep)
+        with pytest.raises(ImageError, match="NOAA"):
+            await fetch_image(client, "https://www.nhc.noaa.gov/away2.png", sleep=_no_sleep)
+    assert gone.call_count == 1 and _SLEPT == []

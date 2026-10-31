@@ -168,3 +168,15 @@ def test_absolute_links_to_other_hosts_are_ignored_and_http_noaa_links_are_upgra
         "https://www.nhc.noaa.gov/storm_graphics/AT05/a_5day_cone_with_line_and_wind.png",
         "https://www.nhc.noaa.gov/storm_graphics/AT05/w_5day_cone.png",
     ]
+
+
+def test_odd_schemes_and_malformed_absolute_links_never_become_graphics():
+    html = (
+        '<img src="file:/etc/storm_graphics/x_5day_cone.png">'
+        '<img src="http:/evil.com/storm_graphics/x_5day_cone.png">'
+        '<img src="abcdefghij://evil.com/storm_graphics/x_5day_cone.png">'
+        '<img src="/storm_graphics/AT05/ok_5day_cone.png">'
+    )
+    assert [link.url for link in parse_graphics_page(html, LANDING)] == [
+        "https://www.nhc.noaa.gov/storm_graphics/AT05/ok_5day_cone.png"
+    ]

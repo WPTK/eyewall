@@ -489,13 +489,12 @@ CONSOLE_BROWSERS = frozenset({"lynx", "w3m", "links", "links2", "elinks", "brows
 def open_in_browser(url: str) -> str:
     """Open the address in the desktop browser: `opened`, `console` (refused) or `none`. Blocks, so run it in a thread.
 
-    A browser that runs in the terminal (lynx, w3m, links) would take over the screen Textual draws on, and the
-    standard library waits for a plain command-line browser to exit, so those are never started.
+    A browser that runs in the terminal (lynx, w3m, links) would take over the screen Textual draws on, so those are
+    never started.
     """
     controller = webbrowser.get()
     name = os.path.basename(str(getattr(controller, "name", ""))).lower().removesuffix(".exe")
-    plain = type(controller) is webbrowser.GenericBrowser  # started in this terminal and waited for
-    if plain or (name.split() or [""])[0] in CONSOLE_BROWSERS:
+    if (name.split() or [""])[0] in CONSOLE_BROWSERS:
         return "console"
     return "opened" if controller.open(url) else "none"
 

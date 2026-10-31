@@ -36,7 +36,7 @@ GIS_LAYERS = ("5day", "fcst")
 TIDE_PRODUCTS = ("water_level", "predictions", "wind", "air_pressure")
 TIDE_LISTINGS = ("water_level", "met")
 STATIONS_XML = "ndbc/activestations.xml"
-_STORM_ID = re.compile(r"(?:al|ep|cp)\d{6}")  # also the folder name under nhc/ and gis/, so nothing else is allowed
+_STORM_ID = re.compile(r"(?:al|ep|cp)[0-9]{6}")  # also the folder name under nhc/ and gis/, so nothing else is allowed
 
 
 class BundleError(ValueError):
@@ -123,6 +123,8 @@ def read_manifest(directory: Path) -> Manifest:
             graphics=graphics,
             format=int(data.get("format", FORMAT)),
         )
+    except BundleError:
+        raise
     except KeyError as exc:
         raise BundleError(f"{path}: missing {exc.args[0]!r}") from exc
     except (TypeError, ValueError, AttributeError) as exc:

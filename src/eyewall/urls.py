@@ -24,4 +24,6 @@ def is_noaa_url(url: str) -> bool:
         return False
     if parts.scheme != "https" or "@" in parts.netloc or port not in (None, 443):
         return False
+    if not host or any(not (ch.isascii() and (ch.isalnum() or ch in ".-")) for ch in host):
+        return False
     return any(host == d or host.endswith("." + d) for d in NOAA_DOMAINS)

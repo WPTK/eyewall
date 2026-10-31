@@ -274,3 +274,35 @@ def test_unreadable_recorded_files_are_a_bundle_error(tmp_path, monkeypatch):
     monkeypatch.setattr(ReplaySource, "_load_stations", lambda self: (_ for _ in ()).throw(ValueError("bad xml")))
     with pytest.raises(bundle.BundleError, match="could not be read"):
         ReplaySource(target)
+
+
+async def test_a_partial_refetch_keeps_the_stored_public_advisory():
+    source, moments, store, storm = await _demo_state(2)
+    for moment in moments:  # find a moment where an intermediate public advisory is the newest
+        source.clock.set(moment)
+        full = await source.advisory((await source.storms()).storms[0])
+        if full.forecast and full.public and full.public.issued > full.forecast.issued:
+            break
+    else:
+        pytest.fail("the demo has no intermediate advisory")
+    store.apply_products(storm.id, moment, key=("1", None), advisories=full)
+    store.apply_products(storm.id, moment, key=("2", None), advisories=AdvisorySet(forecast=full.forecast))
+    assert store.storms[storm.id].advisories.public == full.public
+
+
+async def test_a_newer_set_whose_newest_product_predates_a_stored_intermediate_still_raises_events():
+    from eyewall.state.events import EventKind
+
+    source, moments, store, storm = await _demo_state(2)
+    source.clock.set(moments[2])
+    stored = await source.advisory((await source.storms()).storms[0])
+    source.clock.set(moments[-1])
+    late = await source.advisory((await source.storms()).storms[0])
+    assert late.discussion is not None and stored.discussion is not None
+    assert late.discussion.adv_num != stored.discussion.adv_num
+    store.apply_products(storm.id, moments[2], key=("1", None), advisories=stored)
+    # the public advisory lags (same one as stored) while the forecast and discussion are newer
+    mixed = AdvisorySet(forecast=late.forecast, public=stored.public, discussion=late.discussion)
+    events = store.apply_products(storm.id, moments[-1], key=("2", None), advisories=mixed)
+    assert EventKind.NEW_DISCUSSION in {e.kind for e in events}
+    assert store.storms[storm.id].advisories.discussion == late.discussion

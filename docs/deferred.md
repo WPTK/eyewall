@@ -58,3 +58,4 @@ and move an item into a milestone brief when it is scheduled.
 - Footer (#16): the outlook screen's footer shows `+/- zoom` and `fit` when its map is focused, and `esc back` stands in for `O`; its hard-coded `Enter: charts   w: edit` line above the watchlist remains.
 - Footer (#16): `t` now works only on the Advisory tab (it used to jump there from any tab), and `p` does nothing off the Buoys and Tides tabs (the toast that explained it is gone).
 - Footer (#16): `q`, `g`, `O`, `A`, `w`, `S`, `/`, `r`, `u` and the replay keys are in `?` help only; the snapshot tests pin the status line, so `tests/test_footer.py` checks the footer instead.
+- `fetch_image` follows redirects itself; give `fetch_bytes` a per-hop URL check so the two can be one.

@@ -596,15 +596,11 @@ def test_a_console_browser_is_never_started(monkeypatch, name: str) -> None:
     assert controller.urls == []
 
 
-def test_a_blocking_command_line_browser_is_not_started_but_a_background_one_is(monkeypatch) -> None:
-    plain = webbrowser.GenericBrowser("firefox")
-    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: plain)
-    monkeypatch.setattr(plain, "open", lambda url: pytest.fail("a blocking browser was started"))
-    assert gallery_widget.open_in_browser(STILL) == "console"
-    background = _Controller("firefox")
-    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: background)
-    assert gallery_widget.open_in_browser(STILL) == "opened" and background.urls == [STILL]
-    background.opened = False
+def test_a_command_line_browser_that_is_not_a_console_one_is_started(monkeypatch) -> None:
+    controller = _Controller("wslview")
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: controller)
+    assert gallery_widget.open_in_browser(STILL) == "opened" and controller.urls == [STILL]
+    controller.opened = False
     assert gallery_widget.open_in_browser(STILL) == "none"
 
 

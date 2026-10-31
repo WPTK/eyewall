@@ -73,12 +73,10 @@ def parse_graphics_page(html: str | bytes, base_url: str) -> tuple[GraphicLink, 
     seen: set[str] = set()
     links: list[GraphicLink] = []
     for match in _ASSET.finditer(text):
-        raw = match.group(0)
-        if "//" in raw[:8]:  # an absolute link is kept only when it points at NOAA (an http one is upgraded)
-            raw = re.sub(r"^http://", "https://", raw, flags=re.IGNORECASE)
-            if not is_noaa_url(urljoin(base_url, raw)):
-                continue
+        raw = re.sub(r"^http://", "https://", match.group(0), flags=re.IGNORECASE)
         url = urljoin(base_url, raw)
+        if not is_noaa_url(url):  # a relative link resolves against the NOAA page; anything else must be NOAA itself
+            continue
         if url in seen:
             continue
         seen.add(url)

@@ -243,19 +243,24 @@ class Store:
         return tendency
 
 
-def _issued(advisories: AdvisorySet) -> datetime | None:
-    times = [
-        p.issued
-        for p in (advisories.forecast, advisories.public, advisories.discussion, advisories.wind_probabilities)
-        if p is not None and p.issued is not None
-    ]
-    return max(times, default=None)
-
-
 def _is_older(new: AdvisorySet, old: AdvisorySet) -> bool:
-    """True when the new set was issued before the old one, which only happens when a replay steps back."""
-    new_issued, old_issued = _issued(new), _issued(old)
-    return new_issued is not None and old_issued is not None and new_issued < old_issued
+    """True when a product in both sets was issued earlier in the new one, which only happens when a replay steps back.
+
+    A partial refetch (one product missing) or a set whose newest product predates a stored intermediate advisory
+    has no such product pair, so it keeps the usual merge.
+    """
+    earlier = later = False
+    for fresh, stored in (
+        (new.forecast, old.forecast),
+        (new.public, old.public),
+        (new.discussion, old.discussion),
+        (new.wind_probabilities, old.wind_probabilities),
+    ):
+        if fresh is None or stored is None or fresh.issued is None or stored.issued is None:
+            continue
+        earlier |= fresh.issued < stored.issued
+        later |= fresh.issued > stored.issued
+    return earlier and not later
 
 
 def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:
