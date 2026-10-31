@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.9.0] - 2026-10-31
+
+### Changed
+
+- Degrade the status bar by priority instead of truncating it, and fix which footer keys show regardless of the poll countdown ([`792a87d`](https://github.com/WPTK/eyewall/commit/792a87d), [#34](https://github.com/WPTK/eyewall/pull/34))
+- Fit the Forecast table in 80 columns by moving gusts and wind radii to the Advisory tab ([`792a87d`](https://github.com/WPTK/eyewall/commit/792a87d), [#34](https://github.com/WPTK/eyewall/pull/34))
+- Make the dashboard's right column scale with the terminal width ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+- Fit the Buoys and Tides name column to the room the other columns leave, and show the full name when there is room ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Style the selected tab the same way on every tab bar, focused or not ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Show the summary as a label and value grid so long values wrap under the value ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Show the last wave reading within three hours in the Buoys table and panel when the newest row has none ([`15dbaf7`](https://github.com/WPTK/eyewall/commit/15dbaf7), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Ship the Linux and macOS binaries as `eyewall-<platform>.tar.gz` archives that keep the executable bit; Windows keeps the bare exe ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Pin the standalone binaries' dependencies in `scripts/binary-constraints.txt`, with `scripts/update_constraints.py` to refresh them ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Rewrite the README with new screenshots and move contributor guidance into `docs/development.md` and install notes into `docs/install.md` ([`bbdff09`](https://github.com/WPTK/eyewall/commit/bbdff09), [#46](https://github.com/WPTK/eyewall/pull/46))
+
+### Added
+
+- Add the last traceback to the feed canary issue ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+
+### Removed
+
+- Remove the "Select a storm" panels when an outlook area is selected ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+
+### Fixed
+
+- Fix the stacked dashboard panels overflowing on short terminals by dropping the lowest panels when rows run short ([`983ca19`](https://github.com/WPTK/eyewall/commit/983ca19), [#50](https://github.com/WPTK/eyewall/pull/50))
+- Fix free rows under the stacked dashboard panels on very tall terminals by letting panels grow past their caps ([`983ca19`](https://github.com/WPTK/eyewall/commit/983ca19), [#50](https://github.com/WPTK/eyewall/pull/50))
+- Fix the stacked dashboard panels not refitting after a live resize ([`fca3b47`](https://github.com/WPTK/eyewall/commit/fca3b47), [#50](https://github.com/WPTK/eyewall/pull/50))
+- Fix the tabbed dashboard panels showing only two lines at tall narrow sizes ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+- Fix the stacked dashboard panels running off the screen at 120x30 ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+- Fix the dashboard map sitting at one edge for a recurving storm so it now fits the storm, its wind radii and the next 72 hours ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+- Fix the map legend being cut in a narrow map ([`9502e63`](https://github.com/WPTK/eyewall/commit/9502e63), [#44](https://github.com/WPTK/eyewall/pull/44))
+- Fix the track line leaving a gap when the storm center is newer than the last best-track fix ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix a watchlisted tide gauge missing from the CO-OPS catalog showing "waiting" instead of "unknown" ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix duplicate storm ids in the CurrentStorms feed and uncapped shapefile zip members ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix a crash with `NO_COLOR` set on the graphics gallery, buoy charts and map ([`7b88fea`](https://github.com/WPTK/eyewall/commit/7b88fea), [#39](https://github.com/WPTK/eyewall/pull/39))
+- Fix the graphics screen's footer staying narrow after a resize ([`7b88fea`](https://github.com/WPTK/eyewall/commit/7b88fea), [#39](https://github.com/WPTK/eyewall/pull/39))
+- Fix the alert log missing its status row and help hint ([`789ac89`](https://github.com/WPTK/eyewall/commit/789ac89), [#42](https://github.com/WPTK/eyewall/pull/42))
+- Fix the settings error message overlapping the Units row and border ([`789ac89`](https://github.com/WPTK/eyewall/commit/789ac89), [#42](https://github.com/WPTK/eyewall/pull/42))
+- Fix empty gaps on the outlook and watchlist screens and style waiting buoys like silent ones ([`789ac89`](https://github.com/WPTK/eyewall/commit/789ac89), [#42](https://github.com/WPTK/eyewall/pull/42))
+- Fix the buoy charts starting their plots in different columns ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Fix the graphics picture touching the footer ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Fix the buoy search result row wrapping onto a second line ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Fix the replay's missing-supplemental-file message wording ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Fix a bad or truncated response from NOAA stopping new-storm events and product fetches for good ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix failed cone, wind radii, best track and graphics fetches never being retried, and an old cone showing next to a new advisory ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix the tide gauge cap applying per storm, the refresh key polling without a gap, and poll intervals allowed below the documented cadences ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix rate limiting (429, 5xx) answered from the cache not slowing the poller, and `Retry-After` being ignored ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix one hung host stalling every feed, and disk cache reads and writes blocking the interface ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` being ignored ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix downloads buffering a whole body before the size check; images over the limit are now abandoned at the first byte past it ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix the first GIF frame being decoded on the event loop when a loop opens ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix repeated requests for the same NESDIS listing across panels and storms ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix feeds all polling at once after coming back from away mode ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix the open-link key starting a console browser or blocking the app ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix image downloads and graphics links accepting non-NOAA hosts, http, and redirects that leave NOAA ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix a replay bundle with a bad manifest or storm id giving a traceback or reading outside the bundle ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix the 3 hour pressure change showing a reading from a silent barometer ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix stepping back in a replay popping false watch and warning toasts ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix headless live mode waiting a full interval when a feed is due ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+
 ## [0.8.5] - 2026-10-31
 
 ### Changed
@@ -65,6 +126,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.9.0]: https://github.com/WPTK/eyewall/releases/tag/v0.9.0
 [0.8.5]: https://github.com/WPTK/eyewall/releases/tag/v0.8.5
 [0.8.4]: https://github.com/WPTK/eyewall/releases/tag/v0.8.4
 [0.8.3]: https://github.com/WPTK/eyewall/releases/tag/v0.8.3
