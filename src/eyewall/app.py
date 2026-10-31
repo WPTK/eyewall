@@ -8,6 +8,7 @@ whatever is due. A live app runs `Poller.run()` and lets the poller sleep.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, tzinfo
@@ -40,6 +41,8 @@ from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
 from eyewall.units import PRESETS, Preset, next_preset
+
+log = logging.getLogger(__name__)
 
 REPLAY_SPEEDS = (60, 300, 1200, 3600)  # virtual seconds per real second
 DEFAULT_SPEED = 1
@@ -99,6 +102,8 @@ class EyewallApp(App[None]):
         self._closer = closer
         self._last_input = time.monotonic()
         self._tick_lock = asyncio.Lock()
+        self._reported: set[str] = set()
+        self.replay_over = False
         engine = AlertEngine(config.alerts, state_dir)
         self.poller = Poller(
             source,
@@ -130,7 +135,9 @@ class EyewallApp(App[None]):
         replay = None
         if self.replay is not None:
             adv = next((str(s.advisories.adv_num) for s in self.store.storms.values() if s.advisories.adv_num), None)
-            replay = fmt.ReplayStatus(self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv)
+            replay = fmt.ReplayStatus(
+                self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over
+            )
         text = fmt.status_bar(
             feeds,
             next_poll=self.poller.seconds_until_next(),
@@ -175,7 +182,7 @@ class EyewallApp(App[None]):
             await self._closer()
 
     async def on_event(self, event: events.Event) -> None:
-        if isinstance(event, events.Key | events.MouseDown | events.MouseMove | events.MouseScrollUp):
+        if isinstance(event, events.Key | events.MouseEvent):
             self._last_input = time.monotonic()
         await super().on_event(event)
 
@@ -186,8 +193,24 @@ class EyewallApp(App[None]):
     async def _replay_tick(self) -> None:
         if self.replay is None or self.paused or self._tick_lock.locked():
             return
-        self.replay.clock.advance(REPLAY_SPEEDS[self.speed_index] * REPLAY_TICK)
-        await self._tick()
+        async with self._tick_lock:
+            end = self.replay.manifest.end
+            remaining = (end - self.replay.now()).total_seconds()
+            if remaining <= 0:
+                self._finish_replay()
+                return
+            self.replay.clock.advance(min(REPLAY_SPEEDS[self.speed_index] * REPLAY_TICK, remaining))
+            await self.poller.tick()
+            if self.replay.now() >= end:
+                self._finish_replay()
+
+    def _finish_replay(self) -> None:
+        """The recording has run out: stop the clock and say so."""
+        self.paused = True
+        if not self.replay_over:
+            self.replay_over = True
+            self.notify("The replay is over; use [ to step back through the advisories.", timeout=8)
+        self._for_screens("refresh_status")
 
     def _pulse(self) -> None:
         """Once a second: notice the user coming back from away mode and let the clocks on screen tick."""
@@ -198,6 +221,12 @@ class EyewallApp(App[None]):
     # ---- results from the poller ------------------------------------------------------------------------------
 
     def _on_events(self, events_: list[Event]) -> None:
+        try:
+            self._show_events(events_)
+        except Exception:
+            self._report_failure("the alert toasts")
+
+    def _show_events(self, events_: list[Event]) -> None:
         for event in events_:
             self.alert_log.insert(0, event)
             self.notify(
@@ -210,11 +239,24 @@ class EyewallApp(App[None]):
             self.bell()
 
     def _on_result(self, result: PollResult) -> None:
+        try:
+            self._store_result(result)
+        except Exception:
+            self._report_failure("the poll result handler")
+
+    def _store_result(self, result: PollResult) -> None:
         self.results[result.feed] = result
         self._for_screens("refresh_data")
         self._for_screens("refresh_status")
         if result.feed == protocol.STORMS:
             self.first_poll.set()
+
+    def _report_failure(self, where: str) -> None:
+        """Log an exception raised by a screen or a listener, and tell the user once per place."""
+        log.exception("%s failed", where)
+        if where not in self._reported:
+            self._reported.add(where)
+            self.notify(f"{where} failed; data keeps polling. See the log.", severity="error", timeout=TOAST_SECONDS)
 
     def _for_screens(self, method: str) -> None:
         for screen in list(self.screen_stack):
@@ -224,6 +266,8 @@ class EyewallApp(App[None]):
                     action()
                 except NoMatches:  # a screen still being built or torn down
                     continue
+                except Exception:  # a screen bug must not stop the polling; say so and carry on
+                    self._report_failure(f"{type(screen).__name__}.{method}")
 
     # ---- screens ----------------------------------------------------------------------------------------------
 
@@ -284,13 +328,15 @@ class EyewallApp(App[None]):
     async def action_step(self, direction: int) -> None:
         if self.replay is None:
             return
-        if self.replay.step_advisory(direction) is None:
-            self.notify(
-                "No later advisory in this replay." if direction > 0 else "This is the first advisory.", timeout=3
-            )
-            return
-        self.poller.refresh()
-        await self._tick()
+        async with self._tick_lock:  # the clock move and the refresh must not interleave with a replay tick
+            if self.replay.step_advisory(direction) is None:
+                self.notify(
+                    "No later advisory in this replay." if direction > 0 else "This is the first advisory.", timeout=3
+                )
+                return
+            self.replay_over = False
+            self.poller.refresh()
+            await self.poller.tick()
 
 
 def run_app(

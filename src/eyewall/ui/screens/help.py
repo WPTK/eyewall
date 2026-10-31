@@ -16,7 +16,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     (
         "Dashboard",
         (
-            ("j / k", "next and previous storm in the list"),
+            ("j / k", "next and previous storm in the list, wherever the focus is"),
             ("Enter", "open the storm detail"),
             ("Tab", "move between the list, the map and the panels"),
             ("1  2  3  a", "Atlantic, East Pacific, Central Pacific, all basins"),
@@ -24,7 +24,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("M", "full-screen map"),
             ("l", "choose the map layers"),
             ("+  -", "zoom in and out (the mouse wheel too)"),
-            ("arrows", "pan the map while it has focus"),
+            ("arrows", "pan the map once it has focus (click it, or Tab to it); on the list they move the cursor"),
             ("c  f", "center on the storm; fit the cone again"),
         ),
     ),

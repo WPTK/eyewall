@@ -461,6 +461,7 @@ class ReplayStatus:
     speed: int
     moment: datetime
     adv: str | None
+    over: bool = False
 
 
 def feed_glyph(freshness: Freshness, g: UiGlyphs) -> str:
@@ -506,7 +507,8 @@ def status_bar(
         out.append(f"  {g.alert}{alert_count}", style="bold #ffa63d")
     if replay is not None:
         mark = g.pause if replay.paused else g.play
-        out.append(f"  {mark} replay {replay.speed}x {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
+        speed = "over" if replay.over else f"{replay.speed}x"
+        out.append(f"  {mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
         if replay.adv:
             out.append(f" adv {replay.adv}", style="#8fd3ff")
     return out

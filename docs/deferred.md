@@ -40,3 +40,8 @@ and move an item into a milestone brief when it is scheduled.
 - M5: only the current wind radii are drawn; the forecast radii at each forecast point are not.
 - M5: surge geometry (KML) is not parsed, so the map has no surge lines and the surge panel shows text only.
 - M5: on a quiet day the dashboard stays the first screen; opening on the outlook automatically is not done.
+- M5: parsing runs on the UI loop with no `asyncio.to_thread`; measure a replay at 3600x for freezes before moving the sync parses off the loop.
+- M5: the status bar crowds below 90 columns; drop segments by priority instead of truncating.
+- M5: the detail tables are cleared and rebuilt on every result; update rows in place when nothing changed.
+- M5: the snapshot tests depend on the platform's text rendering; pin the font metrics or compare structure instead.
+- M5: the map widget invalidates and redraws the whole canvas on every scene change; cache the layers that did not change.

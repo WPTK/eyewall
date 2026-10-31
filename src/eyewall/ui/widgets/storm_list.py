@@ -23,7 +23,7 @@ class StormList(OptionList):
         super().__init__(id=id)
         self._rows: list[Row] = []
         self._signature: tuple[tuple[str, str], ...] = ()
-        self._quiet = False
+        self._current: str | None = None  # the row the app already treats as selected
 
     @property
     def rows(self) -> list[Row]:
@@ -45,12 +45,8 @@ class StormList(OptionList):
         if signature != self._signature:
             self._signature = signature
             self._rows = rows
-            self._quiet = True  # the highlight events from the rebuild are not the user's
-            try:
-                self.clear_options()
-                self.add_options([Option(r.text, id=r.id, disabled=not r.selectable) for r in rows])
-            finally:
-                self._quiet = False
+            self.clear_options()
+            self.add_options([Option(r.text, id=r.id, disabled=not r.selectable) for r in rows])
         return self._restore(selected)
 
     def _restore(self, selected: str | None) -> str | None:
@@ -60,16 +56,14 @@ class StormList(OptionList):
         else:
             target = next((i for i, r in enumerate(self._rows) if r.selectable), None)
         if target is not None and self.highlighted != target:
-            self._quiet = True
-            try:
-                self.highlighted = target
-            finally:
-                self._quiet = False
-        return None if target is None else ids[target]
+            self.highlighted = target
+        # Textual delivers the highlight events of a rebuild later, so they cannot be told apart by a flag. The handler
+        # instead ignores any highlight that lands on the row already selected.
+        self._current = None if target is None else ids[target]
+        return self._current
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
-        if self._quiet:
-            return
         row = self.row_at(event.option_index)
-        if row is not None and row.selectable:
+        if row is not None and row.selectable and row.id != self._current:
+            self._current = row.id
             self.post_message(self.Picked(row.id))

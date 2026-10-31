@@ -42,8 +42,8 @@ TABLE_TABS = ("forecast", "probs", "history")
 class StormDetailScreen(Screen[None]):
     BINDINGS = [
         Binding("escape,backspace", "back", "Back"),
-        Binding("left", "tab(-1)", "Previous tab", show=False),
-        Binding("right", "tab(1)", "Next tab", show=False),
+        Binding("left", "tab(-1)", "Previous tab", show=False, priority=True),
+        Binding("right", "tab(1)", "Next tab", show=False, priority=True),
         Binding("t", "toggle_text", "TCP/TCM"),
         *[
             Binding(str((i + 1) % 10), f"show_tab('{tab_id}')", title, show=False)

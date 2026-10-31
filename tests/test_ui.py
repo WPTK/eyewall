@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
-from textual.widgets import DataTable, TabbedContent
+from textual import events
+from textual.widgets import DataTable, TabbedContent, Tabs
 
 from eyewall.app import EyewallApp
 from eyewall.state.store import storm_key
@@ -14,7 +17,7 @@ from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.widgets.map_view import MapView
-from tests.ui_support import ScriptedSource, press, replay_app, running, screen_text, scripted_app, wait_until
+from tests.ui_support import ScriptedSource, press, replay_app, running, screen_text, scripted_app, settle, wait_until
 
 SIZES = [(80, 24), (140, 45)]
 
@@ -174,3 +177,68 @@ async def test_a_dead_network_marks_feeds_stale_without_crashing() -> None:
         assert "Area 1" in screen_text(app)  # the last good outlook stays on screen
         await press(pilot, "O")
         assert isinstance(app.screen, OutlookScreen)
+
+
+async def test_tab_arrows_work_while_a_table_has_focus() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await press(pilot, "enter", "2")
+        table = app.screen.query_one("#forecast-table", DataTable)
+        table.focus()
+        await settle(pilot)
+        assert app.focused is table
+        tabs = app.screen.query_one(TabbedContent)
+        await press(pilot, "right")
+        assert tabs.active == "tab-public"
+        await press(pilot, "left", "left")
+        assert tabs.active == "tab-summary"
+        strip = app.screen.query_one(Tabs)
+        strip.focus()
+        await settle(pilot)
+        assert app.focused is strip
+        await press(pilot, "right", "right")
+        assert tabs.active == "tab-public"  # one step per press: the Tabs widget must not also move
+
+
+async def test_a_screen_that_raises_does_not_stop_the_polling() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        calls = []
+
+        def broken() -> None:
+            calls.append(1)
+            raise RuntimeError("boom")
+
+        app.screen.refresh_data = broken  # type: ignore[method-assign]
+        await press(pilot, "r")
+        await press(pilot, "r")
+        assert len(calls) >= 2  # the app survived the first failure and kept delivering results
+        assert app.is_running
+        assert any("failed" in n.message for n in app._notifications)
+
+
+async def test_stepping_and_ticks_share_the_lock_and_the_replay_stops_at_the_end() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        assert app.replay is not None
+        end = app.replay.manifest.end
+        app.replay.clock.set(end - timedelta(seconds=1))
+        app.paused = False
+        await app._replay_tick()
+        assert app.replay.now() == end
+        assert app.paused and app.replay_over
+        await app._replay_tick()  # paused and over: nothing moves
+        assert app.replay.now() == end
+        await settle(pilot)
+        assert "over" in screen_text(app)
+        await press(pilot, "left_square_bracket")
+        assert not app.replay_over
+        assert app.replay.now() < end
+
+
+async def test_every_mouse_event_counts_as_presence() -> None:
+    app = replay_app()
+    async with running(app):
+        app._last_input = 0.0
+        await app.on_event(events.MouseScrollDown(None, 1, 1, 0, 1, 0, False, False, False))
+        assert app._idle_seconds() < 5

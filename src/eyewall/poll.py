@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -61,6 +62,8 @@ MAX_BACKOFF_EXPONENT = 16  # 2**failures overflows a float after about 1000 cons
 # CO-OPS answers a water level request with HTTP 400 for a datum the gauge lacks; the Great Lakes need IGLD.
 DATUM_COAST = "MLLW"
 DATUM_GREAT_LAKES = "IGLD"
+
+log = logging.getLogger(__name__)
 
 
 class FreshnessState(StrEnum):
@@ -274,13 +277,25 @@ class Poller:
             state.failures += 1
             state.last_error = error
         state.next_at = self.clock.monotonic() + self.delay(feed)
-        shown = self.engine.process(events, self.source.now()) if events else []
+        shown: list[Event] = []
+        try:
+            shown = self.engine.process(events, self.source.now()) if events else []
+        except Exception:  # an alert engine bug must not stop the polling either
+            log.exception("alert engine failed on the %s feed", feed)
         if shown and self.on_events is not None:
-            self.on_events(shown)
+            self._callback(self.on_events, shown)
         result = PollResult(feed, self.freshness(feed), tuple(shown), error)
         if self.on_result is not None:
-            self.on_result(result)
+            self._callback(self.on_result, result)
         return result
+
+    @staticmethod
+    def _callback[T](callback: Callable[[T], object], value: T) -> None:
+        """Call a listener; one that raises is logged and the polling goes on."""
+        try:
+            callback(value)
+        except Exception:
+            log.exception("a poller listener failed")
 
     async def run(self) -> None:
         """Poll forever until `stop` or cancellation."""
