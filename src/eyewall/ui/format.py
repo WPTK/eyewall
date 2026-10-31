@@ -6,6 +6,7 @@ and are converted here, at display time, through a `units.Preset`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -483,6 +484,10 @@ def feed_glyph(freshness: Freshness, g: UiGlyphs) -> str:
     }[freshness.state]
 
 
+# Highest first: when the room runs out, the last segment goes first.
+STATUS_PRIORITY = ("replay", "offline", "alerts", "feeds", "away", "next")
+
+
 def status_bar(
     feeds: list[FeedStatus],
     *,
@@ -493,36 +498,70 @@ def status_bar(
     width: int,
     g: UiGlyphs,
 ) -> Text:
-    """One freshness indicator (a feed is named only when stale or failing), the next poll, the offline marker, the
-    alert count and the replay transport on one line."""
-    out = Text(no_wrap=True, overflow="ellipsis")
+    """The feed health, the offline marker, the alert count, the replay transport, the away marker and the next
+    poll on one line that fits `width` cells.
+
+    Nothing is truncated: a segment first takes a shorter wording, then goes whole, lowest priority first (see
+    `STATUS_PRIORITY`), until the line fits."""
+    segments: dict[str, list[Text]] = {}
     active = [f for f in feeds if f.active]
     trouble = [f for f in active if f.freshness.state in (FreshnessState.STALE, FreshnessState.ERROR)]
     if trouble:
-        for item in trouble:
-            color = FRESHNESS_COLORS[item.freshness.state]
-            out.append(f" {feed_glyph(item.freshness, g)} ", style=color)
-            out.append(FEED_LABELS[item.feed][0 if width >= 100 else 1], style=color)
-            if item.freshness.age is not None:
-                out.append(f" {format_age(item.freshness.age)}", style=color)
+        variants = []
+        for index in (0, 1):  # full names, then three-letter ones
+            text = Text()
+            for item in trouble:
+                color = FRESHNESS_COLORS[item.freshness.state]
+                text.append(f" {feed_glyph(item.freshness, g)} ", style=color)
+                text.append(FEED_LABELS[item.feed][index], style=color)
+                if item.freshness.age is not None:
+                    text.append(f" {format_age(item.freshness.age)}", style=color)
+            variants.append(text)
+        segments["feeds"] = variants
     elif any(f.freshness.state is FreshnessState.LOADING for f in active):
-        out.append(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])
+        segments["feeds"] = [Text(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])]
     elif active:
-        out.append(f" {g.fresh} sources ok", style=FRESHNESS_COLORS[FreshnessState.FRESH])
+        segments["feeds"] = [Text(f" {g.fresh} sources ok", style=FRESHNESS_COLORS[FreshnessState.FRESH])]
     if any(f.freshness.from_cache and f.active for f in feeds):
-        out.append("  OFFLINE: cached data", style="bold #ffe94a")
-    if next_poll is not None and width >= 90:
-        out.append(f"  next {format_age(next_poll)}", style=DIM)
+        segments["offline"] = [Text("OFFLINE: cached data", style="bold #ffe94a")]
+    if next_poll is not None:
+        segments["next"] = [Text(f"next {format_age(next_poll)}", style=DIM)]
     if away:
-        out.append("  away", style="#ffe94a")
+        segments["away"] = [Text("away", style="#ffe94a")]
     if alert_count:
-        out.append(f"  {g.alert}{alert_count}", style="bold #ffa63d")
+        segments["alerts"] = [Text(f"{g.alert}{alert_count}", style="bold #ffa63d")]
     if replay is not None:
         mark = g.pause if replay.paused else g.play
         speed = "over" if replay.over else f"{replay.speed}x"
-        out.append(f"  {mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
+        full = Text(f"{mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
         if replay.adv:
-            out.append(f" adv {replay.adv}", style="#8fd3ff")
+            full.append(f" adv {replay.adv}", style="#8fd3ff")
+        segments["replay"] = [full, Text(f"{mark} replay {speed}", style="bold #8fd3ff")]
+
+    level = dict.fromkeys(segments, 0)
+
+    def current() -> list[Text]:
+        return [segments[name][level[name]] for name in STATUS_PRIORITY if name in level]
+
+    def length() -> int:
+        parts = current()
+        return (
+            sum(part.cell_len for part in parts)
+            + 2 * (len(parts) - 1)
+            + (0 if parts and parts[0].plain[:1] == " " else 1)
+        )
+
+    while level and length() > width:
+        name = next(n for n in reversed(STATUS_PRIORITY) if n in level)
+        if level[name] + 1 < len(segments[name]):
+            level[name] += 1
+        else:
+            del level[name]
+    out = Text(no_wrap=True, overflow="ellipsis")
+    for index, part in enumerate(current()):
+        if index or not part.plain.startswith(" "):
+            out.append(" " if index == 0 else "  ")
+        out.append_text(part)
     return out
 
 
@@ -544,29 +583,34 @@ def key_name(key: str) -> str:
     return KEY_NAMES.get(first, first)
 
 
-def footer_row(status: Text, keys: list[tuple[str, str]], width: int) -> Text:
+STATUS_RESERVE = 24  # cells the keys always leave for the status, so the key set depends on the width alone
+
+
+def footer_row(status: Callable[[int], Text], keys: list[tuple[str, str]], width: int) -> Text:
     """The bottom line: the status on the left, the keys valid where the focus is and `? help` on the right, in one row.
 
-    The status gives way first (as it always has), then the keys: a key is listed only whole and only when it fits, so
-    `? help` is never pushed off. Bold marks the keys and dim the labels, so nothing rests on colour."""
+    Which keys fit is decided from `width` and a fixed `STATUS_RESERVE` only, never from the status text, so the key set
+    stays put while the countdown ticks. A key is listed only whole, and `? help` is always last. The status then
+    degrades by priority to the room that is left (`status` is called with it). Bold marks the keys and dim the labels,
+    so nothing rests on colour."""
 
     def pair(key: str, label: str) -> Text:
         return Text.assemble((key, "bold"), " ", (label, "dim"))
 
     help_ = pair("?", "help")
-    status = status.copy()
-    status.truncate(width - help_.cell_len - 2, overflow="ellipsis")
     right = Text()
     for key, label in keys:
         item = pair(key, label)
         item.append("  ")
-        if status.cell_len + right.cell_len + item.cell_len + help_.cell_len + 2 > width:
+        if STATUS_RESERVE + right.cell_len + item.cell_len + help_.cell_len + 2 > width:
             break
         right.append_text(item)
     right.append_text(help_)
-    status.append(" " * (width - status.cell_len - right.cell_len))
-    status.append_text(right)
-    return status
+    left = status(max(width - right.cell_len - 2, 0))
+    left.truncate(width - right.cell_len - 2, overflow="ellipsis")
+    left.append(" " * (width - left.cell_len - right.cell_len))
+    left.append_text(right)
+    return left
 
 
 def event_title(event: Event) -> str:

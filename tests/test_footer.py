@@ -39,35 +39,61 @@ def one_row(app, width: int) -> str:  # type: ignore[no-untyped-def]
 # ---- the row itself -------------------------------------------------------------------------------------------
 
 
+def fixed(text: str):  # type: ignore[no-untyped-def]
+    """A status that ignores the room it is given, to test the row on its own."""
+    return lambda room: Text(text)
+
+
+KEYS = [("enter", "detail"), ("b", "buoys"), ("m", "map")]
+
+
 def test_keys_fill_the_room_whole_and_help_stays_last() -> None:
-    keys = [("enter", "detail"), ("b", "buoys"), ("m", "map")]
-    status = Text(" ● sources ok")
-    wide = fmt.footer_row(status, keys, 60)
-    assert len(wide.plain) == 60 and wide.plain.startswith(" ● sources ok  ")
+    status = fixed(" ● sources ok")
+    wide = fmt.footer_row(status, KEYS, 80)
+    assert len(wide.plain) == 80 and wide.plain.startswith(" ● sources ok  ")
     assert wide.plain.endswith("  enter detail  b buoys  m map  ? help")
-    narrow = fmt.footer_row(status, keys, 36)  # room for one key and no more
-    assert narrow.plain.endswith("enter detail  ? help") and "b buoys" not in narrow.plain
-    assert len(narrow.plain) == 36
-    bare = fmt.footer_row(status, keys, 22)
-    assert bare.plain == " ● sources ok" + " " * 3 + "? help"
+    narrow = fmt.footer_row(status, KEYS, 58)  # room for two keys and no more
+    assert narrow.plain.endswith("enter detail  b buoys  ? help") and "m map" not in narrow.plain
+    assert len(narrow.plain) == 58
+    bare = fmt.footer_row(status, KEYS, 30)
+    assert bare.plain == " ● sources ok" + " " * 11 + "? help"
 
 
-def test_a_long_status_gives_way_before_the_keys_and_help() -> None:
-    row = fmt.footer_row(Text("x" * 200), [("b", "buoys")], 40)
-    assert len(row.plain) == 40
-    assert row.plain.endswith("? help") and "buoys" not in row.plain
+def test_the_key_set_does_not_depend_on_the_status_text() -> None:
+    for width in range(70, 130):
+        shown = {
+            fmt.footer_row(fixed(text), KEYS, width).plain.count("  ") for text in ("", " ● sources ok", "x" * 300)
+        }
+        keys = {
+            tuple(label for _, label in KEYS if label in fmt.footer_row(fixed(text), KEYS, width).plain)
+            for text in ("", "next 9s", "next 10m 5s", "x" * 300)
+        }
+        assert len(keys) == 1, (width, keys)
+        assert shown  # the rows were built
+
+
+def test_a_long_status_is_cut_before_the_keys_and_help() -> None:
+    row = fmt.footer_row(fixed("x" * 200), [("b", "buoys")], 60)
+    assert len(row.plain) == 60
+    assert row.plain.endswith("b buoys  ? help")
+
+
+def test_the_status_is_asked_for_the_room_the_keys_leave() -> None:
+    rooms: list[int] = []
+    fmt.footer_row(lambda room: rooms.append(room) or Text(""), KEYS, 100)  # type: ignore[func-returns-value]
+    assert rooms == [100 - len("enter detail  b buoys  m map  ? help") - 2]
 
 
 def test_wide_characters_are_measured_in_cells_not_characters() -> None:
     keys = [("w", "台風"), ("b", "buoys")]  # two characters, four cells
-    row = fmt.footer_row(Text("あ" * 30), keys, 40)
+    row = fmt.footer_row(fixed("あ" * 30), keys, 40)
     assert row.cell_len == 40 and row.plain.endswith("? help")
-    fits = fmt.footer_row(Text("ok"), keys, 20)  # "w 台風  ? help" is 14 cells; "b buoys  " would make 23
-    assert fits.cell_len == 20 and "台風" in fits.plain and "buoys" not in fits.plain
+    fits = fmt.footer_row(fixed("ok"), keys, 40)  # 24 reserved + "w 台風  " (8) + "? help" (6) + 2 = 40
+    assert fits.cell_len == 40 and "台風" in fits.plain and "buoys" not in fits.plain
 
 
 def test_the_footer_marks_keys_without_colour() -> None:
-    row = fmt.footer_row(Text(""), [("b", "buoys")], 30)
+    row = fmt.footer_row(fixed(""), [("b", "buoys")], 50)
     styles = {str(span.style) for span in row.spans}
     assert styles == {"bold", "dim"}
 
@@ -232,3 +258,17 @@ async def test_no_footer_below_the_help_threshold() -> None:
     async with running(app, (69, 24)) as pilot:
         await pilot.pause()
         assert "? help" not in bottom(app) and "detail" not in bottom(app)
+
+
+@pytest.mark.parametrize("size", [(80, 24), (100, 50), (120, 30), (200, 50), (280, 70)])
+async def test_the_forecast_table_fits_without_scrolling_sideways(size: tuple[int, int]) -> None:
+    from textual.widgets import DataTable
+
+    app = replay_app()
+    async with running(app, size) as pilot:
+        await into_the_storm(pilot)
+        await pilot.press("enter")
+        await pilot.pause()
+        await show_tab(pilot, "forecast")
+        table = app.screen.query_one("#forecast-table", DataTable)
+        assert table.row_count > 5 and table.virtual_size.width <= table.size.width
