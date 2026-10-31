@@ -85,7 +85,7 @@ def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None)
 def _fix_row(fix: ForecastFix, preset: Preset, tz: tzinfo | None) -> tuple[str, ...]:
     wind = fix.max_wind_kt
     category = category_for_knots(wind)
-    label = fix.status.split("/")[0] if fix.status else (category.value if category else MISSING)
+    label = fix.status or (category.value if category else MISSING)
     if fix.dissipated:
         return (
             f"{fix.tau}h",
@@ -146,11 +146,7 @@ def forecast_note(state: StormState) -> str:
     tcm = state.advisories.forecast
     if tcm is None:
         return "No forecast advisory yet."
-    return (
-        TCM_OUTLOOK_NOTE
-        if tcm.outlook_fixes
-        else "Gusts and wind radii (nautical miles) are in the forecast advisory: t on the Advisory tab."
-    )
+    return TCM_OUTLOOK_NOTE if tcm.outlook_fixes else ""
 
 
 def public_advisory(state: StormState, g: UiGlyphs) -> Text:

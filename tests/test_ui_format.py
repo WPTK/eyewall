@@ -106,8 +106,25 @@ def test_status_bar_degrades_by_priority_and_never_truncates():
         assert len(text) <= max(width, 0) or text == ""
         assert len(text) <= previous  # only ever gets shorter as the room shrinks
         previous = len(text)
-    marks = ("replay", "OFFLINE", "!3", "buoys", "away", "next")  # highest priority first
+    marks = ("replay", "OFFLINE", "buoys", "!3", "away", "next")  # highest priority first
     for width in range(200, 0, -1):
         present = [mark in bar(width) or (mark == "buoys" and "buo" in bar(width)) for mark in marks]
         assert present == sorted(present, reverse=True), (width, present)  # a lower one is never kept over a higher one
     assert "replay" in bar(30) and "Aug" not in bar(30)  # the replay is the last to go, and shortens first
+
+
+def test_a_failing_feed_outlasts_the_alert_count_and_a_healthy_one_does_not():
+    from eyewall.poll import Freshness, FreshnessState
+    from eyewall.sources import protocol
+    from eyewall.ui.format import FeedStatus, status_bar
+    from eyewall.ui.glyphs import UNICODE
+
+    def bar(state: FreshnessState, width: int) -> str:
+        feeds = [FeedStatus(protocol.BUOYS, Freshness(state, age=125.0))]
+        return status_bar(feeds, next_poll=42.0, alert_count=3, replay=None, away=False, width=width, g=UNICODE).plain
+
+    assert "next" not in bar(FreshnessState.ERROR, 25) and "buo" in bar(FreshnessState.ERROR, 25)
+    assert "!3" in bar(FreshnessState.ERROR, 25)
+    assert "buo" in bar(FreshnessState.ERROR, 14) and "!3" not in bar(FreshnessState.ERROR, 14)  # alerts go first
+    assert "sources ok" in bar(FreshnessState.FRESH, 25) and "next" not in bar(FreshnessState.FRESH, 25)
+    assert "sources ok" not in bar(FreshnessState.FRESH, 12) and "!3" in bar(FreshnessState.FRESH, 12)

@@ -61,15 +61,11 @@ def test_keys_fill_the_room_whole_and_help_stays_last() -> None:
 
 def test_the_key_set_does_not_depend_on_the_status_text() -> None:
     for width in range(70, 130):
-        shown = {
-            fmt.footer_row(fixed(text), KEYS, width).plain.count("  ") for text in ("", " ● sources ok", "x" * 300)
-        }
         keys = {
             tuple(label for _, label in KEYS if label in fmt.footer_row(fixed(text), KEYS, width).plain)
             for text in ("", "next 9s", "next 10m 5s", "x" * 300)
         }
         assert len(keys) == 1, (width, keys)
-        assert shown  # the rows were built
 
 
 def test_a_long_status_is_cut_before_the_keys_and_help() -> None:

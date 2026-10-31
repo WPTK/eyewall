@@ -484,8 +484,11 @@ def feed_glyph(freshness: Freshness, g: UiGlyphs) -> str:
     }[freshness.state]
 
 
-# Highest first: when the room runs out, the last segment goes first.
-STATUS_PRIORITY = ("replay", "offline", "alerts", "feeds", "away", "next")
+# Left to right on the line.
+STATUS_ORDER = ("feeds", "offline", "next", "away", "alerts", "replay")
+# What to keep, most important first; the last goes first when the room runs out. A failing feed is a "trouble"
+# segment and ranks above the alert count; the healthy "sources ok" ranks near the bottom.
+STATUS_PRIORITY = ("replay", "offline", "trouble", "alerts", "away", "feeds", "next")
 
 
 def status_bar(
@@ -517,7 +520,7 @@ def status_bar(
                 if item.freshness.age is not None:
                     text.append(f" {format_age(item.freshness.age)}", style=color)
             variants.append(text)
-        segments["feeds"] = variants
+        segments["trouble"] = variants
     elif any(f.freshness.state is FreshnessState.LOADING for f in active):
         segments["feeds"] = [Text(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])]
     elif active:
@@ -541,7 +544,10 @@ def status_bar(
     level = dict.fromkeys(segments, 0)
 
     def current() -> list[Text]:
-        return [segments[name][level[name]] for name in STATUS_PRIORITY if name in level]
+        slot = {"trouble": "feeds"}  # a failing feed takes the place "sources ok" would
+        return [
+            segments[name][level[name]] for place in STATUS_ORDER for name in level if slot.get(name, name) == place
+        ]
 
     def length() -> int:
         parts = current()
