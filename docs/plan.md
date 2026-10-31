@@ -190,7 +190,7 @@ peak surge, NESDIS GEOCOLOR/IR still and newest loop); inline image or pretty fa
 **Alert Log**, **Help**, **Settings** (poll, units, basins, watchlist, alert rules, glyph set; saves TOML).
 
 Keys: `j`/`k` select, `Enter` detail, `Tab` cycle panels, `1`/`2`/`3` basins, `a` all basins, `m` map
-toggle, `M` full-screen map, `l` layer menu, `+`/`-` zoom, arrows pan, `c` center storm, `f` fit cone,
+toggle, `M` full-screen map, `l` layer menu, `+`/`-` zoom, arrows pan, `c` center storm, `f` fit the storm,
 `b` buoys tab, `g` graphics, `t` text products, `A` alert log, `O` outlook, `r` refresh, `u` units preset,
 `/` station search, `?` help, `q` quit.
 

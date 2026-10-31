@@ -39,7 +39,7 @@ class Panel(VerticalScroll):
         text = text.copy()
         text.rstrip()  # the builders end every line with a newline; the last one would show as a blank row
         self.body.update(text)
-        if self.kind == "surge":  # no surge text, no panel: an empty box says nothing
+        if self.kind != "headline":  # no text, no panel: an empty box says nothing
             self.display = has_text(text)
 
 

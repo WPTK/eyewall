@@ -52,13 +52,15 @@ def _forecast_points(state: StormState) -> tuple[L.ForecastPoint, ...]:
     gis = state.forecast_gis
     if gis is not None and gis.points:
         return tuple(
-            L.ForecastPoint(p.lat, p.lon, p.max_wind_kt, _forecast_label(p.valid)) for p in gis.points if p.tau > 0
+            L.ForecastPoint(p.lat, p.lon, p.max_wind_kt, _forecast_label(p.valid), p.tau)
+            for p in gis.points
+            if p.tau > 0
         )
     tcm: ForecastAdvisory | None = state.advisories.forecast
     if tcm is None:
         return ()
     return tuple(
-        L.ForecastPoint(f.lat, f.lon, f.max_wind_kt, _forecast_label(f.valid))
+        L.ForecastPoint(f.lat, f.lon, f.max_wind_kt, _forecast_label(f.valid), f.tau)
         for f in tcm.forecast_fixes
         if f.lat is not None and f.lon is not None
     )

@@ -27,6 +27,7 @@ from eyewall.render.canvas import Canvas, Mode, Priority, Shade
 from eyewall.render.projection import Bounds, LatLon, Viewport, bounds_of
 
 Ring = tuple[LatLon, ...]
+NEAR_HOURS = 72  # how far ahead of the storm the dashboard map looks when it fits
 QuadrantRadii = tuple[float, float, float, float]  # nautical miles in the NE, SE, SW and NW quadrants, as in the TCM
 
 # ------------------------------------------------------------------------------------------------------------ inputs
@@ -43,12 +44,14 @@ class TrackPoint:
 
 @dataclass(frozen=True)
 class ForecastPoint:
-    """A forecast position. label is the time shown beside it, such as '12Z Tue'."""
+    """A forecast position. label is the time shown beside it, such as '12Z Tue'; tau is its hours from the forecast's
+    synoptic time, when known."""
 
     lat: float
     lon: float
     wind_kt: float | None = None
     label: str | None = None
+    tau: int | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,20 @@ class StormScene:
             points = [(f.lat, f.lon) for f in self.forecast] + [(t.lat, t.lon) for t in self.best_track]
         if self.center is not None:
             points.append((self.center.lat, self.center.lon))
+        return points
+
+    def near_extent(self, hours: int = NEAR_HOURS) -> list[LatLon]:
+        """Positions to fit a close view around: the center, the reach of its wind radii and the forecast out to
+        `hours`. The cone and the long range outlook are left out, so a storm that recurves stays in the middle."""
+        points: list[LatLon] = [(f.lat, f.lon) for f in self.forecast if f.tau is None or f.tau <= hours]
+        if self.center is not None:
+            points.append((self.center.lat, self.center.lon))
+        for wind in self.radii:
+            reach = max((max(q) for q in (wind.kt34, wind.kt50, wind.kt64) if q is not None), default=0.0)
+            if reach > 0:
+                points.extend(
+                    destination((wind.lat, wind.lon), bearing, reach) for bearing in (0.0, 90.0, 180.0, 270.0)
+                )
         return points
 
 
