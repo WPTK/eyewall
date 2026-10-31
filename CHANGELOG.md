@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.4] - 2026-10-31
+
+### Fixed
+
+- Fit the dashboard's right column to a 140x45 terminal, hide the empty Storm surge panel and Surge tab, and size panels to their text ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Redraw the map at once when `M` changes its width ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Fit the ten detail tabs and the storm list note in 80 columns by shortening three tab names and the Pacific basins line ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Wrap long alert log messages instead of clipping them, and make scrollbars one column wide ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Make unchecked map layers readable and show each outlook area once on a quiet day ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
+
 ## [0.8.3] - 2026-10-31
 
 ### Fixed
@@ -39,6 +49,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.8.4]: https://github.com/WPTK/eyewall/releases/tag/v0.8.4
 [0.8.3]: https://github.com/WPTK/eyewall/releases/tag/v0.8.3
 [0.8.2]: https://github.com/WPTK/eyewall/releases/tag/v0.8.2
 [0.8.1]: https://github.com/WPTK/eyewall/releases/tag/v0.8.1
