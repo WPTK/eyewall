@@ -279,7 +279,7 @@ class EyewallApp(App[None]):
         self.paused = True
         if not self.replay_over:
             self.replay_over = True
-            self.notify("The replay is over; use [ to step back through the advisories.", timeout=8)
+            self.notify("The replay is over; use [ to step back through the advisories.", timeout=8, markup=False)
         self._for_screens("refresh_status")
 
     def _pulse(self) -> None:
@@ -327,7 +327,12 @@ class EyewallApp(App[None]):
         log.exception("%s failed", where)
         if where not in self._reported:
             self._reported.add(where)
-            self.notify(f"{where} failed; data keeps polling. See the log.", severity="error", timeout=TOAST_SECONDS)
+            self.notify(
+                f"{where} failed; data keeps polling. See the log.",
+                severity="error",
+                timeout=TOAST_SECONDS,
+                markup=False,
+            )
 
     def _for_screens(self, method: str) -> None:
         for screen in list(self.screen_stack):
@@ -585,7 +590,7 @@ class EyewallApp(App[None]):
             return
         self.apply_config(updated)
         verb = "Pinned" if watched else "Removed"
-        self.notify(f"{verb} {station_id} {'to' if watched else 'from'} the watchlist.", timeout=3)
+        self.notify(f"{verb} {station_id} {'to' if watched else 'from'} the watchlist.", timeout=3, markup=False)
         if not watched:
             return
         if kind == "coops":

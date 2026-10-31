@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.coordinate import Coordinate
 from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import DataTable, Static
@@ -31,6 +32,7 @@ class AlertLogScreen(Screen[None]):
 
     HEADERS = ("Time (Z)", "Event", "Storm", "Message")
     _built_width: int | None = None
+    _built_rows: list[tuple[str, str, str, str]] | None = None
     _built: tuple[object, ...] | None = None  # what the table shows now: its rows and its message width
 
     def on_mount(self) -> None:
@@ -70,15 +72,22 @@ class AlertLogScreen(Screen[None]):
         built = (self._built_width, [(time, title.plain, storm, message) for time, title, storm, message in rows])
         if built != self._built:  # a poll that added no alert leaves the reader where they are
             self._built = built
+            keys = self._built_rows or []
             cursor, scroll = table.cursor_row, table.scroll_y
+            before = table._get_cell_region(Coordinate(cursor, 0)).y if keys else 0
             table.clear(columns=True)
             for header, width in zip(self.HEADERS, (*self._fixed_widths(rows), self._built_width), strict=True):
                 table.add_column(header, width=width)
             for time, title, storm, message in rows:
                 table.add_row(time, title, storm, Text(message), height=None)
             if rows:
-                table.move_cursor(row=min(cursor, len(rows) - 1), scroll=False)
-                table.scroll_to(y=scroll, animate=False)
+                # newest first: a new alert pushes the rest down, so the cursor stays on the alert it was on
+                shown = built[1]
+                row = shown.index(keys[cursor]) if keys and keys[cursor] in shown else min(cursor, len(rows) - 1)
+                table.move_cursor(row=row, scroll=False)
+                after = table._get_cell_region(Coordinate(row, 0)).y
+                table.scroll_to(y=max(scroll + after - before, 0), animate=False)
+            self._built_rows = built[1]
         empty = self.query_one("#alert-empty", Static)
         empty.update("No alerts yet this session.")
         empty.display = not self.eye.alert_log

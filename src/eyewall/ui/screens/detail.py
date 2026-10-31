@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import RenderableType
 from rich.text import Text
@@ -58,6 +58,7 @@ class StormDetailScreen(Screen[None]):
         super().__init__()
         self.storm_id = storm_id
         self._first_tab = tab
+        self._table_signatures: dict[str, str] = {}
         self.show_tcm = False
 
     @property
@@ -87,12 +88,6 @@ class StormDetailScreen(Screen[None]):
             self.query_one("#detail-tabs", TabbedContent).active = f"tab-{self._first_tab}"
         self.refresh_data()
         self.refresh_status()
-        self.call_after_refresh(self._focus_active_pane)
-
-    def _focus_active_pane(self) -> None:
-        tabs = self.query_one("#detail-tabs", TabbedContent)
-        if tabs.active and not isinstance(self.focused, DataTable | VerticalScroll | OptionList):
-            self._focus_pane(tabs.get_pane(tabs.active))
 
     # ---- data -------------------------------------------------------------------------------------------------
 
@@ -102,6 +97,14 @@ class StormDetailScreen(Screen[None]):
     def _set_table(self, tab_id: str, table: products.Table, note: str) -> None:
         widget = self.query_one(f"#{tab_id}-table", DataTable)
         columns, rows = table
+        signature = repr(table)
+        if self._table_signatures.get(tab_id) != signature:  # unchanged text keeps the cursor and the sideways scroll
+            self._table_signatures[tab_id] = signature
+            self._fill_table(widget, columns, rows)
+        self.query_one(f"#{tab_id}-note", Static).update(Text(note, style=DIM))
+
+    @staticmethod
+    def _fill_table(widget: DataTable[Any], columns: Any, rows: Any) -> None:
         row = widget.cursor_row
         widget.clear(columns=True)
         widget.add_columns(*columns)
@@ -109,7 +112,6 @@ class StormDetailScreen(Screen[None]):
             widget.add_row(*cells)
         if rows:
             widget.move_cursor(row=min(row, len(rows) - 1))
-        self.query_one(f"#{tab_id}-note", Static).update(Text(note, style=DIM))
 
     def _set_text(self, tab_id: str, text: RenderableType) -> None:
         self.query_one(f"#{tab_id}-text", Static).update(text)
@@ -203,6 +205,8 @@ class StormDetailScreen(Screen[None]):
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Land the focus on the tab's table, so the arrows and Enter act on its rows straight away."""
+        if event.tabbed_content.active != event.pane.id:  # a stale event: focusing its pane would switch back to it
+            return
         self.query_one("#graphics-gallery", GalleryPanel).set_active(event.pane.id == "tab-graphics")
         self._focus_pane(event.pane)
 

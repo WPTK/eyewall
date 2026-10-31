@@ -64,7 +64,7 @@ async def test_the_full_map_keeps_the_keyboard_and_the_arrows_pan() -> None:
         await press(pilot, "right")
         assert view.viewport != before
         await press(pilot, "M")
-        assert app.focused is not None
+        assert app.focused is view  # the map is still shown, so it keeps the keys
 
 
 @pytest.mark.parametrize("size", [(120, 30), (200, 50), (280, 70)])
@@ -76,8 +76,27 @@ async def test_hiding_the_map_gives_the_panels_the_whole_width(size: tuple[int, 
         screen = app.screen
         assert isinstance(screen, DashboardScreen)
         assert screen.query_one("#side-stack").region.right == size[0]
-        await press(pilot, "m")
-        assert app.focused is not None
+        storms = screen.query_one("#storms")
+        await press(pilot, "m")  # the map is back
+        screen.map_view.focus()
+        await press(pilot, "m")  # hidden with the focus on it: the keys go to the storm list
+        assert app.focused is storms
+
+
+async def test_the_compact_map_takes_the_keys_when_shown_and_gives_them_back() -> None:
+    app = replay_app()
+    async with running(app, (80, 24)) as pilot:
+        await into_the_storm(pilot)
+        screen = app.screen
+        assert isinstance(screen, DashboardScreen) and screen.has_class("compact")
+        panel = screen.query_one("#side-tabs .panel")
+        panel.focus()
+        await settle(pilot)
+        assert app.focused is panel
+        await press(pilot, "m")  # the panels are hidden under the map: the keys go to the map
+        assert app.focused is screen.map_view
+        await press(pilot, "m")  # the map is hidden with the focus on it: the keys go to the storm list
+        assert app.focused is screen.query_one("#storms")
 
 
 # ---- the other screens ---------------------------------------------------------------------------------------------
@@ -92,6 +111,7 @@ async def test_the_outlook_does_not_promise_an_enter_it_does_not_have() -> None:
 
 
 async def test_the_watchlist_rows_stay_inside_the_outlook_on_a_short_terminal() -> None:
+    """A guard: this passes on the old stylesheet too with the replay's short outlook; it was not reproduced."""
     app = replay_app()
     async with running(app, (60, 16)) as pilot:
         await press(pilot, "O")
@@ -127,12 +147,14 @@ async def test_choosing_the_configured_units_after_u_takes_effect() -> None:
         assert app.units == configured
 
 
-async def test_the_pinning_of_a_station_leaves_the_shown_units_alone() -> None:
+async def test_pinning_a_station_leaves_the_shown_units_alone() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await press(pilot, "u")
         shown = app.units
-        app.apply_config(replace(app.config), persist=False)
+        assert shown != app.config.units.preset
+        await app.toggle_watch("ndbc", "41002")
+        assert "41002" in app.config.watchlist.ndbc
         assert app.units == shown
 
 
@@ -188,3 +210,51 @@ async def test_a_long_message_wraps_to_the_width_of_the_view() -> None:
         width = view.size.width
         assert all(line.cell_length <= width for line in view._lines)
         assert "HTTP 503" in "\n".join(line.text for line in view._lines)
+
+
+async def test_the_detail_screen_opens_with_its_first_content_focused() -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter")
+        assert isinstance(app.focused, VerticalScroll)
+
+
+async def test_a_new_alert_pushes_the_log_down_and_the_cursor_stays_on_its_alert() -> None:
+    app = replay_app()
+    async with running(app, (80, 24)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "A")
+        table = app.screen.query_one("#alert-table", DataTable)
+        table.move_cursor(row=2)
+        message = table.get_row_at(2)[3].plain
+        app.alert_log.insert(0, replace(app.alert_log[0], message="A brand new alert."))
+        app.screen.refresh_data()
+        await settle(pilot)
+        assert table.cursor_row == 3
+        assert table.get_row_at(table.cursor_row)[3].plain == message
+
+
+async def test_the_first_advisory_has_no_cone_graphic() -> None:
+    app = app_for()
+    async with running(app) as pilot:
+        await press(pilot, "g")
+        panel = app.screen.query_one(GalleryPanel)
+        assert panel.items and "Cone, 5 day" not in [i.title for i in panel.items]
+
+
+async def test_a_poll_with_the_same_text_leaves_a_plain_table_as_it_was() -> None:
+    app = replay_app()
+    async with running(app, (60, 16)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter", "2")
+        table = app.screen.query_one("#forecast-table", DataTable)
+        table.move_cursor(row=1)
+        rows = table.row_count
+        app.screen.refresh_data()
+        await settle(pilot)
+        assert table.cursor_row == 1 and table.row_count == rows
+        calls = []
+        table.clear = lambda *a, **k: calls.append(1)  # type: ignore[method-assign]
+        app.screen.refresh_data()
+        assert calls == []
