@@ -6,6 +6,9 @@
 
 - Replace the Graphics tab placeholder with the image gallery ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
 
+- Remove the sparkline strip from the buoy detail screen and give its height to the charts ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Show the buoy's wave height once, as `--`, when it reports no waves, and show the whole station name in the title ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+
 ### Added
 
 - Add the graphics gallery and the `g` screen: the cone, wind probabilities at 34, 50 and 64 kt, arrival times, surge watch and warning and peak surge, and the GEOCOLOR, air mass and infrared stills and loops, each shown with its address ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))

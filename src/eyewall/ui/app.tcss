@@ -250,24 +250,6 @@ StormDetailScreen Tab {
     background: $panel;
 }
 
-#buoy-sparks {
-    height: 3;
-}
-
-.spark {
-    width: 1fr;
-    height: 3;
-    padding: 0 1;
-}
-
-.spark-label {
-    height: 1;
-}
-
-Sparkline {
-    height: 2;
-}
-
 #buoy-body {
     height: 1fr;
 }

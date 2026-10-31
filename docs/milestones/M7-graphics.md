@@ -87,6 +87,11 @@ The commands in `CLAUDE.md`, then view the gallery in Windows Terminal and in a 
   directories, the image sizes and the on-demand rule. The NHC landing page was still the quiet-day placeholder, so the link
   patterns for a live storm remain unverified.
 
+- Follow-up asked for by the owner: the buoy detail screen lost its sparkline strip (the charts took the height), shows
+  `Wave height --` alone when there are no waves (no separate period row) and no longer cuts the station name; the Graphics
+  tab is the gallery, and no placeholder text is left on the Graphics, Buoys or Tides tabs. One test covers a data refresh
+  keeping the storm selection and the map zoom.
+
 **Next session must know.**
 
 - Not viewed by a person: Sixel and Kitty output, and the app in Windows Terminal. The tests drove the gallery through

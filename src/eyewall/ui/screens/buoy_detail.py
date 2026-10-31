@@ -1,4 +1,4 @@
-"""The buoy detail screen: sparklines, braille charts of pressure, wind with gust and wave height, the latest
+"""The buoy detail screen: braille charts of pressure, wind with gust and wave height, the latest
 observation and the interval extremes.
 
 The series comes from the poller (the 5 day file, which already covers 72 hours); the `.supl` file with the true
@@ -15,7 +15,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import Resize
 from textual.screen import Screen
-from textual.widgets import Sparkline, Static
+from textual.widgets import Static
 
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
@@ -29,11 +29,6 @@ if TYPE_CHECKING:
     from eyewall.app import EyewallApp
 
 NARROW_BELOW = 110
-SPARK_FIELDS = (
-    ("pressure", "Pressure", "pressure_hpa", st.PRESSURE_COLOR),
-    ("wind", "Wind", "wind_speed_mps", st.WIND_COLOR),
-    ("wave", "Wave", "wave_height_m", st.WAVE_COLOR),
-)
 
 
 class BuoyDetailScreen(Screen[None]):
@@ -62,11 +57,6 @@ class BuoyDetailScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="buoy-title")
-        with Horizontal(id="buoy-sparks"):
-            for key, title, _field, _color in SPARK_FIELDS:
-                with Vertical(classes="spark"):
-                    yield Static(title, id=f"spark-{key}-label", classes="spark-label")
-                    yield Sparkline([], id=f"spark-{key}", summary_function=max)
         with Horizontal(id="buoy-body"):
             with Vertical(id="buoy-charts"):
                 yield ChartView(mode=self.eye.map_mode, id="chart-pressure")
@@ -121,7 +111,7 @@ class BuoyDetailScreen(Screen[None]):
         state = st.buoy_state(store, self.station_id, now)
         head = Text(no_wrap=True, overflow="ellipsis")
         head.append(f" {self.station_id} ", style="bold #8fd3ff")
-        head.append(st.short_name(station.name, 40) if station else "", style="bold")
+        head.append(" ".join(station.name.split()) if station else "", style="bold")
         if station is not None:
             head.append(f"  {abs(station.lat):.2f}{'N' if station.lat >= 0 else 'S'} ", style=DIM)
             head.append(f"{abs(station.lon):.2f}{'E' if station.lon >= 0 else 'W'}", style=DIM)
@@ -149,11 +139,6 @@ class BuoyDetailScreen(Screen[None]):
             self.query_one(f"#chart-{key}", ChartView).set_chart(
                 chart_lines, title=titles[key], x_range=(-float(self.hours), 0.0), x_ticks=ticks, empty=empty
             )
-        for key, _title, field, _color in SPARK_FIELDS:
-            spark = self.query_one(f"#spark-{key}", Sparkline)
-            spark.data = st.sparkline_values(rows, now, self.hours, field)
-            label = self.query_one(f"#spark-{key}-label", Static)
-            label.update(Text(titles[key].split(" (")[0] + f"  {self.hours} h", style=DIM))
 
         obs = st.newest_observation(store, self.station_id)
         self.query_one("#buoy-latest", Static).update(

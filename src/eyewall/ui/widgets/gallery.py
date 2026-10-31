@@ -181,10 +181,7 @@ class GalleryPanel(Vertical):
     def _empty_message(self) -> str:
         if self.storm_id not in self.eye.store.storms:
             return "This storm is no longer active."
-        return (
-            "No graphics yet.\nThe NHC posts them with each advisory;"
-            " satellite imagery appears once NESDIS lists the storm."
-        )
+        return "No graphics yet."
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
         event.stop()

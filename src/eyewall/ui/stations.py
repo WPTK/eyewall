@@ -327,11 +327,6 @@ def time_ticks(hours: float) -> list[Tick]:
     return [*ticks, Tick(0.0, "now")]
 
 
-def sparkline_values(observations: Sequence[Observation], now: datetime, hours: float, field: str) -> list[float]:
-    """The non-missing values of one Observation field inside the range, oldest first, for a Sparkline."""
-    return [float(v) for o in hours_back(observations, now, hours) if (v := getattr(o, field)) is not None]
-
-
 def extremes_for(
     observations: Sequence[Observation], supplemental: Sequence[SupplementalReading], now: datetime, hours: float
 ) -> Extremes:
@@ -363,8 +358,9 @@ def latest_observation_text(
     out.append_text(change)
     out.append("\n")
     _kv(out, "Wave height", preset.fmt_length(obs.wave_height_m, "m"))
-    period = MISSING if obs.dominant_period_s is None else f"{obs.dominant_period_s:.0f} s"
-    _kv(out, "Wave period", period)
+    if obs.wave_height_m is not None or obs.dominant_period_s is not None:
+        period = MISSING if obs.dominant_period_s is None else f"{obs.dominant_period_s:.0f} s"
+        _kv(out, "Wave period", period)
     _kv(out, "Water temp", preset.fmt_temperature(obs.water_temp_c, "c"))
     _kv(out, "Air temp", preset.fmt_temperature(obs.air_temp_c, "c"))
     _kv(out, "Dew point", preset.fmt_temperature(obs.dewpoint_c, "c"))
