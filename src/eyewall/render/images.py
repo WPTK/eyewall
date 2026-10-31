@@ -30,7 +30,7 @@ import httpx
 from PIL import Image as PILImage
 from PIL import ImageChops, ImageFilter, ImageOps
 
-from eyewall.net import fetch_bytes
+from eyewall.net import TooLarge, fetch_bytes
 from eyewall.render.canvas import Mode, Run, Style
 
 MAX_IMAGE_BYTES = 24 * 1024 * 1024  # the full GEOCOLOR loop of a long storm is about 13 MB
@@ -88,7 +88,10 @@ async def fetch_image(client: httpx.AsyncClient, url: str, *, max_bytes: int = M
     """
     if urlsplit(url).scheme not in ("http", "https"):
         raise ImageError(f"{url}: not a web address")
-    fetched = await fetch_bytes(client, url)
+    try:
+        fetched = await fetch_bytes(client, url, max_bytes=max_bytes)
+    except TooLarge as exc:
+        raise ImageError(f"{url}: over the {max_bytes // (1024 * 1024)} MB limit") from exc
     return check_image_bytes(url, fetched.body, max_bytes)
 
 
@@ -416,6 +419,13 @@ class InlineBackend:
 
     kind: str  # "sixel" or "tgp"
     widget: Any
+
+
+def inline_wanted(inline: str, glyph_set: str) -> bool:
+    """Whether the config allows inline graphics at all: `[graphics] inline` is "auto" and the glyph set is not ASCII.
+
+    The one predicate: the app asks it before probing the terminal, and the gallery asks it on every paint."""
+    return inline == "auto" and glyph_set != "ascii"
 
 
 def load_inline(mode: str = "auto") -> InlineBackend | None:

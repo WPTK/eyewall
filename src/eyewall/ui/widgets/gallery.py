@@ -30,7 +30,16 @@ from textual.widgets.option_list import Option
 
 from eyewall.net import FetchError
 from eyewall.render.canvas import Mode
-from eyewall.render.images import Depth, FallbackFrame, FrameCursor, Frames, ImageError, crop_cone, render_fallback
+from eyewall.render.images import (
+    Depth,
+    FallbackFrame,
+    FrameCursor,
+    Frames,
+    ImageError,
+    crop_cone,
+    inline_wanted,
+    render_fallback,
+)
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
 from eyewall.ui.theme import DIM
 
@@ -142,7 +151,7 @@ class GalleryPanel(Vertical):
     @property
     def uses_inline(self) -> bool:
         eye = self.eye
-        return eye.inline is not None and eye.config.graphics.inline == "auto" and eye.config.map.glyph_set != "ascii"
+        return eye.inline is not None and inline_wanted(eye.config.graphics.inline, eye.config.map.glyph_set)
 
     # ---- items ------------------------------------------------------------------------------------------------
 
@@ -263,7 +272,7 @@ class GalleryPanel(Vertical):
             if self.debounce:
                 await asyncio.sleep(self.debounce)
             data = await self.eye.load_image(item.url, item.version)
-            frames = await asyncio.to_thread(Frames, data)
+            frames = await asyncio.to_thread(_open_frames, data)
         except (FetchError, ImageError) as exc:
             self._failed = (item.key, item.url, item.version)
             self._drop_picture()
@@ -466,6 +475,17 @@ class GalleryPanel(Vertical):
             )
             return
         self.eye.notify("Copied the address (the terminal must allow clipboard access).", timeout=4)
+
+
+def _open_frames(data: bytes) -> Frames:
+    """Open the image and decode its first frame, in a worker thread, so the event loop only draws."""
+    frames = Frames(data)
+    try:
+        frames.frame(0)
+    except BaseException:
+        frames.close()
+        raise
+    return frames
 
 
 def is_noaa_url(url: str) -> bool:

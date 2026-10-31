@@ -26,9 +26,7 @@ and move an item into a milestone brief when it is scheduled.
 - M4: the "US threat" test for polling alerts is a pair of latitude and longitude boxes (Atlantic and Gulf coasts, Hawaii) plus any coastal watch or warning in effect; a land-geometry test would be exact.
 - M4: the Erin demo bundle's best track starts at the first recorded advisory (06Z on 19 August), so the first three hours of the replay have no past track; re-record with a longer `--track-hours` if the track history matters.
 - M4: the replay serves no outlook, invests, alerts or satellite; a bundle format for them is not worth recording until a UI needs them.
-- M4: `LiveSource.satellite` makes one listing request per storm per satellite poll; cache the listing across storms.
-- M4: coming back from away mode makes every feed due at once (a burst of requests); stagger the first poll after the return.
-- M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh.
+- M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh. Parked: a replay is never `stale` on purpose (a stale feed shows the status bar's `OFFLINE: cached data`, and `ui/format.py` is out of this change), and the honest answer is that the poller should skip feeds the source does not serve, which needs a new `DataSource` method.
 - M5: README screenshots; `scripts/screenshot_terminal.ps1` needs a visible Windows Terminal, so take them by hand (M6 is in now).
 - M5: the replay serves no outlook, so the outlook screen is only populated live.
 - M5: only the current wind radii are drawn; the forecast radii at each forecast point are not.
@@ -48,16 +46,12 @@ and move an item into a milestone brief when it is scheduled.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
 - M7: the cone crop margins (`CONE_MARGINS` in `render/images.py`) were measured on the 2025 Erin cone only; check them against the next live cone and the `no_line` variants.
 - M7: the gallery has no key to pick the image size (`500x500`, `2000x2000`) or a satellite band other than 13; the product list is fixed in `ui/gallery.py`.
-- M7: a loop over 24 MB (a long storm's full GEOCOLOR loop) is refused with a message; fall back to the newest ranged loop instead.
-- M7: the download is read whole before the size check (the cache layer already caps a body at 32 MB); stream and abort on the first byte over the limit.
+- M7: a loop over 24 MB (a long storm's full GEOCOLOR loop) is refused with a message; fall back to the newest ranged loop instead. Parked: `FloaterProduct` keeps one `loop_url`, so the ranged loops have to be kept by `parse_floater_listing` in `providers/nhc/graphics.py` first.
 - M7: the gallery cannot browse the archived per-advisory cones, so an earlier advisory's graphic is out of reach; the replay shows the newest one recorded.
 - M7: Sixel and Kitty drawing, and the size of the picture inside its area, are not verified in a real terminal; see the State after of the M7 brief.
 - M7: the settings screen has no widget for `[graphics] inline`; it stays in the TOML file.
+- M7: the loop timer decodes each frame on the event loop (`Frames.frame`), and wrapping back to frame 0 makes Pillow re-decode the GIF from its start; decode ahead in a thread if a long loop stutters.
 - M7: surge KML and arrival-time KMZ files are listed as link only; parsing them is still the M1 deferred item.
-- M7: a GIF loop is decoded (frame count, first frame) on the event loop when it opens; move the decode to a thread like the stills.
-- M7: `fetch_bytes` buffers the whole body before the 24 MB size check; check `Content-Length` and stream.
-- M7: the gallery asks NESDIS for the same product listing from several panels; share one in-flight request.
-- M7: the "is inline graphics possible" test is written twice (`run_app` and `GalleryPanel.uses_inline`); keep one predicate.
 - #18: the map marks states by colour alone: station marks by reported wind and dimmed when stale, outlook areas by risk, watch and warning track segments by kind. The same facts are in text on the panels and tables; a glyph per state would need new marks on a braille canvas.
 - #18: the buoy chart draws wind and gust as two lines told apart by colour alone (the legend names them); a dashed gust line would need a new line style in `render/chart.py`.
 - #20: the dashboard map fit shows the whole five-day cone, so a storm that recurves (Erin at advisory 38 reaches 57 N) is fitted by its long extent and sits at one edge with empty bands above and below. Centring on the storm needs the fit to stop at the 72 hour point, which means a `tau` on the map's `ForecastPoint` and a decision about whether the cone may be cropped; the "Fit cone" key and help text promise the whole cone.

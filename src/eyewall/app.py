@@ -33,7 +33,7 @@ from eyewall.net import FetchError
 from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
 from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
-from eyewall.render.images import Depth, InlineBackend, load_inline
+from eyewall.render.images import Depth, InlineBackend, inline_wanted, load_inline
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource
@@ -656,7 +656,9 @@ def run_app(
     file_config: Config | None = None,
     config_file_broken: bool = False,
 ) -> None:
-    inline = None if config.map.glyph_set == "ascii" else load_inline(config.graphics.inline)
+    inline = (
+        load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
+    )
     EyewallApp(
         config,
         source,
