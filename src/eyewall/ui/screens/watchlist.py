@@ -21,10 +21,10 @@ if TYPE_CHECKING:
 
 class WatchlistScreen(Screen[None]):
     BINDINGS = [
-        Binding("escape,w", "back", "Back"),
-        Binding("a", "add", "Add"),
-        Binding("d,delete", "remove", "Remove"),
-        Binding("tab", "other_table", "Other table", show=False, priority=True),
+        Binding("a", "add", "add"),
+        Binding("d,delete", "remove", "remove"),
+        Binding("tab", "other_table", "other table", priority=True),
+        Binding("escape,w", "back", "back"),
     ]
 
     @property
@@ -36,7 +36,7 @@ class WatchlistScreen(Screen[None]):
             yield Static("", id="watch-buoy-title", classes="watch-title")
             yield StationTable(id="watch-buoys")
             yield Static("", id="watch-tide-title", classes="watch-title")
-            yield StationTable(id="watch-tides")
+            yield StationTable(id="watch-tides", charts=False)
         yield Static("", id="watch-status")
 
     def on_mount(self) -> None:
@@ -45,15 +45,13 @@ class WatchlistScreen(Screen[None]):
         self.refresh_status()
 
     def refresh_status(self) -> None:
-        self.query_one("#watch-status", Static).update(self.eye.status_text(self.size.width))
+        self.query_one("#watch-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
         eye = self.eye
         store, now, preset = eye.store, eye.now(), eye.preset
         buoys, gauges = st.watchlist_buoys(store), st.watchlist_gauges(store)
-        self.query_one("#watch-buoy-title", Static).update(
-            Text(f" Buoys ({len(buoys)})   Enter: charts   a: add   d: remove   Tab: other table", style="bold #8fd3ff")
-        )
+        self.query_one("#watch-buoy-title", Static).update(Text(f" Buoys ({len(buoys)})", style="bold #8fd3ff"))
         self.query_one("#watch-tide-title", Static).update(Text(f" Tide gauges ({len(gauges)})", style="bold #8fd3ff"))
         columns = st.BUOY_COLUMNS[:2] + st.BUOY_COLUMNS[4:11]
         rows = [(key, cells[:2] + cells[4:11]) for key, cells in st.buoy_rows(store, buoys, now, preset, eye.glyphs)]

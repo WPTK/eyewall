@@ -32,19 +32,28 @@ COMPACT_BELOW = 90
 ROW_REFRESH_SECONDS = 30.0
 
 
+class DashboardMap(MapView):
+    """The dashboard's map: the keys only it has, listed in the footer while it has the focus."""
+
+    BINDINGS = [
+        Binding("c", "screen.center", "center"),
+        Binding("l", "screen.layers", "layers"),
+    ]
+
+
 class DashboardScreen(Screen[None]):
     BINDINGS = [
         Binding("j", "cursor(1)", "Next storm", show=False),
         Binding("k", "cursor(-1)", "Previous storm", show=False),
-        Binding("enter", "open_detail", "Detail"),
+        Binding("enter", "open_detail", "detail"),
         Binding("1", "basin('AL')", "Atlantic", show=False),
         Binding("2", "basin('EP')", "East Pacific", show=False),
         Binding("3", "basin('CP')", "Central Pacific", show=False),
         Binding("a", "basin('')", "All basins", show=False),
-        Binding("b", "buoys", "Buoys"),
-        Binding("m", "toggle_map", "Map"),
+        Binding("b", "buoys", "buoys"),
+        Binding("m", "toggle_map", "map"),
         Binding("M", "full_map", "Full map", show=False),
-        Binding("l", "layers", "Layers"),
+        Binding("l", "layers", "Layers", show=False),
         Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
         Binding("minus", "zoom_out", "Zoom out", show=False),
         Binding("c", "center", "Center storm", show=False),
@@ -64,7 +73,7 @@ class DashboardScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         eye = self.eye
-        self.map_view = MapView(mode=eye.map_mode, options=eye.map_options)
+        self.map_view = DashboardMap(mode=eye.map_mode, options=eye.map_options)
         with Horizontal(id="main"):
             yield StormList(id="storms")
             yield MapPane(self.map_view, id="map-pane")
@@ -137,7 +146,7 @@ class DashboardScreen(Screen[None]):
         return adapt.basin_points(eye.basin_view)
 
     def refresh_status(self) -> None:
-        self.query_one("#status", StatusBar).show(self.eye.status_text(self.size.width))
+        self.query_one("#status", StatusBar).show(self.eye.status_text(self.size.width, self))
 
     # ---- events -----------------------------------------------------------------------------------------------
 

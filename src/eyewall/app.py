@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
+from typing import Any
 
 from rich.text import Text
 from textual import events
@@ -76,11 +77,11 @@ class EyewallApp(App[None]):
     ENABLE_COMMAND_PALETTE = False
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("question_mark", "help", "Help"),
-        Binding("g", "graphics", "Graphics"),
-        Binding("O", "outlook", "Outlook"),
-        Binding("A", "alerts", "Alerts"),
+        Binding("q", "quit", "Quit", show=False),
+        Binding("question_mark", "help", "Help", show=False),
+        Binding("g", "graphics", "Graphics", show=False),
+        Binding("O", "outlook", "Outlook", show=False),
+        Binding("A", "alerts", "Alerts", show=False),
         Binding("r", "refresh", "Refresh", show=False),
         Binding("u", "units", "Units", show=False),
         Binding("slash", "search", "Find station", show=False),
@@ -170,7 +171,7 @@ class EyewallApp(App[None]):
         enabled = self.config.basins.enabled
         return (self.basin_filter,) if self.basin_filter in enabled else enabled
 
-    def status_text(self, width: int) -> Text:
+    def status_text(self, width: int, screen: Screen[Any]) -> Text:
         feeds = [fmt.FeedStatus(f, self.poller.freshness(f), self.poller.active(f)) for f in protocol.FEEDS]
         replay = None
         if self.replay is not None:
@@ -187,11 +188,28 @@ class EyewallApp(App[None]):
             width=width,
             g=self.glyphs,
         )
-        if width >= 70:
-            hint = "  ? help"
-            text.truncate(width - len(hint), overflow="ellipsis")  # the hint keeps its place; the rest gives way
-            text.append(hint, style="#7d8a99")
+        if width >= 70:  # `? help` keeps its place, then the keys; the status gives way
+            text = fmt.footer_row(text, self.footer_keys(screen), width)
         return text
+
+    def footer_keys(self, screen: Screen[Any]) -> list[tuple[str, str]]:
+        """The keys that work where the focus is on `screen`: Textual's own active bindings, nearest widget first,
+        filtered to the ones marked `show` and not disabled by their widget's `check_action`."""
+        keys: dict[str, tuple[str, str]] = {}
+        for active in screen.active_bindings.values():
+            binding = active.binding
+            if binding.show and active.enabled and binding.description and binding.action not in keys:
+                keys[binding.action] = (binding.key_display or fmt.key_name(binding.key), binding.description)
+        return list(keys.values())
+
+    def on_descendant_focus(self) -> None:
+        self._for_screens("refresh_status")
+
+    def on_descendant_blur(self) -> None:
+        self._for_screens("refresh_status")  # also when the focus clears, which fires no focus event
+
+    def on_tabbed_content_tab_activated(self) -> None:
+        self._for_screens("refresh_status")
 
     def _idle_seconds(self) -> float:
         return time.monotonic() - self._last_input

@@ -91,11 +91,11 @@ class GalleryPanel(Vertical):
     """One storm's images. `set_active` says whether it is on screen; nothing is fetched or played while it is not."""
 
     BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
-        Binding("o", "open_url", "Open in browser"),
-        Binding("y", "copy_url", "Copy URL"),
-        Binding("left_square_bracket", "step(-1)", "Previous frame", show=False),
-        Binding("right_square_bracket", "step(1)", "Next frame", show=False),
-        Binding("space", "toggle_loop", "Play/pause", show=False),
+        Binding("o", "open_url", "open"),
+        Binding("y", "copy_url", "copy URL"),
+        Binding("left_square_bracket", "step(-1)", "previous frame", key_display="[ ]"),
+        Binding("right_square_bracket", "step(1)", "next frame", show=False),
+        Binding("space", "toggle_loop", "play/pause"),
     ]
 
     def __init__(self, storm_id: str, *, id: str | None = None) -> None:
@@ -129,7 +129,6 @@ class GalleryPanel(Vertical):
             with Vertical(id="gal-main"):
                 yield Static("", id="gal-caption")
                 yield ImageView(id="gal-view")
-                yield Static("", id="gal-hint")
 
     def on_mount(self) -> None:
         self.refresh_data()
@@ -352,7 +351,7 @@ class GalleryPanel(Vertical):
             return
         if self._inline is None:
             self._inline = backend.widget(None, id="gal-inline")
-            self.query_one("#gal-main", Vertical).mount(self._inline, before="#gal-hint")
+            self.query_one("#gal-main", Vertical).mount(self._inline)
         self.query_one("#gal-view", ImageView).display = False
         self._inline.display = True
         image = frames.frame(cursor.index)
@@ -375,12 +374,12 @@ class GalleryPanel(Vertical):
         self.query_one("#gal-caption", Static).update(text)
 
     def _update_hint(self) -> None:
-        parts = ["o open in browser", "y copy URL"]
-        if self._cursor is not None and self._cursor.count > 1:
-            parts += ["[ ] step", "space play/pause"]
-        self.query_one("#gal-hint", Static).update(Text("  ".join(parts), style=DIM))
+        """Tell the footer: the keys that work depend on whether the picture is animated (`check_action`)."""
         if self.current is None:
             self.query_one("#gal-caption", Static).update("")
+        refresh = getattr(self.screen, "refresh_status", None)
+        if refresh is not None:
+            refresh()
 
     # ---- loops ------------------------------------------------------------------------------------------------
 

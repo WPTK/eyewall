@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class AlertLogScreen(Screen[None]):
-    BINDINGS = [Binding("escape,A", "back", "Back")]
+    BINDINGS = [Binding("escape,A", "back", "back")]
 
     @property
     def eye(self) -> EyewallApp:

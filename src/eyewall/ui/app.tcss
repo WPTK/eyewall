@@ -452,11 +452,6 @@ GalleryPanel {
     width: 1fr;
 }
 
-#gal-hint {
-    height: 1;
-    padding: 0 1;
-}
-
 #graphics-title {
     height: 1;
     background: $panel;

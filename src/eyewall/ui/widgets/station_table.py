@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from rich.text import Text
+from textual.binding import Binding
 from textual.widgets import DataTable
 
 
@@ -13,10 +14,16 @@ class StationTable(DataTable[Text]):
     same (units, ages and values that did not change), so a poll that changes nothing costs nothing and never moves the
     cursor; when it does change, the cursor follows the station it was on."""
 
-    def __init__(self, *, id: str | None = None) -> None:
+    BINDINGS = [Binding("enter", "select_cursor", "charts")]
+
+    def __init__(self, *, id: str | None = None, charts: bool = True) -> None:
         super().__init__(id=id, zebra_stripes=True, cursor_type="row")
+        self.charts = charts  # Enter opens a buoy's charts; a gauge row has nothing to open
         self._signature: object = None
         self._keys: list[str] = []
+
+    def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        return self.charts or action != "select_cursor"
 
     @property
     def keys(self) -> list[str]:

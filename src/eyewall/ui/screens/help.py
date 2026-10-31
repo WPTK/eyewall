@@ -26,7 +26,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         "Storm detail",
         (
             ("Left Right  1-0", "previous or next tab; jump to a tab"),
-            ("t", "public or forecast advisory"),
+            ("t", "on the Advisory tab: public or forecast advisory"),
             ("Enter  p", "open a buoy's charts; pin or unpin a station"),
             ("h  i", "in the charts: range; charts or observation"),
             ("Esc", "back"),

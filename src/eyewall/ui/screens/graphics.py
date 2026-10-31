@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class GraphicsScreen(Screen[None]):
-    BINDINGS = [Binding("escape,backspace", "back", "Back")]
+    BINDINGS = [Binding("escape,backspace", "back", "back")]
 
     def __init__(self, storm_id: str) -> None:
         super().__init__()
@@ -64,7 +64,7 @@ class GraphicsScreen(Screen[None]):
         self.query_one(GalleryPanel).refresh_data()
 
     def refresh_status(self) -> None:
-        self.query_one("#graphics-status", Static).update(self.eye.status_text(self.size.width))
+        self.query_one("#graphics-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def action_back(self) -> None:
         self.app.pop_screen()

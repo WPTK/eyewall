@@ -8,6 +8,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import DataTable, OptionList, Static, TabbedContent, TabPane
 
@@ -41,11 +42,11 @@ STATION_TABS = {"buoys": "ndbc", "tides": "coops"}  # tab id -> watchlist kind
 
 class StormDetailScreen(Screen[None]):
     BINDINGS = [
-        Binding("escape,backspace", "back", "Back"),
         Binding("left", "tab(-1)", "Previous tab", show=False, priority=True),
         Binding("right", "tab(1)", "Next tab", show=False, priority=True),
-        Binding("t", "toggle_text", "TCP/TCM"),
-        Binding("p", "pin", "Pin station"),
+        Binding("t", "toggle_text", "tcp/tcm"),
+        Binding("p", "pin", "pin"),
+        Binding("escape,backspace", "back", "back"),
         *[
             Binding(str((i + 1) % 10), f"show_tab('{tab_id}')", title, show=False)
             for i, (tab_id, title) in enumerate(TABS)
@@ -69,7 +70,7 @@ class StormDetailScreen(Screen[None]):
                 with TabPane(title, id=f"tab-{tab_id}"):
                     if tab_id in STATION_TABS:
                         yield Static("", id=f"{tab_id}-note", classes="note")
-                        yield StationTable(id=f"{tab_id}-table")
+                        yield StationTable(id=f"{tab_id}-table", charts=tab_id == "buoys")
                     elif tab_id == "graphics":
                         yield GalleryPanel(self.storm_id, id="graphics-gallery")
                     elif tab_id in TABLE_TABS:
@@ -89,7 +90,7 @@ class StormDetailScreen(Screen[None]):
     # ---- data -------------------------------------------------------------------------------------------------
 
     def refresh_status(self) -> None:
-        self.query_one("#detail-status", Static).update(self.eye.status_text(self.size.width))
+        self.query_one("#detail-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def _set_table(self, tab_id: str, table: products.Table, note: str) -> None:
         widget = self.query_one(f"#{tab_id}-table", DataTable)
@@ -144,7 +145,7 @@ class StormDetailScreen(Screen[None]):
         self.query_one("#buoys-note", Static).update(
             Text(
                 f"{len(buoys)} buoys within {preset.fmt_distance(nearby.radius_now_nm)} or "
-                f"{preset.fmt_distance(nearby.radius_track_nm)} of the track. Enter: charts. p: pin. * = watchlist.",
+                f"{preset.fmt_distance(nearby.radius_track_nm)} of the track. * = watchlist.",
                 style=DIM,
             )
         )
@@ -153,7 +154,7 @@ class StormDetailScreen(Screen[None]):
         self.query_one("#tides-note", Static).update(
             Text(
                 f"{len(gauges)} gauges near the storm. Residual = observed minus predicted: the surge estimate. "
-                "p: pin. * = watchlist.",
+                "* = watchlist.",
                 style=DIM,
             )
         )
@@ -162,6 +163,19 @@ class StormDetailScreen(Screen[None]):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        """Keys that do something on one tab only are off, and so out of the footer, on the others."""
+        try:
+            tabs = self.query_one("#detail-tabs", TabbedContent)
+        except NoMatches:  # a key pressed while the screen is still being built
+            return True
+        tab = (tabs.active or "").removeprefix("tab-")
+        if action == "toggle_text":
+            return tab == "public"
+        if action == "pin":
+            return tab in STATION_TABS
+        return True
 
     def action_tab(self, step: int) -> None:
         ids = [f"tab-{t}" for t, _ in TABS]
@@ -194,10 +208,7 @@ class StormDetailScreen(Screen[None]):
     def action_pin(self) -> None:
         tabs = self.query_one("#detail-tabs", TabbedContent)
         tab_id = (tabs.active or "").removeprefix("tab-")
-        kind = STATION_TABS.get(tab_id)
-        if kind is None:
-            self.eye.notify("Pin works on the Buoys and Tides tabs: move to a row and press p.", timeout=4)
-            return
+        kind = STATION_TABS[tab_id]
         key = self.query_one(f"#{tab_id}-table", StationTable).current_key()
         if key is not None:
             self.eye.watch_in_background(kind, key, key.upper() not in watchlist_ids(self.eye.config, kind))
@@ -206,9 +217,5 @@ class StormDetailScreen(Screen[None]):
         self.query_one("#detail-tabs", TabbedContent).active = f"tab-{tab_id}"
 
     def action_toggle_text(self) -> None:
-        tabs = self.query_one("#detail-tabs", TabbedContent)
-        if tabs.active == "tab-public":
-            self.show_tcm = not self.show_tcm
-        else:
-            tabs.active = "tab-public"
+        self.show_tcm = not self.show_tcm
         self.refresh_data()
