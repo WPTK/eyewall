@@ -189,3 +189,28 @@ def test_watchlist_toggle_adds_removes_and_rejects_bad_ids() -> None:
     with pytest.raises(ValueError):
         with_watchlist(config, "weather", ["1"])
     assert watchlist_ids(with_watchlist(config, "coops", ["8651370", "8651370", "x y"]), "coops") == ("8651370",)
+
+
+def test_a_residual_that_rounds_to_zero_never_shows_a_minus_sign() -> None:
+    assert st._signed(-0.02, "ft", 1) == "+0.0 ft"
+    assert st._signed(-0.4, "ft", 1) == "-0.4 ft"
+    assert st._signed(0.0, "ft", 1) == "+0.0 ft"
+
+
+def test_a_latest_obs_only_row_never_shows_a_negative_age() -> None:
+    from eyewall.models.obs import LatestObservation
+
+    store = _store()
+    store.latest["41002"] = LatestObservation("41002", 31.76, -74.84, obs(-5, wind_speed_mps=5.0))  # 5 min ahead
+    entry = st.Entry(store.stations["41002"])
+    cells = st.buoy_row(store, entry, NOW, PRESETS["nautical"], G)
+    assert not cells[10].plain.startswith("-")
+
+
+def test_a_buoy_missing_from_a_loaded_latest_obs_is_not_reporting() -> None:
+    from eyewall.models.obs import LatestObservation
+
+    store = _store()
+    store.latest["41010"] = LatestObservation("41010", 28.9, -78.5, obs(10, wind_speed_mps=5.0))
+    assert st.buoy_state(store, "41002", NOW) == "dark"
+    assert st.buoy_state(store, "41010", NOW) == "ok"

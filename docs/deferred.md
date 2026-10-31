@@ -49,5 +49,7 @@ and move an item into a milestone brief when it is scheduled.
 - M6: the buoy charts cover 24, 48 and 72 hours from the 5 day NDBC file; longer ranges (the 45 day file) are not wired.
 - M6: the settings screen edits poll intervals, units, glyph set, basins, nearby radii and alert rules; the map layers,
   the alert thresholds and the per-storm options still need the TOML file.
-- M6: the watchlist caps at 60 stations per kind and the buoy and gauge polls still fetch at most 24 and 12 series.
+- M6: the watchlist holds 60 stations per kind, but series files are capped at 24 buoys (open pages first, then the storm's nearest; a watchlist-only buoy is read from `latest_obs`) and gauges at 12 (the storm's nearest first, then the watchlist), so a long gauge watchlist is only partly polled; rotate through it.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
+- M6: Ctrl+P in the search modal collides with Textual's command palette binding; pick another key for pinning.
+- M6: a watchlisted gauge that is missing from the CO-OPS catalog shows "waiting" forever; say it is unknown.

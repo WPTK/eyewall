@@ -81,7 +81,7 @@ class BuoyDetailScreen(Screen[None]):
         eye = self.eye
         eye.poller.extra_buoys.add(self.station_id)
         if self.station_id not in eye.store.series:
-            self.run_worker(eye.poll_now("buoys"), name="buoy-series", exit_on_error=False)
+            self.run_worker(eye.fetch_series(self.station_id), name="buoy-series", exit_on_error=False)
         self.run_worker(self._load_supplemental(), name="buoy-supl", exit_on_error=False)
         self._apply_layout(self.size.width)
         self.refresh_data()
@@ -102,7 +102,7 @@ class BuoyDetailScreen(Screen[None]):
     async def _load_supplemental(self) -> None:
         """One request, never retried: the extremes fall back to the regular rows when it fails."""
         try:
-            self.supl = await self.eye.source.ndbc_supplemental(self.station_id)
+            self.supl = await self.eye.supplemental(self.station_id)
             self.supl_note = self.supl.message if not self.supl.items else None
         except (FetchError, ParseError) as exc:
             self.supl = Parsed()
@@ -179,4 +179,4 @@ class BuoyDetailScreen(Screen[None]):
         self._apply_layout(self.size.width)
 
     def action_pin(self) -> None:
-        self.run_worker(self.eye.toggle_watch("ndbc", self.station_id), exclusive=False)
+        self.eye.watch_in_background("ndbc", self.station_id, self.station_id not in self.eye.config.watchlist.ndbc)

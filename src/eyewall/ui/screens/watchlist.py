@@ -81,7 +81,7 @@ class WatchlistScreen(Screen[None]):
     def action_add(self) -> None:
         def added(choice: SearchChoice | None) -> None:
             if choice is not None:
-                self.run_worker(self.eye.set_watch(choice.kind, choice.id, True), exclusive=False)
+                self.eye.watch_in_background(choice.kind, choice.id, True)
 
         self.app.push_screen(SearchScreen(title="Add to the watchlist", pin_only=True), added)
 
@@ -90,4 +90,4 @@ class WatchlistScreen(Screen[None]):
         key = table.current_key()
         if key is not None:
             kind = "ndbc" if table.id == "watch-buoys" else "coops"
-            self.run_worker(self.eye.set_watch(kind, key, False), exclusive=False)
+            self.eye.watch_in_background(kind, key, False)

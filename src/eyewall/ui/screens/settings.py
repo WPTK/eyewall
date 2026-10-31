@@ -94,7 +94,7 @@ class SettingsScreen(ModalScreen[Config | None]):
             with VerticalScroll(id="settings-scroll"):
                 yield Static("Poll intervals (seconds)", classes="settings-head")
                 for key in POLL_FIELDS:
-                    yield self._row(key.capitalize(), Input(str(int(getattr(cfg.poll, key))), id=f"poll-{key}"))
+                    yield self._row(key.capitalize(), Input(f"{getattr(cfg.poll, key):g}", id=f"poll-{key}"))
                 yield Static("Display", classes="settings-head")
                 yield self._row(
                     "Units",

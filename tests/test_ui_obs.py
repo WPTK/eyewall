@@ -323,7 +323,8 @@ class QuietDaySource(ScriptedSource):
         )
 
     async def ndbc_latest(self) -> tuple[LatestObservation, ...]:
-        return ()
+        row = Observation(QUIET_NOW - timedelta(minutes=20), wind_speed_mps=9.0, pressure_hpa=1015.0)
+        return (LatestObservation("41010", 28.9, -78.5, row),)
 
     async def ndbc_series(self, station_id: str) -> ObservationSeries:
         if station_id != "41010":
@@ -353,7 +354,7 @@ async def test_a_quiet_day_polls_the_watchlist_and_the_outlook_lists_it() -> Non
     async with running(app) as pilot:
         await press(pilot, "O")
         assert isinstance(app.screen, OutlookScreen)
-        await wait_until(pilot, lambda: "41010" in app.store.series)
+        await wait_until(pilot, lambda: "41010" in app.store.latest)
         await settle(pilot)
         text = screen_text(app)
         assert "Watchlist" in text
@@ -365,7 +366,7 @@ async def test_a_quiet_day_polls_the_watchlist_and_the_outlook_lists_it() -> Non
 async def test_the_watchlist_screen_on_a_quiet_day_opens_a_buoy_with_enter() -> None:
     app = scripted_app(QuietDaySource())
     async with running(app) as pilot:
-        await wait_until(pilot, lambda: "41010" in app.store.series)
+        await wait_until(pilot, lambda: "41010" in app.store.latest)
         await press(pilot, "b")
         assert isinstance(app.screen, WatchlistScreen)
         assert app.screen.query_one("#watch-buoys", StationTable).keys[0] == "41010"
@@ -379,8 +380,131 @@ async def test_the_watchlist_screen_on_a_quiet_day_opens_a_buoy_with_enter() -> 
 async def test_a_silent_watchlist_buoy_reads_not_reporting_on_its_chart_screen() -> None:
     app = scripted_app(QuietDaySource())
     async with running(app) as pilot:
-        await wait_until(pilot, lambda: "42001" in app.store.series)
+        await wait_until(pilot, lambda: "41010" in app.store.latest)
         app.open_buoy("42001")
         await settle(pilot)
         assert isinstance(app.screen, BuoyDetailScreen)
         assert "not reporting" in screen_text(app) or "waiting" in screen_text(app)
+
+
+# ---- review fixes ------------------------------------------------------------------------------------------------
+
+
+async def test_command_line_flags_are_not_saved_with_a_pin(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from eyewall.config import BasinsConfig, save_config
+
+    path = tmp_path / "eyewall.toml"
+    from_file = Config()
+    save_config(from_file, path)
+    flagged = replace(from_file, basins=BasinsConfig(("AL",)), map=replace(from_file.map, glyph_set="ascii"))
+    app = replay_app(flagged, config_path=path, file_config=from_file)
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter", "7", "p")
+        await wait_until(pilot, lambda: load_config(path).config.watchlist != from_file.watchlist)
+    saved = load_config(path).config
+    assert saved.basins == from_file.basins
+    assert saved.map.glyph_set == from_file.map.glyph_set
+
+
+async def test_a_value_changed_in_settings_is_saved_even_when_a_flag_set_it(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from eyewall.config import save_config
+
+    path = tmp_path / "eyewall.toml"
+    from_file = Config()
+    save_config(from_file, path)
+    flagged = replace(from_file, map=replace(from_file.map, glyph_set="ascii"))
+    app = replay_app(flagged, config_path=path, file_config=from_file)
+    async with running(app) as pilot:
+        await press(pilot, "S")
+        app.screen.query_one("#map-glyph-set", Select).value = "unicode"
+        await press(pilot, "ctrl+s")
+    assert load_config(path).config.map.glyph_set == "unicode"
+
+
+async def test_a_file_that_failed_to_load_is_backed_up_before_the_first_save(tmp_path: Path) -> None:
+    path = tmp_path / "eyewall.toml"
+    path.write_text("[poll\nstorms = 'oops'\n", encoding="utf-8")
+    original = path.read_bytes()
+    app = replay_app(config_path=path, config_file_broken=True)
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter", "7", "p")
+        await wait_until(pilot, lambda: not load_config(path).broken)
+    assert (tmp_path / "eyewall.toml.bak").read_bytes() == original
+    assert load_config(path).config.watchlist != Config().watchlist
+
+
+async def test_opening_a_buoy_fetches_that_series_and_reuses_the_supplemental_file() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        asked: list[str] = []
+        refreshed: list[tuple[str, ...]] = []
+        original = app.source.ndbc_supplemental
+
+        async def spy(station_id: str):  # type: ignore[no-untyped-def]
+            asked.append(station_id)
+            return await original(station_id)
+
+        app.source.ndbc_supplemental = spy  # type: ignore[method-assign]
+        app.poller.refresh_feeds = lambda *feeds: refreshed.append(feeds)  # type: ignore[method-assign]
+        app.store.series.pop("41002", None)
+        for _ in range(2):
+            app.open_buoy("41002")
+            await settle(pilot)
+            await wait_until(pilot, lambda: app.screen.supl is not None)  # type: ignore[attr-defined]
+            await press(pilot, "escape")
+        assert "41002" in app.store.series
+        assert refreshed == []
+        assert asked == ["41002"]
+
+
+async def test_a_settings_change_makes_only_the_affected_feeds_due() -> None:
+    from dataclasses import replace
+
+    app = replay_app()
+    async with running(app):
+        due: list[tuple[str, ...]] = []
+        app.poller.refresh_feeds = lambda *feeds: due.append(feeds)  # type: ignore[method-assign]
+        app.poller.refresh = lambda: due.append(("everything",))  # type: ignore[method-assign]
+        app.apply_config(replace(app.config, poll=replace(app.config.poll, buoys=900.0)), persist=False)
+        assert due == [("buoys",)]
+        due.clear()
+        app.apply_config(replace(app.config, nearby=replace(app.config.nearby, radius_now_nm=200.0)), persist=False)
+        assert due == [("buoys", "tides")]
+        due.clear()
+        app.apply_config(replace(app.config, units=replace(app.config.units, preset="metric")), persist=False)
+        assert due == []
+
+
+async def test_a_failing_pin_is_reported_and_does_not_end_the_app() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+
+        async def broken(*_args: object) -> None:
+            raise RuntimeError("disk on fire")
+
+        app.set_watch = broken  # type: ignore[method-assign]
+        await press(pilot, "enter", "7", "p")
+        await wait_until(pilot, lambda: any("disk on fire" in n.message for n in app._notifications))
+        assert app.is_running
+        assert isinstance(app.screen, StormDetailScreen)
+
+
+async def test_a_hand_edited_fractional_interval_survives_a_settings_save(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    config = Config()
+    config = replace(config, poll=replace(config.poll, storms=90.5))
+    app = replay_app(config, config_path=tmp_path / "eyewall.toml")
+    async with running(app) as pilot:
+        await press(pilot, "S")
+        assert app.screen.query_one("#poll-storms", Input).value == "90.5"
+        await press(pilot, "ctrl+s")
+    assert load_config(tmp_path / "eyewall.toml").config.poll.storms == 90.5

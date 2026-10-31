@@ -328,3 +328,43 @@ async def test_a_refused_prediction_request_leaves_the_water_level_alone(tmp_pat
     assert series.water_level.items
     assert series.predictions.items == ()
     assert series.predictions.message
+
+
+async def test_series_requests_are_conditional_once_the_first_answer_is_cached(tmp_path):
+    seen: list[httpx.Headers] = []
+
+    class Series(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers)
+            if request.headers.get("if-none-match") == '"v1"':
+                return httpx.Response(304, request=request)
+            body = (FIXTURES / "coops" / "water_level_recent.json").read_bytes()
+            return httpx.Response(200, content=body, headers={"etag": '"v1"'}, request=request)
+
+    source = LiveSource(cache_dir=tmp_path, transport=Series(), clock=VirtualClock(NOW))
+    try:
+        await source.ndbc_series("41002")
+        await source.ndbc_series("41002")
+    finally:
+        await source.aclose()
+    assert "if-none-match" not in seen[0]
+    assert seen[1].get("if-none-match") == '"v1"'
+
+
+async def test_predictions_are_asked_once_a_day_and_never_for_the_great_lakes(tmp_path):
+    from eyewall.models.obs import TideStation
+
+    feeds = Tides(predictions=True)
+    source = LiveSource(cache_dir=tmp_path, transport=feeds, clock=VirtualClock(NOW))
+    try:
+        coast = TideStation("8651370", "Duck", 36.18, -75.75)
+        lakes = TideStation("9063063", "Cleveland", 41.5, -81.6, great_lakes=True)
+        for _ in range(3):
+            await source.coops_series(coast, "MLLW")
+        await source.coops_series(lakes, "IGLD")
+        again = await source.coops_series(lakes, "IGLD")
+    finally:
+        await source.aclose()
+    asked = [u for u in feeds.urls if "product=predictions" in u]
+    assert len(asked) == 1 and "station=8651370" in asked[0]
+    assert again.predictions.items == () and again.predictions.message

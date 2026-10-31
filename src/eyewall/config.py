@@ -166,6 +166,7 @@ class LoadResult:
     config: Config
     warnings: tuple[str, ...] = ()
     path: Path | None = None
+    broken: bool = False  # the file exists but could not be read; the config is the defaults, not the file
 
 
 def default_path() -> Path:
@@ -349,7 +350,7 @@ def load_config(path: Path | None = None, *, use_file: bool = True) -> LoadResul
     try:
         data = tomllib.loads(target.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        return LoadResult(Config(), (f"could not read {target}: {exc}; using defaults",), target)
+        return LoadResult(Config(), (f"could not read {target}: {exc}; using defaults",), target, broken=True)
     config, problems = parse_config(data)
     return LoadResult(config, tuple(problems), target)
 

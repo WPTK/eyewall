@@ -110,8 +110,8 @@ def buoy_state(store: Store, station_id: str, now: datetime) -> str:
     if latest is not None:
         return "silent" if now - latest.observation.time > timedelta(hours=2) else "ok"
     station = store.stations.get(key)
-    if station is not None and station.met is False:
-        return "dark"
+    if station is not None and (station.met is False or store.latest):
+        return "dark"  # latest_obs is read and does not list it: no report in the last hours
     return "waiting"
 
 
@@ -160,6 +160,8 @@ def short_name(name: str, width: int = NAME_WIDTH) -> str:
 
 
 def _signed(value: float, unit: str, decimals: int) -> str:
+    if round(value, decimals) == 0:
+        value = 0.0  # a residual of -0.02 ft reads +0.0, never -0.0
     text = format_value(value, unit, decimals=decimals)
     return text if text.startswith("-") else f"+{text}"
 
@@ -183,9 +185,10 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
         cells = [ident, Text(name), Text(distance), Text(bearing)] + [Text(MISSING, style=DIM)] * 6
         return (*cells, Text(WAITING, style=DIM), Text(closest_text(entry, preset)))
     series = store.series.get(station.id.upper())
-    age = (
-        observation_age(series, now) if series is not None and series.latest is not None else now - obs.time
-    ) or timedelta(0)
+    if series is not None and series.latest is not None:
+        age = observation_age(series, now) or timedelta(0)
+    else:
+        age = max(timedelta(0), now - obs.time)  # latest_obs only; a clock a little behind must not give a negative age
     tendency = store.tendency(station.id, now)
     wind, gust = wind_kt(obs), gust_kt(obs)
     return (

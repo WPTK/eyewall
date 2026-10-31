@@ -11,6 +11,7 @@ from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
+from eyewall.config import watchlist_ids
 from eyewall.ui import format as fmt
 from eyewall.ui import products
 from eyewall.ui import stations as st
@@ -185,7 +186,7 @@ class StormDetailScreen(Screen[None]):
             return
         key = self.query_one(f"#{tab_id}-table", StationTable).current_key()
         if key is not None:
-            self.run_worker(self.eye.toggle_watch(kind, key), exclusive=False)
+            self.eye.watch_in_background(kind, key, key.upper() not in watchlist_ids(self.eye.config, kind))
 
     def action_show_tab(self, tab_id: str) -> None:
         self.query_one("#detail-tabs", TabbedContent).active = f"tab-{tab_id}"

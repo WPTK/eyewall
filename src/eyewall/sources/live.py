@@ -68,6 +68,7 @@ class LiveSource:
         self.ndbc = NdbcClient(self._http)
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
+        self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -205,14 +206,27 @@ class LiveSource:
                     pressure = await self.coops.air_pressure(station.id, date="recent")
                 except FetchError as exc:
                     pressure = Parsed(message=str(exc))
-            predictions: Parsed = Parsed()
-            try:
-                begin = (self._clock.now() - timedelta(days=PREDICTION_DAYS_BEHIND)).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                predictions = await self.coops.predictions(
-                    station.id, datum=datum, interval=None, begin=begin, hours=PREDICTION_HOURS
-                )
-            except FetchError as exc:
-                predictions = Parsed(message=str(exc))
+            predictions = await self._predictions_for(station, datum)
             return TideSeries(station.id, datum, level, wind, pressure, predictions)
+
+    async def _predictions_for(self, station: TideStation, datum: str) -> Parsed:
+        """The gauge's 6-minute predictions, asked for once per UTC day and remembered, empty answers included: the
+        window starts at a UTC midnight, so a second request the same day would return the same thing. Great Lakes
+        gauges (IGLD) have no predictions, so none is asked for."""
+        if station.great_lakes:
+            return Parsed(message="no tide predictions for the Great Lakes")
+        begin = (self._clock.now() - timedelta(days=PREDICTION_DAYS_BEHIND)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        key = (station.id, datum, begin.date().isoformat())
+        if key in self._predictions:
+            return self._predictions[key]
+        try:
+            found: Parsed = await self.coops.predictions(
+                station.id, datum=datum, interval=None, begin=begin, hours=PREDICTION_HOURS
+            )
+        except FetchError as exc:
+            found = Parsed(message=str(exc))  # a subordinate station answers with an error; do not ask again today
+        self._predictions = {k: v for k, v in self._predictions.items() if k[2] == key[2]}
+        self._predictions[key] = found
+        return found

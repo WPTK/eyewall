@@ -404,12 +404,14 @@ class Poller:
             self.store.apply_stations(await self.source.ndbc_stations())
             self._stations_at["ndbc"] = self.clock.monotonic()
         self.store.apply_latest(await self.source.ndbc_latest())
-        wanted: dict[str, None] = {}
+        # A full series is fetched only for the stations an open page shows and the ones nearest a storm, at most
+        # MAX_BUOY_SERIES in all. A watchlist-only buoy is covered by `latest_obs`, which is one file for every buoy.
+        wanted: dict[str, None] = {sid.upper(): None for sid in sorted(self.extra_buoys)[:MAX_BUOY_SERIES]}
         for storm_id in self.store.storms:
-            for entry in self.store.nearby_buoys(storm_id)[:MAX_BUOY_SERIES]:
+            for entry in self.store.nearby_buoys(storm_id):
+                if len(wanted) >= MAX_BUOY_SERIES:
+                    break
                 wanted[entry.station.id.upper()] = None
-        for station_id in (*self.store.config.watchlist.ndbc, *sorted(self.extra_buoys)):
-            wanted[station_id.upper()] = None  # the watchlist is polled with or without a storm
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
         async def one(index: int, station_id: str) -> None:
@@ -434,8 +436,8 @@ class Poller:
         known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
             gauge = known.get(station_id.upper())
-            if gauge is not None:
-                gauges.setdefault(gauge.id, gauge)
+            if gauge is not None and len(gauges) < MAX_TIDE_GAUGES:
+                gauges.setdefault(gauge.id, gauge)  # the storm's gauges and the watchlist share the same cap
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
         async def one(index: int, station: TideStation) -> None:

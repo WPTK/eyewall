@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from eyewall import __version__
-from eyewall.config import BASINS, GLYPH_SETS, Config, apply_overrides, default_path, load_config
+from eyewall.config import BASINS, GLYPH_SETS, Config, LoadResult, apply_overrides, default_path, load_config
 from eyewall.models.events import Event
 
 DEMO_BUNDLE = "demo"
@@ -60,9 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def resolve_config(args: argparse.Namespace) -> tuple[Config, tuple[str, ...]]:
     """The configuration after the file and the flags, plus any warnings about the file."""
-    loaded = load_config(args.config, use_file=not args.no_config)
-    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs)
-    return config, loaded.warnings
+    loaded = _load(args)
+    return apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs), loaded.warnings
+
+
+def _load(args: argparse.Namespace) -> LoadResult:
+    return load_config(args.config, use_file=not args.no_config)
 
 
 def _headless(args: argparse.Namespace, config: Config) -> int:
@@ -97,8 +100,11 @@ def _config_path(args: argparse.Namespace) -> Path | None:
     return None if args.no_config else (args.config or default_path())
 
 
-def _run_app(args: argparse.Namespace, config: Config) -> int:
+def _run_app(args: argparse.Namespace, config: Config, loaded: LoadResult | None = None) -> int:
     config_path = _config_path(args)
+    # What is saved starts from the file as loaded, never from the flags, and never over a file that failed to load.
+    file_config = loaded.config if loaded is not None else None
+    file_broken = loaded.broken if loaded is not None else False
     from eyewall.app import run_app
     from eyewall.sources.bundle import BundleError, resolve_bundle
     from eyewall.sources.live import LiveSource
@@ -114,18 +120,35 @@ def _run_app(args: argparse.Namespace, config: Config) -> int:
         except BundleError as exc:
             print(f"eyewall: {exc}", file=sys.stderr)
             return 2
-        run_app(config, source, state_dir=state_dir, config_path=config_path)
+        run_app(
+            config,
+            source,
+            state_dir=state_dir,
+            config_path=config_path,
+            file_config=file_config,
+            config_file_broken=file_broken,
+        )
         return 0
     live = LiveSource()
-    run_app(config, live, state_dir=state_dir, closer=live.aclose, config_path=config_path)
+    run_app(
+        config,
+        live,
+        state_dir=state_dir,
+        closer=live.aclose,
+        config_path=config_path,
+        file_config=file_config,
+        config_file_broken=file_broken,
+    )
     return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config, warnings = resolve_config(args)
+    loaded = _load(args)
+    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs)
+    warnings = loaded.warnings
     for warning in warnings:
         print(f"eyewall: config: {warning}", file=sys.stderr)
     if args.headless:
         return _headless(args, config)
-    return _run_app(args, config)
+    return _run_app(args, config, loaded)

@@ -276,7 +276,8 @@ async def test_a_quiet_basin_still_polls_the_watchlisted_buoys_and_gauges():
     source.tide_stations = (gauge("8721604", 28.4, -80.6),)
     results = await poller.tick()
     assert [r.feed for r in results] == [protocol.STORMS, protocol.OUTLOOK, protocol.BUOYS, protocol.TIDES]
-    assert sorted(c for c in source.calls if c.startswith("series:")) == ["series:41010", "series:42001"]
+    # A watchlist-only buoy is read from latest_obs; no series file is fetched for it.
+    assert [c for c in source.calls if c.startswith("series:")] == []
     assert source.datums == [("8721604", "MLLW")]
     assert not poller.active(protocol.SATELLITE) and not poller.active(protocol.ALERTS)
 
@@ -434,3 +435,33 @@ async def test_a_listener_that_raises_does_not_stop_the_poll():
     results = await poller.tick()
     assert results
     assert seen
+
+
+async def test_open_pages_and_storm_buoys_share_one_cap_on_series_files():
+    from eyewall.poll import MAX_BUOY_SERIES
+
+    config = Config(watchlist=WatchlistConfig(ndbc=tuple(f"4{n:04d}" for n in range(60)), coops=()))
+    poller, source, *_ = build(config=config)
+    source.stations = tuple(station(f"4{n:04d}", 30.0 + n / 100, -75.0) for n in range(60))
+    await poller.tick()
+    fetched = [c for c in source.calls if c.startswith("series:")]
+    assert len(fetched) <= MAX_BUOY_SERIES
+    poller.extra_buoys.update({"49999", "48888"})
+    source.calls.clear()
+    poller.refresh_feeds(protocol.BUOYS)
+    await poller.tick()
+    fetched = [c for c in source.calls if c.startswith("series:")]
+    assert len(fetched) <= MAX_BUOY_SERIES
+    assert {"series:49999", "series:48888"} <= set(fetched)  # an open page comes before the storm's list
+
+
+async def test_watchlisted_gauges_share_the_cap_with_a_storms_gauges():
+    from eyewall.poll import MAX_TIDE_GAUGES
+
+    ids = [f"87{n:05d}" for n in range(40)]
+    config = Config(watchlist=WatchlistConfig(ndbc=(), coops=tuple(ids)))
+    poller, source, *_ = build(config=config)
+    source.current = CurrentStorms()
+    source.tide_stations = tuple(gauge(i, 28.0 + n / 10, -80.0) for n, i in enumerate(ids))
+    await poller.tick()
+    assert len(source.datums) == MAX_TIDE_GAUGES
