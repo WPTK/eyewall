@@ -67,4 +67,82 @@ The commands in `CLAUDE.md`, plus the spot check.
 
 ## State after
 
-(to be filled in by the session)
+**What exists.** Every storm-side NOAA feed parses into frozen dataclasses through pure functions, with an `NhcClient`
+over `eyewall.net`. Nothing caches, polls or renders.
+
+- `models/`: `storm.py` (`Storm`, `CurrentStorms`, `Classification`, `Basin`, `AdvNum`, `ProductRef`, `GisRef`),
+  `forecast.py` (`ForecastAdvisory`, `ForecastFix`, `ForecastGis`), `advisory.py` (`PublicAdvisory`, `Discussion`,
+  `AdvisorySet`, api product types), `wind.py` (`QuadrantRadii`, `WindRadii`, `WindProbabilities`, radii polygons),
+  `watches.py`, `outlook.py`, `graphics.py`, and `track.py` (new, see below). `models/__init__.py` is still empty.
+- `providers/base.py` (`StormProvider` protocol, `ParseError`) and `providers/nhc/`: `ids.py` (ids, bins, advisory
+  numbers, every URL, `text_is_current`), `times.py`, `textutil.py`, `current.py`, `tcm.py`, `text.py` (TCP, TCD, PWS,
+  TWO), `atcf.py` (b-decks and the `btk` listing), `gis.py` (forecast, radii and best track zips), `two.py` (gtwo zip),
+  `alerts.py` (alerts and the api.weather.gov product fallback), `graphics.py` (landing page and NESDIS listings),
+  `client.py`.
+- `scripts/record_fixtures.py` (`record` for the committed set, `storm` for any archived storm) and
+  `scripts/spot_check_nhc.py` (43 checks against the live services, about 20 s; passes on a quiet day).
+- `tests/fixtures/nhc` and `tests/fixtures/gis`: 54 payloads (51 recorded, 3 hand-built) listed with URL, time and SHA-256 in
+  `tests/fixtures/nhc/sources.json` (1.6 MB); 11 test modules (`tests/test_nhc_*.py`, plus the loader `tests/nhc_fixtures.py`) with
+  330 tests, including hypothesis tests that damage real payloads and expect a result or `ParseError`.
+
+**Deviations from the brief, and why.**
+
+- **The odd-case fixtures are real recordings, not hand-built.** tgftp keeps the last advisory of the latest storm in each
+  bin, and on 2026-10-31 those were post-tropical, remnant, dissipating, dateline and no-radii cases: Fay (post-tropical,
+  `DISSIPATED`), Olana and Vance (no radii), Josephine (partial radii), Hurricane Nolo (an `ep` id in the CP2 bin, east
+  longitudes, W and E in one product, a cone across the dateline), plus the 2024 Potential Tropical Cyclone Eight and the real
+  `030A` intermediate zip for Erin. Only three fixtures are hand-built, each flagged in `sources.json`: the populated
+  CurrentStorms file (no storm is active; modelled on the 2023 sample, edited to the live shape, with Erin at the
+  intermediate 30A, a PTC, a post-tropical storm and Nolo in a CP bin), a populated alerts file (the alerts feed only serves
+  active alerts; a real-shape file of frost and freeze alerts is recorded too), and a modelled graphics landing page.
+- **Key messages come from the discussion.** The public advisory only says where to find them; `Discussion.key_messages`
+  holds the list. `PublicAdvisory.key_messages` is filled only if a TCP carries a `KEY MESSAGES:` list.
+- **Added `models/track.py`, `providers/nhc/times.py` and `textutil.py`.** Best track types did not fit the planned model
+  files; the other two are shared helpers. The layout in `docs/plan.md` is updated.
+- **The TWO in the plan's fixture list became three outlooks.** A 2026 TWO "with invests" does not exist as such: 2026
+  outlooks name areas but carry no invest numbers (`(AL91)` is an optional suffix on an area title, parsed if present,
+  never observed). The fixtures are the 2026-09-10 outlook with two numbered areas and active systems, the live
+  2026-10-31 outlooks, and gtwo zips from 2025-09-19 (three areas) and 2026-10-31.
+- **No ATCF index URLs.** `atcf/index/…` is replay tooling (M4); nothing in M1 needs it.
+- Shared M0 modules are untouched. `docs/data-sources.md` and `docs/plan.md` are corrected where the feeds disagreed (below).
+
+**What the next session must know.**
+
+- **Two layers in `NhcClient`.** `fetch_*` methods accept `etag`/`last_modified` and return `Response(value, fetched,
+  source)`; `value` is None on 304 or 404, `fetched` carries the validators and raw body for the cache. The provider
+  methods (`storms`, `advisory`, `forecast_gis`, `track`, `outlook_text`, `outlook_gis`, `graphics`) return parsed values
+  and turn a failed or stale product into None. Parsers also take plain text or bytes, so the replay source can use them
+  on bundle files.
+- **Staleness.** Use `ids.text_is_current(storm, ref, storm_id=…, adv_num=…)`, where `ref` is the product's own reference
+  (`storm.public_advisory`...). The public advisory can be at `30A` while the forecast advisory is at `30`, so one storm
+  number does not fit every product. `Storm.adv_num` prefers the forecast advisory.
+- **Bins are not storms.** Key by `Storm.id`. `Storm.basin` is the id's basin and `Storm.bin_basin` the bin's; they differ
+  for a storm in a CP bin. `ids.parse_bin(storm.bin_number)` gives the bin for text URLs.
+- **Invests are not in CurrentStorms.** Find them with `fetch_bdeck_index()` (`BDeckFile.is_invest`, `modified`), then
+  `fetch_bdeck(storm_id)`; a b-deck stays listed after a system dies, so judge recency by `modified` and the last fix.
+  `BestTrack.is_invest` (90 to 99) and `is_training` (80 to 89) are provided. gtwo areas carry probabilities but no id, so
+  matching an outlook area to an invest is a position match.
+- **Longitudes.** Text products keep the sign NOAA printed (E is positive and `180.0E` is 180.0). GIS vertices are wrapped
+  to (-180, 180]. NOAA's layers disagree across the dateline, so a ring that crosses it jumps between 180 and -180: unwrap
+  against the map center before drawing. `gis.wrap_lon` is the helper.
+- **Units.** `Storm.movement_speed_mph` is mph; `ForecastAdvisory.movement_speed_kt`, wind and radii are knots and nautical
+  miles; `PublicAdvisory.summary` is mph. A b-deck `0` for wind, pressure, gusts, eye and radius of max wind is None.
+- **TCM fix hours** count from `ForecastAdvisory.synoptic`; `forecast_fixes` are 12 to 72 h and `outlook_fixes` are 96 and
+  120 h. A dissipating system ends in a fix with `dissipated` set and no position. The final advisory has `is_final`; its
+  wind probability table is empty.
+- **Heavy fetches.** A forecast zip is 40 KB, a radii zip 120 KB, a best track zip up to 600 KB, and a NESDIS product
+  listing is over a megabyte for a long storm; fetch them on an advisory change or on demand. `fetch_floater_storms` and
+  `fetch_floater_products` are small.
+- **Unverified until a live storm** (marked in the code and the data-sources doc): the graphics landing page markup and its
+  image URLs (the parser is deliberately loose and classifies by product name), the `stormSurgeWatchWarningGIS` and
+  `potentialStormSurgeFloodingGIS` objects (parsed as `GisRef` with `kml_url`; nothing parses the KML yet), and tropical
+  alerts with geometry (the parser is tested on the real alert shape and a hand-built tropical one).
+- **Corrections to `docs/data-sources.md`:** tgftp names are `wtnt2{n}` and so on for bin `n`, not `wtnt21` for every bin;
+  CP b-decks are `bcp…` files in `btk/` (the `cphc/` folder is stale); the gtwo zip is one combined product with
+  `Atlantic`/`Pacific` labels and percent strings, and has no invest ids; the NESDIS listing layout; shapefile 9999 fills and
+  the dateline disagreement; `peakSurgeKMLFile`; key messages live in the discussion.
+- **Left for the coordinator.** `README.md` still says "version 0.0.1"; it is the same line every parallel milestone would
+  change, so it was left alone. The `tests/nhc_fixtures.py` loader is shared by the NHC tests only.
+- `record_fixtures.py storm <id> --adv N` records exactly the archive products a replay bundle needs (the four text
+  products from the archive pages, both zips, the b-deck and the best track), so `record_storm.py` can reuse its recipes
+  and `ids.archive_product_url`, `forecast_zip_url`, `bdeck_archive_url` and `best_track_zip_url`.

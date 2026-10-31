@@ -1,0 +1,73 @@
+WTPA42 PHFO 042038
+TCDCP2
+ 
+Hurricane Nolo Discussion Number  57
+NWS Central Pacific Hurricane Center Honolulu HI   EP152026
+Issued by NWS National Hurricane Center Miami FL
+1100 AM HST Sun Oct 04 2026
+ 
+Recent visible and infrared imagery show that outer rainbands have 
+developed over the western semicircle, and Nolo is no longer 
+exhibiting annular appearance. Shortly after the previous advisory, 
+infrared imagery showed warming of the cloud tops and a thinning of 
+the inner core convection over the southwestern quadrant. The eye 
+has become more cloud filled and not as warm with an eye temperature 
+around 7 C. A recent GMI microwave pass shows that the inner core is 
+vertically aligned and perhaps the recent satellite degradation 
+could just be a brief lull. Subjective and objective satellite 
+intensity estimates range from 95 to 102 kt. Based on a blend of 
+these data, the initial intensity is maintained at 100 kt.
+ 
+The initial motion is estimated to be westward, or 280/15 kt. Nolo 
+is expected to continue being steered generally westward by a strong 
+subtropical ridge located to its north. Over the next several days, 
+the hurricane should maintain a similar or slightly slower forward 
+speed along this heading. By the end of the forecast period, Nolo is 
+forecast to reach the western periphery of the aforementioned ridge, 
+which should cause the cyclone to slow down and turn 
+west-northwestward to northwestward. The latest NHC track forecast 
+is very similar to the previous and lies near the HCCA and GDMI 
+track aids.
+ 
+Nolo is currently situated within a favorable environment, with warm 
+sea surface temperatures and low vertical wind shear, some slight 
+strengthening is possible over the next 18 to 24 hours. Between 24 
+and 36 hours, the cyclone is forecast to move into an area of 
+increasing vertical wind shear and a much drier mid-level airmass. 
+The combination of strong shear and dry air entrainment will induce 
+a steady weakening trend through the middle-to-end of the week. The 
+NHC intensity forecast remains on the high end of the guidance suite 
+through the short term, leaning closest to the regional hurricane 
+models, before trending back toward the various consensus aids by 
+the end of the forecast period.
+ 
+This is the last advisory issued by the National Hurricane Center on
+this system. Future advisories will be issued by RSMC Tokyo, Japan.
+Advisories issued by RSMC Tokyo are found on the web at:
+ 
+www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/RSMC_HP.htm
+ 
+For U.S. interests, see advisories issued by the Joint Typhoon
+Warning Center (JTWC) in Honolulu, Hawaii. Advisories issued by JTWC
+can be found on the web at:
+ 
+www.metoc.navy.mil/jtwc/jtwc.html
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  04/2100Z 24.2N 180.0E  100 KT 115 MPH
+ 12H  05/0600Z 24.8N 177.7E  110 KT 125 MPH
+ 24H  05/1800Z 25.2N 174.6E  110 KT 125 MPH
+ 36H  06/0600Z 25.1N 170.9E   95 KT 110 MPH
+ 48H  06/1800Z 25.2N 166.4E   85 KT 100 MPH
+ 60H  07/0600Z 25.7N 162.3E   70 KT  80 MPH
+ 72H  07/1800Z 26.2N 158.2E   60 KT  70 MPH
+ 96H  08/1800Z 27.8N 152.0E   55 KT  65 MPH
+120H  09/1800Z 29.4N 149.7E   55 KT  65 MPH
+ 
+$$
+Forecaster Kelly
+ 
+
+

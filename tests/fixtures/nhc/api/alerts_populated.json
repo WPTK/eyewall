@@ -1,0 +1,149 @@
+{
+    "@context": {
+        "@version": "1.1"
+    },
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0001.001",
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -76.67,
+                            34.69
+                        ],
+                        [
+                            -76.15,
+                            35.35
+                        ],
+                        [
+                            -75.63,
+                            35.83
+                        ],
+                        [
+                            -75.5,
+                            35.2
+                        ],
+                        [
+                            -76.1,
+                            34.8
+                        ],
+                        [
+                            -76.67,
+                            34.69
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0001.001",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.0001.001",
+                "areaDesc": "Eastern Carteret; Pamlico",
+                "geocode": {
+                    "SAME": [
+                        "037031",
+                        "037137"
+                    ],
+                    "UGC": [
+                        "NCZ196",
+                        "NCZ095"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/NCZ196",
+                    "https://api.weather.gov/zones/forecast/NCZ095"
+                ],
+                "references": [],
+                "sent": "2025-08-18T21:00:00-04:00",
+                "effective": "2025-08-18T21:00:00-04:00",
+                "onset": "2025-08-20T08:00:00-04:00",
+                "expires": "2025-08-19T03:00:00-04:00",
+                "ends": "2025-08-21T08:00:00-04:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Moderate",
+                "certainty": "Possible",
+                "urgency": "Future",
+                "event": "Tropical Storm Watch",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Newport/Morehead City NC",
+                "headline": "Tropical Storm Watch issued August 18 at 9:00PM EDT until August 21 at 8:00AM EDT by NWS Newport/Morehead City NC",
+                "description": "* WHAT...Tropical storm conditions are possible.\n\n* WHERE...Eastern Carteret; Pamlico.\n\n* WHEN...Possible Wednesday.",
+                "instruction": "Monitor the progress of the storm and finalize preparations.",
+                "response": "Prepare",
+                "parameters": {
+                    "NWSheadline": [
+                        "Tropical Storm Watch is in effect"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KMHX.TR.A.1002.250820T1200Z-250821T1200Z/"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0001.002",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.0001.002",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.0001.002",
+                "areaDesc": "Outer Banks Dare",
+                "geocode": {
+                    "SAME": [
+                        "037055"
+                    ],
+                    "UGC": [
+                        "NCZ204"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/NCZ204"
+                ],
+                "references": [],
+                "sent": "2025-08-18T21:00:00-04:00",
+                "effective": "2025-08-18T21:00:00-04:00",
+                "onset": "2025-08-20T08:00:00-04:00",
+                "expires": "2025-08-19T03:00:00-04:00",
+                "ends": "2025-08-21T08:00:00-04:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Moderate",
+                "certainty": "Possible",
+                "urgency": "Future",
+                "event": "Storm Surge Watch",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS Newport/Morehead City NC",
+                "headline": "Storm Surge Watch issued August 18 at 9:00PM EDT until August 21 at 8:00AM EDT by NWS Newport/Morehead City NC",
+                "description": "* WHAT...Tropical storm conditions are possible.\n\n* WHERE...Outer Banks Dare.\n\n* WHEN...Possible Wednesday.",
+                "instruction": "Monitor the progress of the storm and finalize preparations.",
+                "response": "Prepare",
+                "parameters": {
+                    "NWSheadline": [
+                        "Storm Surge Watch is in effect"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KMHX.TR.A.1002.250820T1200Z-250821T1200Z/"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "urn:oid:2.49.0.1.840.0.0001.003",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "id": "x"
+            }
+        }
+    ],
+    "title": "Current watches, warnings, and advisories",
+    "updated": "2025-08-18T21:05:00+00:00"
+}
