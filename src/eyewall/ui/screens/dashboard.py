@@ -12,6 +12,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.css.scalar import Unit
 from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import OptionList, TabbedContent, TabPane
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 NARROW_BELOW = 110
 COMPACT_BELOW = 90
 ROW_REFRESH_SECONDS = 30.0
+HEADLINE_ROWS = 6  # the least the stacked headline is given: its border and four lines
 
 
 class DashboardMap(MapView):
@@ -57,7 +59,7 @@ class DashboardScreen(Screen[None]):
         Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
         Binding("minus", "zoom_out", "Zoom out", show=False),
         Binding("c", "center", "Center storm", show=False),
-        Binding("f", "fit", "Fit cone", show=False),
+        Binding("f", "fit", "Fit storm", show=False),
     ]
 
     def __init__(self) -> None:
@@ -94,6 +96,35 @@ class DashboardScreen(Screen[None]):
 
     def on_resize(self, event: Resize) -> None:
         self._apply_layout(event.size.width)
+        self.call_after_refresh(self.fit_stack)
+
+    def fit_stack(self) -> None:
+        """Share the stacked column's height between its panels. The headline keeps at least `HEADLINE_ROWS`. The
+        others take what their text needs, up to their cap, the shortest first, and an even share when there is not
+        enough room. The headline gets the rest, up to what its text needs; a panel whose text is longer than its rows
+        scrolls inside itself."""
+        stack = self.query_one("#side-stack")
+        panels = [p for p in stack.query(Panel) if p.display]
+        if not stack.display or not panels or stack.size.height < 1:
+            return
+        wants: dict[Panel, int] = {}
+        for panel in panels:
+            want = panel.body.outer_size.height + 2  # the text and the border
+            cap = panel.styles.max_height
+            if cap is not None and cap.unit == Unit.CELLS:
+                want = min(want, int(cap.value))
+            wants[panel] = max(want, int(panel.styles.min_height.value) if panel.styles.min_height else 3)
+        rows = dict.fromkeys(panels, 0)
+        headline = next((p for p in panels if p.kind == "headline"), None)
+        left = stack.size.height - (HEADLINE_ROWS if headline is not None else 0)
+        others = sorted((p for p in panels if p is not headline), key=lambda p: wants[p])
+        for index, panel in enumerate(others):
+            rows[panel] = min(wants[panel], max(left, 0) // (len(others) - index))
+            left -= rows[panel]
+        if headline is not None:
+            rows[headline] = min(wants[headline], stack.size.height - sum(rows.values()))
+        for panel, height in rows.items():
+            panel.styles.height = max(height, 3)
 
     def _apply_layout(self, width: int | None = None) -> None:
         width = self.size.width if width is None else width
@@ -128,10 +159,10 @@ class DashboardScreen(Screen[None]):
         for panel in self.query(Panel):
             panel.update(texts[panel.kind])
         tabs = self.query_one("#side-tabs", TabbedContent)
-        if has_text(texts["surge"]):
-            tabs.show_tab("tab-surge")
-        else:
-            tabs.hide_tab("tab-surge")
+        for kind, text in texts.items():  # a panel with nothing to say is left out, the tab as well
+            if kind != "headline":
+                (tabs.show_tab if has_text(text) else tabs.hide_tab)(f"tab-{kind}")
+        self.call_after_refresh(self.fit_stack)
         scene = adapt.map_scene(store, now, selected)
         self.map_view.set_scene(scene, self._fit_points())
 
@@ -139,7 +170,7 @@ class DashboardScreen(Screen[None]):
         eye = self.eye
         state = eye.store.storms.get(eye.selected or "")
         if state is not None:
-            points = adapt.storm_scene(state).extent()
+            points = adapt.storm_scene(state).near_extent()
             if points:
                 return points
         return adapt.basin_points(eye.basin_view)

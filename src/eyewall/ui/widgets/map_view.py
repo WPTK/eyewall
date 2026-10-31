@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from rich.cells import cell_len
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
@@ -213,27 +214,40 @@ class MapView(Widget, can_focus=True):
     # ---- legend -----------------------------------------------------------------------------------------------
 
     def legend(self, width: int) -> Text:
+        """The marks, then the zoom and the cursor. Items that do not fit the width go on the next line."""
         glyphs = ASCII_GLYPHS if self.mode is Mode.ASCII else UNICODE_GLYPHS
-        out = Text(no_wrap=True, overflow="ellipsis")
         self._ensure_viewport()
-        items = [
+        items: list[list[tuple[str, str]]] = []
+        for mark, name in (
             (glyphs.center, "storm"),
             (glyphs.forecast, "forecast"),
             (glyphs.buoy, "buoy"),
             (glyphs.tide, "gauge"),
-        ]
-        for mark, name in items:
-            out.append(f" {mark} ", style="bold")
-            out.append(name, style=DIM)
+        ):
+            items.append([(f" {mark} ", "bold"), (name, DIM)])
         view = self._viewport
         if view is not None and width >= 60:
-            out.append(f"  {view.deg_per_dot:.2f} deg/dot ", style=DIM)
-            out.append("10m coast" if is_detailed(view) else "overview", style="#8fd3ff")
+            items.append(
+                [
+                    (f"  {view.deg_per_dot:.2f} deg/dot ", DIM),
+                    ("10m coast" if is_detailed(view) else "overview", "#8fd3ff"),
+                ]
+            )
         if self.cursor is not None and width >= 80:
             lat, lon = self.cursor
-            out.append(
-                f"  {abs(lat):.2f}{'N' if lat >= 0 else 'S'} {abs(lon):.2f}{'E' if lon >= 0 else 'W'}", style=DIM
+            items.append(
+                [(f"  {abs(lat):.2f}{'N' if lat >= 0 else 'S'} {abs(lon):.2f}{'E' if lon >= 0 else 'W'}", DIM)]
             )
+        out = Text(no_wrap=True, overflow="ellipsis")
+        used = 0
+        for item in items:
+            size = sum(cell_len(text) for text, _ in item)
+            if used and used + size > width:
+                out.append("\n")
+                used = 0
+            for text, style in item:
+                out.append(text, style=style)
+            used += size
         return out
 
 
@@ -250,4 +264,6 @@ class MapPane(Vertical):
         yield self.legend
 
     def on_map_view_changed(self, event: MapView.Changed) -> None:
-        self.legend.update(self.view.legend(self.size.width))
+        text = self.view.legend(self.size.width)
+        self.legend.update(text)
+        self.legend.styles.height = text.plain.count("\n") + 1

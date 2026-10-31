@@ -308,9 +308,7 @@ def ww_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
     out = Text()
     state = store.storms.get(selected or "")
     public = state.advisories.public if state else None
-    if public is None:
-        out.append("Select a storm for its watches and warnings.", style=DIM)
-    else:
+    if public is not None:
         blocks = public.watches_warnings
         for area in blocks.in_effect:
             color = WATCH_WARNING_COLORS.get(area.kind, NEUTRAL) if area.kind else NEUTRAL
@@ -364,7 +362,6 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
     out = Text()
     state = store.storms.get(selected or "")
     if state is None:
-        out.append("Select a storm for its wind field.", style=DIM)
         return out
     storm = state.storm
     tcm = state.advisories.forecast
@@ -416,7 +413,6 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
     """The five nearest buoys with wind, pressure and the three hour pressure change."""
     out = Text()
     if selected not in store.storms:
-        out.append("Select a storm for the buoys near it.", style=DIM)
         return out
     entries = store.nearby_buoys(selected)[:MAX_STRIP_BUOYS]
     if not entries:
