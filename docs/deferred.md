@@ -66,3 +66,5 @@ and move an item into a milestone brief when it is scheduled.
 - M7: `fetch_bytes` buffers the whole body before the 24 MB size check; check `Content-Length` and stream.
 - M7: the gallery asks NESDIS for the same product listing from several panels; share one in-flight request.
 - M7: the "is inline graphics possible" test is written twice (`run_app` and `GalleryPanel.uses_inline`); keep one predicate.
+- #18: the map marks states by colour alone: station marks by reported wind and dimmed when stale, outlook areas by risk, watch and warning track segments by kind. The same facts are in text on the panels and tables; a glyph per state would need new marks on a braille canvas.
+- #18: the buoy chart draws wind and gust as two lines told apart by colour alone (the legend names them); a dashed gust line would need a new line style in `render/chart.py`.
