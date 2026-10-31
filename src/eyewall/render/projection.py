@@ -22,6 +22,7 @@ LatLon = tuple[float, float]
 Dot = tuple[float, float]
 
 MIN_DEG_PER_DOT = 0.002
+MIN_FIT_SPAN_DEG = 2.0  # fit() never shows less than this much of the box's sides, so one point is not blank sea
 MAX_DEG_PER_DOT = 4.0
 MAX_CENTER_LAT = 85.0
 
@@ -208,12 +209,16 @@ class Viewport:
     def fit(
         cls, bounds: Bounds, cols: int, rows: int, *, dots_x: int = 2, dots_y: int = 4, margin: float = 0.05
     ) -> Viewport:
-        """The view that shows bounds entirely, centered, with a margin (a fraction of each side) all round."""
+        """The view that shows bounds entirely, centered, with a margin (a fraction of each side) all round.
+
+        A box narrower than MIN_FIT_SPAN_DEG on a side is treated as that wide, so a point or a tiny box still
+        gets a window of a couple of degrees rather than a blank patch of sea.
+        """
         lat, lon = bounds.center
         scale = round(math.cos(math.radians(max(-MAX_CENTER_LAT, min(MAX_CENTER_LAT, lat)))), 9)
         usable = 1.0 - 2.0 * max(0.0, min(0.45, margin))
-        by_lat = (bounds.north - bounds.south) / (rows * dots_y * usable)
-        by_lon = bounds.lon_span * scale / (cols * dots_x * usable)
+        by_lat = max(bounds.north - bounds.south, MIN_FIT_SPAN_DEG) / (rows * dots_y * usable)
+        by_lon = max(bounds.lon_span, MIN_FIT_SPAN_DEG) * scale / (cols * dots_x * usable)
         return cls(lat, lon, max(by_lat, by_lon, MIN_DEG_PER_DOT), cols, rows, dots_x, dots_y)
 
     @classmethod

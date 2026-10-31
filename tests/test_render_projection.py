@@ -247,8 +247,14 @@ def test_fit_across_the_antimeridian():
 
 def test_fit_a_single_point_does_not_divide_by_zero():
     view = Viewport.fit_points([(25.0, -80.0)], 80, 24)
-    assert view.deg_per_dot == MIN_DEG_PER_DOT
     assert view.dot_at(25.0, -80.0) == (view.width // 2, view.height // 2)
+
+
+def test_fit_a_single_point_shows_a_window_of_at_least_two_degrees():
+    view = Viewport.fit_points([(25.0, -80.0)], 80, 24)
+    south, west, north, east = view.bounds().south, view.bounds().west, view.bounds().north, view.bounds().east
+    assert north - south >= 2.0
+    assert east - west >= 2.0
 
 
 def test_viewport_bounds_contain_the_edges_of_the_view():

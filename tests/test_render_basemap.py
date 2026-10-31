@@ -129,10 +129,8 @@ def test_the_central_pacific_straddles_the_antimeridian():
         ("Hawaii", 21.3, -157.85),
         ("Midway", 28.2, -177.4),  # just east of the line, to the right of the center
         ("Majuro", 7.1, 171.2),  # west of the line, to the left of the center
-        ("Tarawa", 1.4, 173.0),
     ]:
-        if not PACIFIC.bounds().contains(lat, lon):
-            continue
+        assert PACIFIC.bounds().contains(lat, lon), name
         x, y = PACIFIC.dot_at(lat, lon)
         assert any(canvas.dot(x + dx, y + dy) for dx in range(-5, 6) for dy in range(-5, 6)), name
     assert PACIFIC.dot_at(28.2, -177.4)[0] > PACIFIC.width // 2 > PACIFIC.dot_at(7.1, 171.2)[0]

@@ -292,6 +292,12 @@ def unpack(data: bytes) -> tuple[bool, list[tuple[int, list[tuple[int, int]]]]]:
 # ----------------------------------------------------------------------------------------------------------- driver
 
 
+def _verify(path: Path, data: bytes, expected: str) -> None:
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != expected:
+        raise SystemExit(f"{path} has SHA-256 {digest}, expected {expected}; delete it and run with --refresh")
+
+
 def fetch(name: str, cache: Path, *, refresh: bool) -> bytes:
     """The bytes of one Natural Earth GeoJSON file, downloaded once into the cache and checked against its hash."""
     path = cache / f"{name}.geojson"
@@ -299,15 +305,12 @@ def fetch(name: str, cache: Path, *, refresh: bool) -> bytes:
         print(f"downloading {name}", file=sys.stderr)
         request = urllib.request.Request(MIRROR_URL + f"{name}.geojson", headers={"User-Agent": "eyewall-build"})
         with urllib.request.urlopen(request, timeout=120) as response:
-            data = response.read()
+            downloaded = response.read()
+        _verify(path, downloaded, SOURCE_SHA256[name])
         cache.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        path.write_bytes(downloaded)
     data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if SOURCE_SHA256[name] and digest != SOURCE_SHA256[name]:
-        raise SystemExit(
-            f"{path} has SHA-256 {digest}, expected {SOURCE_SHA256[name]}; delete it and run with --refresh"
-        )
+    _verify(path, data, SOURCE_SHA256[name])
     return data
 
 

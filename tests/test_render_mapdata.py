@@ -1,5 +1,6 @@
 """The vendored map data and the script that builds it. Nothing here touches the network."""
 
+import hashlib
 import importlib.util
 import itertools
 import json
@@ -259,8 +260,12 @@ def offline(build, monkeypatch, tmp_path):
         raise AssertionError("the build must not download anything in tests")
 
     monkeypatch.setattr(build.urllib.request, "urlopen", no_network)
-    monkeypatch.setattr(build, "SOURCE_SHA256", dict.fromkeys(build.SOURCE_SHA256, ""))
     write_sources(tmp_path / "cache")
+    digests = {
+        name: hashlib.sha256((tmp_path / "cache" / f"{name}.geojson").read_bytes()).hexdigest()
+        for name in build.SOURCE_SHA256
+    }
+    monkeypatch.setattr(build, "SOURCE_SHA256", digests)
     return tmp_path
 
 
