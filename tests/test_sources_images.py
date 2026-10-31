@@ -140,7 +140,8 @@ async def test_a_failed_listing_is_not_kept_and_a_cancelled_asker_does_not_cance
         with pytest.raises(HttpError):
             await source.satellite_product(_storm("al012026"), "AirMass")
         transport.fail = False
-        assert await source.satellite_product(_storm("al012026"), "AirMass") is None or True
+        await source.satellite_product(_storm("al012026"), "GEOCOLOR")
+        assert transport.paths.count("/FLOATER/data/") == 2  # the failure was not kept; the listing was asked again
         first = asyncio.ensure_future(source.satellite_product(_storm("al022026"), "AirMass"))
         second = asyncio.ensure_future(source.satellite_product(_storm("al032026"), "AirMass"))
         await asyncio.sleep(0)
