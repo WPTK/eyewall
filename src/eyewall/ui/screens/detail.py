@@ -8,6 +8,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import DataTable, OptionList, Static, TabbedContent, TabPane
 
@@ -165,7 +166,11 @@ class StormDetailScreen(Screen[None]):
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
         """Keys that do something on one tab only are off, and so out of the footer, on the others."""
-        tab = (self.query_one("#detail-tabs", TabbedContent).active or "").removeprefix("tab-")
+        try:
+            tabs = self.query_one("#detail-tabs", TabbedContent)
+        except NoMatches:  # a key pressed while the screen is still being built
+            return True
+        tab = (tabs.active or "").removeprefix("tab-")
         if action == "toggle_text":
             return tab == "public"
         if action == "pin":

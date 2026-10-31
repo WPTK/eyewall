@@ -205,6 +205,9 @@ class EyewallApp(App[None]):
     def on_descendant_focus(self) -> None:
         self._for_screens("refresh_status")
 
+    def on_descendant_blur(self) -> None:
+        self._for_screens("refresh_status")  # also when the focus clears, which fires no focus event
+
     def on_tabbed_content_tab_activated(self) -> None:
         self._for_screens("refresh_status")
 

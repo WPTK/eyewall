@@ -8,6 +8,7 @@ from textual.widgets import TabbedContent
 
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.ui import format as fmt
+from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.detail import TABS
 from tests.ui_support import into_the_storm, replay_app, running, screen_text
 
@@ -55,6 +56,14 @@ def test_a_long_status_gives_way_before_the_keys_and_help() -> None:
     row = fmt.footer_row(Text("x" * 200), [("b", "buoys")], 40)
     assert len(row.plain) == 40
     assert row.plain.endswith("? help") and "buoys" not in row.plain
+
+
+def test_wide_characters_are_measured_in_cells_not_characters() -> None:
+    keys = [("w", "台風"), ("b", "buoys")]  # two characters, four cells
+    row = fmt.footer_row(Text("あ" * 30), keys, 40)
+    assert row.cell_len == 40 and row.plain.endswith("? help")
+    fits = fmt.footer_row(Text("ok"), keys, 20)  # "w 台風  ? help" is 14 cells; "b buoys  " would make 23
+    assert fits.cell_len == 20 and "台風" in fits.plain and "buoys" not in fits.plain
 
 
 def test_the_footer_marks_keys_without_colour() -> None:
@@ -194,9 +203,13 @@ async def test_the_buoy_charts_list_range_pin_and_back() -> None:
     async with running(app, (140, 45)) as pilot:
         await into_the_storm(pilot)
         app.open_buoy("41002")
-        await pilot.pause(0.5)
+        for _ in range(50):  # until the buoy screen is up
+            await pilot.pause()
+            if isinstance(app.screen, BuoyDetailScreen):
+                break
+        await pilot.pause()
         row = one_row(app, 140)
-        assert "h 24/48/72 h" in row and "p pin" in row and "esc back" in row
+        assert "h range" in row and "p pin" in row and "esc back" in row
 
 
 # ---- the crowded worst case -----------------------------------------------------------------------------------
@@ -210,7 +223,7 @@ async def test_help_survives_a_crowded_status_at_every_width(width: int) -> None
         app.poller.active = lambda feed: True  # type: ignore[method-assign]
         app.alert_log = [object()] * 12  # type: ignore[list-item]
         app.screen.refresh_status()  # type: ignore[attr-defined]
-        await pilot.pause(0.5)
+        await pilot.pause()
         one_row(app, width)
 
 

@@ -33,7 +33,7 @@ NARROW_BELOW = 110
 
 class BuoyDetailScreen(Screen[None]):
     BINDINGS = [
-        Binding("h", "range", "24/48/72 h"),
+        Binding("h", "range", "range"),
         Binding("p", "pin", "pin"),
         Binding("escape,backspace", "back", "back"),
         Binding("i", "toggle_info", "Info", show=False),
