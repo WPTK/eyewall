@@ -1,6 +1,7 @@
 """The live client reaches NOAA through the proxies named in the environment, which httpx skips for a custom transport."""
 
 import asyncio
+import urllib.request
 
 import pytest
 
@@ -42,6 +43,8 @@ def clean_proxy_environment(monkeypatch):
     for name in PROXY_VARIABLES:
         monkeypatch.delenv(name, raising=False)
         monkeypatch.delenv(name.lower(), raising=False)
+    # httpx also asks the operating system (the Windows registry, macOS settings); a developer's proxy must not leak in
+    monkeypatch.setattr("httpx._utils.getproxies", urllib.request.getproxies_environment)
     return monkeypatch
 
 
@@ -86,5 +89,18 @@ async def test_without_proxy_variables_the_request_goes_straight_to_the_host(cle
     try:
         assert await fetch(tmp_path, f"http://127.0.0.1:{origin.port}/data") == "origin"
         assert origin.request_lines == ["GET /data HTTP/1.1"]
+    finally:
+        await origin.stop()
+
+
+@pytest.mark.parametrize("address", ["socks://127.0.0.1:1080", "socks5://127.0.0.1:1080", "ftp+weird://x:1"])
+async def test_a_proxy_httpx_cannot_use_means_direct_requests_not_a_startup_failure(
+    clean_proxy_environment, tmp_path, address
+):
+    origin = Listener("origin")
+    await origin.start()
+    try:
+        clean_proxy_environment.setenv("ALL_PROXY", address)
+        assert await fetch(tmp_path, f"http://127.0.0.1:{origin.port}/data") == "origin"
     finally:
         await origin.stop()

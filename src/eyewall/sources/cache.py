@@ -23,6 +23,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import tempfile
 from collections.abc import AsyncIterator, Iterator
@@ -36,6 +37,7 @@ from platformdirs import user_cache_dir
 
 from eyewall.net import MAX_BYTES_EXTENSION, FetchError, HttpError, RateLimited, retry_after_seconds
 
+log = logging.getLogger(__name__)
 MAX_BODY_BYTES = 32 * 1024 * 1024
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "content-encoding")
 _FAILURE_STATUSES = frozenset({429, 500, 502, 503, 504})
@@ -204,12 +206,18 @@ class _Overflow(httpx.AsyncByteStream):
 
 class EnvTransport(httpx.AsyncBaseTransport):
     """The network, reached the way httpx reaches it for a client with no custom transport: through the proxies named
-    by HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and NO_PROXY. A client given a transport of its own ignores them (httpx only
-    reads the environment when it builds the transport itself), so the proxy routing lives in this inner client.
-    Redirects are left to the outer client."""
+    by HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and NO_PROXY, and on Windows and macOS the system proxy setting (httpx reads
+    both through `urllib.request.getproxies`). A client given a transport of its own ignores them (httpx only reads the
+    environment when it builds the transport itself), so the proxy routing lives in this inner client. A proxy address
+    httpx cannot use (an unknown scheme, or socks without the socksio package) is logged and skipped: the requests go
+    direct instead of the app failing to start. Redirects are left to the outer client."""
 
     def __init__(self) -> None:
-        self._client = httpx.AsyncClient(trust_env=True, follow_redirects=False)
+        try:
+            self._client = httpx.AsyncClient(trust_env=True, follow_redirects=False)
+        except (ValueError, ImportError) as exc:
+            log.warning("ignoring the configured proxy, requests go direct (%s)", type(exc).__name__)
+            self._client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         return await self._client.send(request, stream=True)

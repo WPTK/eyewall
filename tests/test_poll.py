@@ -569,7 +569,43 @@ async def test_an_unexpected_error_in_one_storm_does_not_cost_the_events_or_the_
 
     source.advisory = advisory
     results = await poller.tick()
-    assert results[0].ok
+    assert isinstance(results[0].error, EOFError)  # the feed backs off, but only after the other storm was served
     assert sum(e.kind is EventKind.NEW_STORM for e in got) == 2
     assert store.storms["al022026"].fetched_key is not None  # its products arrived
     assert store.storms["al012026"].fetched_key is None  # asked for again on the next poll
+
+
+async def test_an_unexpected_advisory_error_backs_the_feed_off_and_stops_at_the_cap():
+    poller, source, store, clock, got = build()
+    source.set_storm("1")
+    source.advisory = Boom()
+    first = await poller.tick()
+    assert isinstance(first[0].error, EOFError)
+    assert any(e.kind is EventKind.NEW_STORM for e in got)  # the events survive the failure
+    assert poller.freshness(protocol.STORMS).failures == 1
+    for _ in range(PRODUCT_ATTEMPTS + 2):
+        await step(poller, clock, 1800)
+    assert source.advisory.calls == PRODUCT_ATTEMPTS  # then settled, not asked forever
+    assert store.storms["al012026"].fetched_key is not None
+
+
+class Boom:
+    def __init__(self):
+        self.calls = 0
+
+    async def __call__(self, *args, **kwargs):
+        self.calls += 1
+        raise EOFError("truncated")
+
+
+async def test_the_refresh_key_cannot_shorten_a_backoff_window():
+    poller, source, _, clock, _ = build()
+    source.fail.add("storms")
+    await poller.tick()
+    window = poller._feeds[protocol.STORMS].next_at - clock.monotonic()
+    assert window > 2 * REFRESH_MIN_GAP
+    clock.advance(REFRESH_MIN_GAP + 1)
+    poller.refresh(throttled=True)
+    assert protocol.STORMS not in poller.due()
+    clock.advance(window)
+    assert protocol.STORMS in poller.due()

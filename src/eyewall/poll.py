@@ -46,7 +46,8 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.obs import TideStation
 from eyewall.models.watches import AlertsResult
-from eyewall.net import RateLimited
+from eyewall.net import FetchError, RateLimited
+from eyewall.providers.base import ParseError
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource, ThrottleReporting
 from eyewall.state.alerts import AlertEngine
@@ -120,6 +121,7 @@ class _FeedState:
     from_cache: bool = False
     polls: int = 0
     last_attempt: float | None = None
+    not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
 
 
 async def no_sleep(_seconds: float) -> None:
@@ -260,8 +262,11 @@ class Poller:
         less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead."""
         now = self.clock.monotonic()
         for state in self._feeds.values():
-            if throttled and state.last_attempt is not None and now < state.last_attempt + REFRESH_MIN_GAP:
-                state.next_at = min(state.next_at, state.last_attempt + REFRESH_MIN_GAP)
+            floor = state.not_before
+            if throttled and state.last_attempt is not None:
+                floor = max(floor, state.last_attempt + REFRESH_MIN_GAP)
+            if throttled and floor > now:
+                state.next_at = min(state.next_at, floor)
             else:
                 state.next_at = 0.0
         if not self.polling:
@@ -329,6 +334,7 @@ class Poller:
         if retry_after:
             wait = max(wait, min(retry_after, self.config.backoff_max))
         state.next_at = self.clock.monotonic() + wait
+        state.not_before = state.next_at if (state.failures or retry_after) else 0.0
         shown: list[Event] = []
         try:
             shown = self.engine.process(events, self.source.now()) if events else []
@@ -366,14 +372,22 @@ class Poller:
         now = self.source.now()
         events = self.store.apply_storms(await self.source.storms(), now)
         self._partial = events  # the store has moved on; these events must survive a failure or a deadline below
+        failure: Exception | None = None
         for storm_id, state in list(self.store.storms.items()):
             key = storm_key(state.storm)
             if state.fetched_key == key:
                 continue
             try:
                 events += await self._fetch_products(storm_id, key)
-            except Exception:  # one storm's bad product must not cost the others theirs, nor the events above
-                log.exception("fetching the products of %s failed", storm_id)
+            except Exception as exc:  # one storm's bad product must not cost the others theirs, nor the events above
+                if self._attempts.get((storm_id, key), 0) >= PRODUCT_ATTEMPTS:
+                    log.warning("giving up on the products of %s", storm_id, exc_info=True)
+                    self.store.apply_products(storm_id, now, key=key)  # settled, without them
+                else:
+                    log.debug("fetching the products of %s failed", storm_id, exc_info=True)
+                    failure = failure or exc
+        if failure is not None:
+            raise failure  # after the other storms: the feed backs off, and poll_feed keeps `_partial`
         if not self.store.us_threat():
             self.store.apply_alerts(AlertsResult())  # the alerts feed is off now; do not keep showing its last answer
         return events
@@ -403,7 +417,7 @@ class Poller:
         got: dict[str, object] = {}
         for name in _PRODUCTS:
             if name in pending:
-                value = await self._optional(getattr(self.source, name)(storm), name, failed)
+                value = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
                 got[name] = value
         retry = bool(failed) and attempt < PRODUCT_ATTEMPTS  # a failed product is asked for again, within the cap
         if retry:
@@ -423,12 +437,16 @@ class Poller:
         )
 
     @staticmethod
-    async def _optional[T](call: Awaitable[T], name: str, failed: set[str]) -> T | None:
+    async def _optional[T](call: Awaitable[T], name: str, failed: set[str], storm_id: str) -> T | None:
         """A product that fails does not discard the others; it is noted in `failed` so the storm is tried again."""
         try:
             return await call
-        except Exception:  # a failure of any kind: the other products still count, and this one is asked for again
-            log.warning("the %s of a storm could not be fetched", name, exc_info=True)
+        except (FetchError, ParseError) as exc:  # routine: NOAA has not posted it yet, or answered badly
+            log.debug("the %s of %s could not be fetched: %s", name, storm_id, exc)
+            failed.add(name)
+            return None
+        except Exception:  # any other failure: the other products still count, and this one is asked for again
+            log.warning("the %s of %s could not be fetched", name, storm_id, exc_info=True)
             failed.add(name)
             return None
 

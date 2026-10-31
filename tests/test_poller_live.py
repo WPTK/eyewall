@@ -196,6 +196,9 @@ async def test_a_429_answered_from_the_cache_still_backs_the_feed_off_and_honour
     assert poller.freshness(protocol.STORMS).failures == 1
     assert store.storms_loaded  # the cached answer was still applied
     assert storms_wait(poller) == pytest.approx(900)  # the server's Retry-After, over the 600 s backoff
+    clock.advance(60)
+    poller.refresh(throttled=True)  # the refresh key cannot cut the server's window short
+    assert protocol.STORMS not in poller.due()
     await source.aclose()
 
 

@@ -262,14 +262,14 @@ async def test_settings_save_round_trips_through_the_toml_file(tmp_path: Path) -
         await press(pilot, "S")
         assert isinstance(app.screen, SettingsScreen)
         screen = app.screen
-        screen.query_one("#poll-storms", Input).value = "240"
+        screen.query_one("#poll-storms", Input).value = "420"
         screen.query_one("#nearby-radius_now_nm", Input).value = "150"
         screen.query_one("#units-preset", Select).value = "metric"
         screen.query_one("#alerts-bell", Switch).value = False
         screen.query_one("#basin-CP", Switch).value = False
         await press(pilot, "ctrl+s")
         assert not isinstance(app.screen, SettingsScreen)
-        assert app.config.poll.storms == 240
+        assert app.config.poll.storms == 420
         assert app.config.nearby.radius_now_nm == 150
         assert app.units == "metric"
         loaded = load_config(tmp_path / "eyewall.toml")
@@ -499,10 +499,10 @@ async def test_a_hand_edited_fractional_interval_survives_a_settings_save(tmp_pa
     from dataclasses import replace
 
     config = Config()
-    config = replace(config, poll=replace(config.poll, storms=90.5))
+    config = replace(config, poll=replace(config.poll, storms=450.5))
     app = replay_app(config, config_path=tmp_path / "eyewall.toml")
     async with running(app) as pilot:
         await press(pilot, "S")
-        assert app.screen.query_one("#poll-storms", Input).value == "90.5"
+        assert app.screen.query_one("#poll-storms", Input).value == "450.5"
         await press(pilot, "ctrl+s")
-    assert load_config(tmp_path / "eyewall.toml").config.poll.storms == 90.5
+    assert load_config(tmp_path / "eyewall.toml").config.poll.storms == 450.5
