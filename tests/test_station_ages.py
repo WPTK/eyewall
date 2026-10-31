@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from eyewall.config import Config, with_watchlist
+from eyewall.models.events import EventKind
 from eyewall.models.forecast import ForecastFix
 from eyewall.models.obs import (
     LatestObservation,
@@ -19,9 +20,10 @@ from eyewall.models.obs import (
     WaterLevelReading,
 )
 from eyewall.models.obs import Parsed as ObsParsed
+from eyewall.models.storm import AdvNum
 from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.models.wind import WindRadii
-from eyewall.state.store import Store, StormState, track_fixes
+from eyewall.state.store import Store, StormState, track_fixes, track_from
 from eyewall.ui import adapt
 from eyewall.ui import format as fmt
 from eyewall.ui import stations as st
@@ -41,7 +43,7 @@ def fix(valid: datetime, lat: float, lon: float) -> ForecastFix:
 # ---- the wind panel -------------------------------------------------------------------------------------------
 
 
-def test_the_wind_panel_shows_the_storm_feed_when_it_is_newer_than_the_forecast_advisory() -> None:
+def test_the_wind_panel_takes_max_wind_and_pressure_from_the_feed_over_the_forecast_advisory() -> None:
     store = Store(Config())
     storm = replace(make_storm("5"), intensity_kt=115, pressure_mb=950)
     adv = advisories("5")
@@ -231,3 +233,115 @@ async def test_the_dashboard_and_detail_screens_pass_now_to_the_age_aware_reader
         await press(pilot, "enter")  # the storm detail screen
         app.screen._refresh_stations()  # type: ignore[attr-defined]
         assert seen and all(at is not None for at in seen)
+
+
+# ---- review follow-ups ----------------------------------------------------------------------------------------
+
+
+def _store_with_a_buoy_by_the_storm() -> tuple[Store, StormState]:
+    store = Store(Config())
+    storm = make_storm("5", lat=25.0, lon=-75.0)
+    state = StormState(storm, advisories("5"))
+    store.storms[storm.id] = state
+    store.stations = {"41010": Station("41010", "NEAR", 25.0, -74.9, met=True)}
+    return store, state
+
+
+def test_a_buoy_whose_series_stopped_refreshing_is_not_silent_while_latest_obs_still_lists_it() -> None:
+    store, _ = _store_with_a_buoy_by_the_storm()
+    store.series["41010"] = ObservationSeries("41010", (Observation(time=T0 - timedelta(hours=3), wind_speed_mps=5.0),))
+    assert [e.kind for e in store.buoy_events(T0)] == [EventKind.BUOY_SILENT]
+    store.latest["41010"] = LatestObservation(
+        "41010", 25.0, -74.9, Observation(time=T0 - timedelta(minutes=20), wind_speed_mps=5.0)
+    )
+    assert st.buoy_state(store, "41010", T0) == "ok"
+    assert store.buoy_events(T0) == []
+
+
+def _fixes_at(state: StormState, issued: datetime, *fixes: ForecastFix) -> StormState:
+    tcm = replace(state.advisories.forecast, issued=issued, fixes=fixes)
+    return StormState(state.storm, replace(state.advisories, forecast=tcm))
+
+
+def test_when_every_forecast_fix_is_past_a_station_by_the_last_one_is_kept_with_an_eta_of_zero() -> None:
+    store, state = _store_with_a_buoy_by_the_storm()
+    store.storms[state.storm.id] = _fixes_at(
+        state, T0, fix(T0 + timedelta(hours=6), 25.0, -74.0), fix(T0 + timedelta(hours=12), 25.0, -73.0)
+    )
+    store.stations = {"41010": Station("41010", "EAST", 25.0, -73.0, met=True)}
+    assert [e.station.id for e in store.nearby_buoys(state.storm.id, T0)] == ["41010"]
+    later = store.nearby_buoys(state.storm.id, T0 + timedelta(hours=20))
+    assert [e.station.id for e in later] == ["41010"]
+    assert later[0].eta_hours == 0 and later[0].near_now
+
+
+def test_a_first_fix_already_past_does_not_leave_a_chord_across_the_real_track() -> None:
+    store, state = _store_with_a_buoy_by_the_storm()
+    # the storm swings south around the bend at hour 12 before heading to hour 24
+    store.storms[state.storm.id] = _fixes_at(
+        state, T0, fix(T0 + timedelta(hours=12), 20.0, -75.0), fix(T0 + timedelta(hours=24), 20.0, -70.0)
+    )
+    now = T0 + timedelta(hours=13)
+    center, ahead = track_from(store.storms[state.storm.id], (25.0, -75.0), now)
+    assert [f.hours for f in ahead] == [11.0]
+    assert center[0] < 20.0 + 0.01 and center[0] > 19.5 and center[1] > -75.0  # just past the bend, on the real track
+    assert track_from(store.storms[state.storm.id], (25.0, -75.0), None)[0] == (25.0, -75.0)
+    # a station on the leg from the bend to hour 24 is still found, ETA counted from now
+    store.stations = {"41010": Station("41010", "LEG", 20.0, -72.5, met=True)}
+    found = store.nearby_buoys(state.storm.id, now)
+    assert [e.station.id for e in found] == ["41010"] and 0 < found[0].eta_hours < 11
+
+
+def test_alert_expiry_uses_ends_then_expires_and_no_end_means_still_active() -> None:
+    store = Store(Config())
+    past, future = NOW - timedelta(hours=1), NOW + timedelta(hours=1)
+    store.alerts = AlertsResult(
+        (
+            replace(_alert("expires-only-past", "A", None), expires=past),
+            replace(_alert("expires-only-future", "B", None), expires=future),
+            replace(_alert("ends-later", "C", future), expires=past),  # ends wins over expires
+            replace(_alert("ends-earlier", "D", past), expires=future),
+            _alert("neither", "E", None),
+        )
+    )
+    assert [a.id for a in store.active_alerts(NOW)] == ["expires-only-future", "ends-later", "neither"]
+
+
+def test_the_map_and_the_strip_are_told_what_time_it_is() -> None:
+    store, state = _store_with_a_buoy_by_the_storm()
+    seen: list[datetime | None] = []
+    original_buoys, original_tides = store.nearby_buoys, store.nearby_tides
+    store.nearby_buoys = lambda storm_id, at=None: (seen.append(at), original_buoys(storm_id, at))[1]  # type: ignore[method-assign]
+    store.nearby_tides = lambda storm_id, at=None: (seen.append(at), original_tides(storm_id, at))[1]  # type: ignore[method-assign]
+    adapt.station_marks(store, state.storm.id, NOW)
+    fmt.buoy_strip(store, state.storm.id, NOW, NAUTICAL, G)
+    assert seen == [NOW, NOW, NOW]
+
+
+def test_map_marks_and_table_rows_go_stale_at_the_same_age() -> None:
+    store = Store(Config())
+    gauge = TideStation("8651370", "Duck", 36.18, -75.75, "NC")
+    store.stations = {"41010": Station("41010", "CANAVERAL", 28.9, -78.5)}
+    for minutes, stale in ((110, False), (130, True)):
+        store.latest["41010"] = _latest("41010", minutes)
+        assert adapt._wind_kt_of(store, "41010", NOW)[1] is stale
+        assert (st.buoy_state(store, "41010", NOW) == "silent") is stale
+        series = TideSeries(
+            "8651370", "MLLW", water_level=ObsParsed((WaterLevelReading(NOW - timedelta(minutes=minutes), 3.0),))
+        )
+        store.tide_series[gauge.id] = series
+        assert adapt._tide_mark(store, gauge, NOW).stale is stale
+
+
+def test_the_wind_panel_hides_gusts_and_eye_of_a_forecast_advisory_older_than_the_feed() -> None:
+    store = Store(Config())
+    adv = advisories("5")
+    behind = replace(adv.forecast, adv_num=AdvNum(4), gust_kt=145, eye_diameter_nm=30)
+    storm = replace(make_storm("5"), intensity_kt=115, pressure_mb=950)
+    store.storms[storm.id] = StormState(storm, replace(adv, forecast=behind))
+    text = fmt.wind_panel(store, storm.id, NAUTICAL).plain
+    assert "115" in text and "gusts" not in text and "eye" not in text
+    current = replace(behind, adv_num=storm.adv_num)
+    store.storms[storm.id] = StormState(storm, replace(adv, forecast=current))
+    text = fmt.wind_panel(store, storm.id, NAUTICAL).plain
+    assert "gusts" in text and "145" in text and "eye" in text

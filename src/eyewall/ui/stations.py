@@ -98,12 +98,8 @@ def watchlist_gauges(store: Store) -> list[Entry[TideStation]]:
 
 
 def newest_observation(store: Store, station_id: str) -> Observation | None:
-    """The newest row for a buoy: the polled series or its row in latest_obs.txt, whichever is newer. A series stops
-    refreshing once nothing asks for the buoy, while latest_obs is read on every poll."""
-    series = store.series.get(station_id.upper())
-    latest = store.latest.get(station_id.upper())
-    rows = [o for o in (None if series is None else series.latest, None if latest is None else latest.observation) if o]
-    return max(rows, key=lambda o: o.time, default=None)
+    """The newest row for a buoy, from the store (series or latest_obs.txt, whichever is newer)."""
+    return store.newest_observation(station_id)
 
 
 def buoy_state(store: Store, station_id: str, now: datetime) -> str:

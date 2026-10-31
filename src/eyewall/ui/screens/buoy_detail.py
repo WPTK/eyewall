@@ -8,7 +8,6 @@ of it has expired, so the peak wind keeps up while the screen stays open.
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 from rich.text import Text
@@ -48,7 +47,7 @@ class BuoyDetailScreen(Screen[None]):
         self.supl: Parsed[SupplementalReading] | None = None
         self.supl_note: str | None = "Loading the supplemental file..."
         self._show_info = False
-        self._supl_asked = float("-inf")  # time.monotonic() of the last request for the supplemental file
+        self._supl_loading = False
 
     @property
     def eye(self) -> EyewallApp:
@@ -92,24 +91,27 @@ class BuoyDetailScreen(Screen[None]):
         self.set_class(narrow and self._show_info, "show-info")
 
     def _ask_supplemental(self) -> None:
-        """Request the supplemental file now, or after SUPL_TTL since the last request (a failed one is not retried
-        sooner): the extremes fall back to the regular rows when it fails."""
-        from eyewall.app import SUPL_TTL  # app imports this screen
-
-        if time.monotonic() - self._supl_asked >= SUPL_TTL:
-            self._supl_asked = time.monotonic()
-            self.run_worker(
-                self._load_supplemental(), name="buoy-supl", group="buoy-supl", exclusive=True, exit_on_error=False
-            )
+        """Ask the app for the supplemental file unless a request is already running. The app decides whether it still
+        holds a fresh answer; the extremes fall back to the regular rows when there is none."""
+        if self._supl_loading:
+            return
+        self._supl_loading = True
+        self.run_worker(self._load_supplemental(), name="buoy-supl", group="buoy-supl", exit_on_error=False)
 
     async def _load_supplemental(self) -> None:
         try:
             self.supl = await self.eye.supplemental(self.station_id)
             self.supl_note = self.supl.message if not self.supl.items else None
         except (FetchError, ParseError) as exc:
-            self.supl_note = f"No supplemental file ({type(exc).__name__}); extremes use the regular rows."
-            if self.supl is None:
+            if self.supl is not None and self.supl.items:
+                self.supl_note = (
+                    f"Refreshing the supplemental file failed ({type(exc).__name__}); the earlier one is kept."
+                )
+            else:
+                self.supl_note = f"No supplemental file ({type(exc).__name__}); extremes use the regular rows."
                 self.supl = Parsed()
+        finally:
+            self._supl_loading = False
         self._draw()
 
     # ---- data -------------------------------------------------------------------------------------------------

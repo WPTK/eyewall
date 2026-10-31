@@ -117,7 +117,7 @@ class EyewallApp(App[None]):
         self.config = config
         self.config_path = config_path
         self._launch_config = config
-        self._supl: dict[str, tuple[float, Parsed[SupplementalReading]]] = {}
+        self._supl: dict[str, tuple[float, Parsed[SupplementalReading] | FetchError | ParseError]] = {}
         self.inline = inline
         self._images: OrderedDict[tuple[str, str], bytes] = OrderedDict()
         self._floaters: dict[tuple[str, str], tuple[float, FloaterProduct | None]] = {}
@@ -523,12 +523,19 @@ class EyewallApp(App[None]):
         self._for_screens("refresh_data")
 
     async def supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
-        """A buoy's `.supl` file, remembered for SUPL_TTL seconds so reopening a page does not fetch it again."""
+        """A buoy's `.supl` file, remembered for SUPL_TTL seconds (a failure too, so a dead file is not asked for on
+        every poll). The one place the lifetime is decided; callers may ask as often as they like."""
         station_id = station_id.upper()
         kept = self._supl.get(station_id)
         if kept is not None and time.monotonic() - kept[0] < SUPL_TTL:
+            if isinstance(kept[1], (FetchError, ParseError)):
+                raise kept[1]
             return kept[1]
-        result = await self.source.ndbc_supplemental(station_id)
+        try:
+            result = await self.source.ndbc_supplemental(station_id)
+        except (FetchError, ParseError) as exc:
+            self._supl[station_id] = (time.monotonic(), exc)
+            raise
         self._supl[station_id] = (time.monotonic(), result)
         return result
 

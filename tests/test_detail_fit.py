@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
+from datetime import UTC, datetime
 
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
 from textual.widgets import DataTable, Tabs
 
+from eyewall.models.obs import Parsed, SupplementalReading
+from eyewall.net import FetchError
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.widgets.chart_view import ChartView
@@ -184,16 +186,56 @@ async def test_station_table_with_more_rows_than_height_still_fits(size) -> None
             assert not table.show_horizontal_scrollbar, f"{table.size} {table.virtual_size}"
 
 
-async def test_buoy_detail_asks_for_the_supplemental_file_again_once_it_expires() -> None:
-    async with running(replay_app(), (120, 30)) as pilot:
+async def test_buoy_detail_gets_new_supplemental_data_once_the_apps_copy_expires() -> None:
+    app = replay_app()
+    first = Parsed((SupplementalReading(datetime(2025, 8, 20, 1, tzinfo=UTC), peak_wind_mps=10.0),))
+    second = Parsed((SupplementalReading(datetime(2025, 8, 20, 2, tzinfo=UTC), peak_wind_mps=20.0),))
+    answers = [first, second]
+    calls: list[str] = []
+
+    async def fake(station_id: str) -> Parsed[SupplementalReading]:
+        calls.append(station_id)
+        return answers[len(calls) - 1]
+
+    app.source.ndbc_supplemental = fake  # type: ignore[method-assign]
+    async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "b", "enter")
         screen = pilot.app.screen
         assert isinstance(screen, BuoyDetailScreen)
-        asked: list[float] = []
-        screen._load_supplemental = lambda: asked.append(screen._supl_asked) or asyncio.sleep(0)  # type: ignore[method-assign]
+        await wait_until(pilot, lambda: screen.supl is first)
         screen.refresh_data()  # a poll result right away: the app still holds the file
-        assert asked == []
-        screen._supl_asked -= 601.0  # SUPL_TTL has passed
+        await settle(pilot)
+        assert len(calls) == 1 and screen.supl is first
+        for station_id, (asked, kept) in list(app._supl.items()):
+            app._supl[station_id] = (asked - 601.0, kept)  # SUPL_TTL has passed
         screen.refresh_data()
-        assert len(asked) == 1
+        await wait_until(pilot, lambda: screen.supl is second)
+        assert len(calls) == 2
+
+
+async def test_a_failed_refresh_keeps_the_earlier_supplemental_file_and_says_so() -> None:
+    app = replay_app()
+    first = Parsed((SupplementalReading(datetime(2025, 8, 20, 1, tzinfo=UTC), peak_wind_mps=10.0),))
+    results: list[object] = [first, FetchError("x", "down")]
+
+    async def fake(station_id: str) -> Parsed[SupplementalReading]:
+        result = results.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result  # type: ignore[return-value]
+
+    app.source.ndbc_supplemental = fake  # type: ignore[method-assign]
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "b", "enter")
+        screen = pilot.app.screen
+        assert isinstance(screen, BuoyDetailScreen)
+        await wait_until(pilot, lambda: screen.supl is first)
+        for station_id, (asked, kept) in list(app._supl.items()):
+            app._supl[station_id] = (asked - 601.0, kept)
+        screen.refresh_data()
+        await wait_until(pilot, lambda: screen.supl_note is not None)
+        assert screen.supl is first
+        assert screen.supl_note is not None and "earlier one is kept" in screen.supl_note
+        assert "No supplemental file" not in screen.supl_note

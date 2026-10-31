@@ -310,7 +310,7 @@ def _cut(text: str, limit: int) -> str:
     return text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
-def ww_panel(store: Store, selected: str | None, g: UiGlyphs, now: datetime | None = None) -> Text:
+def ww_panel(store: Store, selected: str | None, g: UiGlyphs, now: datetime) -> Text:
     """Watches and warnings in effect, each with a color chip, then the NWS zone alerts."""
     out = Text()
     state = store.storms.get(selected or "")
@@ -326,7 +326,7 @@ def ww_panel(store: Store, selected: str | None, g: UiGlyphs, now: datetime | No
             out.append("No coastal watches or warnings in effect.\n", style=DIM)
         for change in blocks.changes:
             out.append(f"{g.sep} {collapse(change)}\n", style=DIM)
-    alerts = store.alerts.alerts if now is None else store.active_alerts(now)
+    alerts = store.active_alerts(now)
     if alerts:
         out.append("\nNWS alerts\n", style="bold #8fd3ff")
         for alert in alerts[:MAX_PANEL_ALERTS]:
@@ -374,13 +374,16 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
     tcm = state.advisories.forecast
     wind = storm.intensity_kt if storm.intensity_kt is not None else tcm.max_wind_kt if tcm else None
     _kv(out, "Max wind", preset.fmt_wind(wind), style=f"bold {category_color(wind)}")
-    if tcm is not None and tcm.gust_kt is not None:
+    # The feed's wind and pressure are the newest advisory; the TCM's gust and eye belong to its own. When the TCM is
+    # behind, they describe an older storm than the number beside them, so they are left out.
+    current = tcm is not None and (storm.adv_num is None or tcm.adv_num is None or tcm.adv_num == storm.adv_num)
+    if tcm is not None and current and tcm.gust_kt is not None:
         out.append("  ")
         _kv(out, "gusts", preset.fmt_wind(tcm.gust_kt))
     out.append("\n")
     pressure = storm.pressure_mb if storm.pressure_mb is not None else tcm.pressure_mb if tcm else None
     _kv(out, "Pressure", preset.fmt_pressure(pressure))
-    if tcm is not None and tcm.eye_diameter_nm is not None:
+    if tcm is not None and current and tcm.eye_diameter_nm is not None:
         out.append("  ")
         _kv(out, "eye", preset.fmt_distance(tcm.eye_diameter_nm))
     out.append("\n")

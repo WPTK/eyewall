@@ -9,14 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+from itertools import pairwise
 
 from eyewall.config import Config
-from eyewall.geo import LatLon
+from eyewall.geo import LatLon, interpolate
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.forecast import ForecastGis
 from eyewall.models.graphics import FloaterProduct, GraphicLink
-from eyewall.models.obs import LatestObservation, ObservationSeries, Station, TideSeries, TideStation
+from eyewall.models.obs import LatestObservation, Observation, ObservationSeries, Station, TideSeries, TideStation
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
@@ -225,9 +226,10 @@ class Store:
         state = self.storms.get(storm_id)
         if state is None or state.storm.lat is None or state.storm.lon is None:
             return []
+        center, track = track_from(state, (state.storm.lat, state.storm.lon), now)
         return nearby_stations(
-            (state.storm.lat, state.storm.lon),
-            track_fixes(state, now),
+            center,
+            track,
             stations,  # type: ignore[arg-type]
             config=self.config.nearby,
             watchlist=watchlist,
@@ -238,6 +240,16 @@ class Store:
         answer from a failed poll or a cached copy for hours."""
         return tuple(a for a in self.alerts.alerts if (end := a.ends or a.expires) is None or end > now)
 
+    def newest_observation(self, station_id: str) -> Observation | None:
+        """The newest row for a buoy: the polled series or its row in latest_obs.txt, whichever is newer. A series stops
+        refreshing once nothing asks for the buoy, while latest_obs is read on every poll."""
+        series = self.series.get(station_id.upper())
+        latest = self.latest.get(station_id.upper())
+        rows = [
+            o for o in (None if series is None else series.latest, None if latest is None else latest.observation) if o
+        ]
+        return max(rows, key=lambda o: o.time, default=None)
+
     def buoy_events(self, now: datetime) -> list[Event]:
         """Threshold crossings and silences at each storm's nearby buoys, from the series fetched so far."""
         events: list[Event] = []
@@ -245,7 +257,8 @@ class Store:
             for entry in self.nearby_buoys(storm_id, now):
                 series = self.series.get(entry.station.id.upper())
                 if series is not None:
-                    events += ev.buoy_events(state.storm, entry.station.id, series, now)
+                    newest = self.newest_observation(entry.station.id)
+                    events += ev.buoy_events(state.storm, entry.station.id, series, now, newest=newest)
         return events
 
     def tendency(self, station_id: str, now: datetime) -> PressureTendency | None:
@@ -322,3 +335,32 @@ def track_fixes(state: StormState, now: datetime | None = None) -> list[TrackFix
             if p.valid is not None and p.valid > origin
         ]
     return []
+
+
+def track_from(state: StormState, center: LatLon, now: datetime | None) -> tuple[LatLon, list[TrackFix]]:
+    """Where the storm is at `now` and the forecast fixes still ahead of it, hours counted from now.
+
+    The center is the position at the advisory time. Once `now` is later, the storm is placed by interpolating along
+    the center and the fixes already passed, so the path from here on does not cut across the real track. When every
+    fix is past the storm sits at the last one with nothing ahead (an ETA of 0, not a dropped station). Without `now`
+    the center and `track_fixes(state)` are returned unchanged.
+    """
+    ahead = track_fixes(state, now)
+    if now is None:
+        return center, ahead
+    tcm = state.advisories.forecast
+    if tcm is not None:
+        origin = tcm.issued
+        stamped = [(f.valid, (f.lat, f.lon)) for f in tcm.fixes if f.lat is not None and f.lon is not None]
+    elif state.forecast_gis is not None and state.storm.last_update is not None:
+        origin = state.storm.last_update
+        stamped = [(p.valid, (p.lat, p.lon)) for p in state.forecast_gis.points if p.valid is not None]
+    else:
+        return center, ahead
+    anchors = [(origin, center), *sorted((t, pos) for t, pos in stamped if t > origin)]
+    if now <= origin:
+        return center, ahead
+    for (t0, p0), (t1, p1) in pairwise(anchors):
+        if t0 <= now < t1:
+            return interpolate(p0, p1, (now - t0) / (t1 - t0)), ahead
+    return anchors[-1][1], ahead
