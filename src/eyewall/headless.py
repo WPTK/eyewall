@@ -127,7 +127,8 @@ async def run_live(
         while True:
             await poller.tick()
             result.polls += 1
-            wait = poller.seconds_until_next() or poller.interval("storms")
+            due = poller.seconds_until_next()  # 0.0 means a feed is due now: poll it now, not after a full interval
+            wait = poller.interval("storms") if due is None else due
             if end is None or source.now() + timedelta(seconds=wait) > end:
                 break
             await asyncio.sleep(wait)
