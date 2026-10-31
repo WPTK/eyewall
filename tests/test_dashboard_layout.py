@@ -120,8 +120,9 @@ async def test_the_legend_never_changes_height_when_the_cursor_is_set() -> None:
     [[(120, 20), (200, 50)], [(120, 20), (280, 70)], [(200, 50), (120, 20), (200, 50)]],
     ids=lambda p: "-".join(f"{w}x{h}" for w, h in p),
 )
-async def test_a_live_resize_refits_the_stack(path) -> None:  # type: ignore[no-untyped-def]
-    """Panels dropped on a short terminal come back whole, and the ones cut short come back, when it grows again."""
+async def test_a_live_resize_matches_a_fresh_start(path) -> None:  # type: ignore[no-untyped-def]
+    """A regression guard, not a reproduction: it passes on the code before the measurement change too. After a live resize
+    the panels (dropped, shown again, grown) are the same as when the app starts at the final size."""
     app = replay_app()
     async with running(app, path[0]) as pilot:
         await into_the_storm(pilot)

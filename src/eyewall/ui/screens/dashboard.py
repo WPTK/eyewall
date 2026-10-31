@@ -107,7 +107,7 @@ class DashboardScreen(Screen[None]):
         all of its text, rows still free go to the panels cut short by their cap. A panel whose text is longer than
         its rows scrolls inside itself."""
         stack = self.query_one("#side-stack")
-        headline = next(p for p in stack.query(Panel) if p.kind == "headline")  # it always has text
+        headline = stack.query_one(".headline", Panel)  # it always has text
         filled = [p for p in stack.query(Panel) if p.filled and p is not headline]
         if not stack.display or stack.size.height < 1:
             return
