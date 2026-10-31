@@ -1,0 +1,269 @@
+{
+  "gis/erin_5day_030.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/al052025_5day_030.zip",
+    "recorded": "2026-10-31T08:28:22Z",
+    "sha256": "2ebbc540ad30d2042510ad7adb92ecc60c8d303d65b0c14b1529ce26d814e57c"
+  },
+  "gis/erin_5day_030A.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/al052025_5day_030A.zip",
+    "recorded": "2026-10-31T08:28:25Z",
+    "sha256": "58a6115530fa87d5f27b4bc7d4dadc770423e1470f13f16b2319577f9faeecb0"
+  },
+  "gis/erin_best_track.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/best_track/al052025_best_track.zip",
+    "recorded": "2026-10-31T08:28:24Z",
+    "sha256": "1a7f96e0de88049c80dc847fadc77973ce67be5f610c30dff529cb07ff86edd3"
+  },
+  "gis/erin_fcst_030.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/al052025_fcst_030.zip",
+    "recorded": "2026-10-31T08:28:23Z",
+    "sha256": "41e91d29912881e8ef677940bf751576a4508d5119a7974c4e97d48d24349f56"
+  },
+  "gis/fay_5day_latest.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/al062026_5day_latest.zip",
+    "recorded": "2026-10-31T08:28:44Z",
+    "sha256": "5f20ba2144bc53914ebc8161e431b9b4f1e189386e9e755d3f6a13400665c1ca"
+  },
+  "gis/gtwo_20250919.zip": {
+    "source": "https://www.nhc.noaa.gov/archive/xgtwo/atl/202509190600/gtwo_shapefiles.zip",
+    "recorded": "2026-10-31T08:28:44Z",
+    "sha256": "0f1cd98c8374b6b125042de9dbdc455a900d88f6129adb310a5e446a0a9dcebb"
+  },
+  "gis/gtwo_20250926.zip": {
+    "source": "https://www.nhc.noaa.gov/archive/xgtwo/atl/202509260600/gtwo_shapefiles.zip",
+    "recorded": "2026-10-31T08:28:45Z",
+    "sha256": "5b1689ddb71a5e374eac1c02677cb9b308d5b3782715c22d3d65e435f14263ab"
+  },
+  "gis/gtwo_20261031.zip": {
+    "source": "https://www.nhc.noaa.gov/xgtwo/gtwo_shapefiles.zip",
+    "recorded": "2026-10-31T08:28:42Z",
+    "sha256": "18fc7d541c5f1386c7fda39231427e2938bfacb6ea42dff917d2d97a90e72264"
+  },
+  "gis/nolo_5day_057.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/ep152026_5day_057.zip",
+    "recorded": "2026-10-31T08:28:42Z",
+    "sha256": "862df9c8c2aceb6ff3b3027effe52d09513161cad8e618c3bb7a94a6e5e6ae69"
+  },
+  "gis/nolo_fcst_057.zip": {
+    "source": "https://www.nhc.noaa.gov/gis/forecast/archive/ep152026_fcst_057.zip",
+    "recorded": "2026-10-31T08:28:43Z",
+    "sha256": "c8e2bb1f6bd4a5709a9b38affaecddd5bacdc0201f820ddaaa9383ebe5d4958c"
+  },
+  "nhc/api/alerts_active_none.json": {
+    "source": "https://api.weather.gov/alerts/active?event=Hurricane%20Warning,Hurricane%20Watch,Tropical%20Storm%20Warning,Tropical%20Storm%20Watch,Storm%20Surge%20Warning,Storm%20Surge%20Watch,Hurricane%20Force%20Wind%20Warning,Extreme%20Wind%20Warning,Tropical%20Cyclone%20Statement",
+    "recorded": "2026-10-31T08:28:39Z",
+    "sha256": "210b4b34c1d7f45c0f94ab6fa80a5e48d188d01478a4965c3faec5449d5bfc0d"
+  },
+  "nhc/api/alerts_populated.json": {
+    "source": "hand-built",
+    "note": "hand-built in the api.weather.gov alert feature shape (CAP fields, SAME/UGC geocodes, polygon geometry). The alerts endpoint only serves active alerts and none were active."
+  },
+  "nhc/api/alerts_real_shape.json": {
+    "source": "https://api.weather.gov/alerts/active?event=Freeze%20Warning,Frost%20Advisory",
+    "recorded": "2026-10-31T08:54:37Z",
+    "sha256": "7e0dc289ef8259aa3b8c17bd06253e5dd0a4d3ab9021ed94845d27aedadcfcb3"
+  },
+  "nhc/api/product_two_at.json": {
+    "source": "https://api.weather.gov/products/3ae4e478-d4e6-4c83-b209-60fbef9a5e73",
+    "recorded": "2026-10-31T08:28:40Z",
+    "sha256": "6104b5721bcfd217ebc562af2bf51a3d3f168a38d5ddaaaa4154d7453287e82e"
+  },
+  "nhc/api/products_tcm_ep2.json": {
+    "source": "https://api.weather.gov/products/types/TCM/locations/EP2",
+    "recorded": "2026-10-31T08:28:41Z",
+    "sha256": "76e034d1487f97abe1b38dd26779f9232ea98931b7d1b1b63182d70795e43322"
+  },
+  "nhc/api/products_two_at.json": {
+    "source": "https://api.weather.gov/products/types/TWO/locations/AT",
+    "recorded": "2026-10-31T08:28:39Z",
+    "sha256": "c6c935bf31fc52d4ed9be2882cd502aa819e287bf94bcc6c290d0dae9de1ac67"
+  },
+  "nhc/atcf/bal052025.dat.gz": {
+    "source": "https://ftp.nhc.noaa.gov/atcf/archive/2025/bal052025.dat.gz",
+    "recorded": "2026-10-31T08:28:24Z",
+    "sha256": "a0951d0936a268471bd9ee19f345bd4b6535c9c744644c4963ffe9e015d0c749"
+  },
+  "nhc/atcf/bal062026.dat": {
+    "source": "https://ftp.nhc.noaa.gov/atcf/btk/bal062026.dat",
+    "recorded": "2026-10-31T08:28:36Z",
+    "sha256": "1bb60726c6b4dbe6ce73dcb14b8d71c1c81f9706aa7326baccd65e47adec68d4"
+  },
+  "nhc/atcf/bcp032026.dat": {
+    "source": "https://ftp.nhc.noaa.gov/atcf/btk/bcp032026.dat",
+    "recorded": "2026-10-31T08:28:37Z",
+    "sha256": "715f3cc9a41f5e6cfebba5b0545d6bf698c1a9c9cf8c36672f9a09e6280540e2"
+  },
+  "nhc/atcf/bep222026.dat": {
+    "source": "https://ftp.nhc.noaa.gov/atcf/btk/bep222026.dat",
+    "recorded": "2026-10-31T08:28:38Z",
+    "sha256": "850b1ea26df2be41225c499cfee6a31ff942eef0682b499ab9e253e35c0a6c33"
+  },
+  "nhc/atcf/btk_index.html": {
+    "source": "https://ftp.nhc.noaa.gov/atcf/btk/",
+    "recorded": "2026-10-31T08:28:38Z",
+    "sha256": "9de4f598af74430bc7382deb7e4662f1ad25d2084df9c30f4b5886596874ee17"
+  },
+  "nhc/current/empty.json": {
+    "source": "https://www.nhc.noaa.gov/CurrentStorms.json",
+    "recorded": "2026-10-31T08:28:27Z",
+    "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7"
+  },
+  "nhc/current/populated.json": {
+    "source": "hand-built",
+    "note": "hand-built from NHC_JSON_Sample.json and edited to the live shape: lowercase ids, string intensity and pressure, latitudeNumeric/longitudeNumeric, mph movement. Holds Erin (AT5), a potential tropical cyclone, a post-tropical storm and an ep id in a CP bin. No active storm exists to record from."
+  },
+  "nhc/graphics/erin_cone_archive.html": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/ERIN_graphics.php?product=5day_cone_with_line_and_wind",
+    "recorded": "2026-10-31T08:28:47Z",
+    "sha256": "ea7e5a148ed8310023eea7ceb82279ac3f0358919e67c53b5651cc4103a2c0e3"
+  },
+  "nhc/graphics/floater_cp032026.html": {
+    "source": "https://cdn.star.nesdis.noaa.gov/FLOATER/data/CP032026/",
+    "recorded": "2026-10-31T08:28:48Z",
+    "sha256": "0755542a8917216822ec772decebbd6c88ace1b7640c97ef7c90f1d6e7c5c394"
+  },
+  "nhc/graphics/floater_cp032026_geocolor.html": {
+    "source": "https://cdn.star.nesdis.noaa.gov/FLOATER/data/CP032026/GEOCOLOR/",
+    "recorded": "2026-10-31T08:28:49Z",
+    "sha256": "55a3d6285df338548a7d14a9e862f50e541bbe5a36d2433336521cd3218f083f"
+  },
+  "nhc/graphics/floater_root.html": {
+    "source": "https://cdn.star.nesdis.noaa.gov/FLOATER/data/",
+    "recorded": "2026-10-31T08:28:47Z",
+    "sha256": "d91f6243900a8299b1fb06b314f8da16a693f5d5d383dcd25b897de76e7245bd"
+  },
+  "nhc/graphics/landing_active_modelled.html": {
+    "source": "hand-built",
+    "note": "hand-built from the NHC landing page layout: image and link patterns are the ones documented in docs/data-sources.md and are confirmed during the first live storm."
+  },
+  "nhc/graphics/landing_at1_quiet.html": {
+    "source": "https://www.nhc.noaa.gov/graphics_at1.shtml",
+    "recorded": "2026-10-31T08:28:46Z",
+    "sha256": "5221f3aeabdab7b807b92c8b8785c28c5448d9c181642069e91a87cfc77c589a"
+  },
+  "nhc/pws/erin_030.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/al05/al052025.wndprb.030.shtml",
+    "recorded": "2026-10-31T08:28:22Z",
+    "sha256": "7c53731c2bdba546cbf53c86607e52b88886856b86a9a29d644add91650a6c38"
+  },
+  "nhc/pws/fay_039.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/fo/font11.knhc.pws.at1.txt",
+    "recorded": "2026-10-31T08:28:33Z",
+    "sha256": "26af66975fac8378220cf5fe7019657c627338ba524ff41108b827755c58e6ce"
+  },
+  "nhc/pws/nolo_057.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/fo/fopa12.phfo.pws.cp2.txt",
+    "recorded": "2026-10-31T08:28:34Z",
+    "sha256": "52490256f1a567c087ade7116fae06450a968ded2914e10aff199ac3435ee161"
+  },
+  "nhc/tcd/erin_030.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/al05/al052025.discus.030.shtml",
+    "recorded": "2026-10-31T08:28:21Z",
+    "sha256": "e7e2b415da73ae735140f27189e24c9fe5a8e83be16b7317804c26c150a3bdb5"
+  },
+  "nhc/tcd/fay_039.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtnt41.knhc.tcd.at1.txt",
+    "recorded": "2026-10-31T08:28:32Z",
+    "sha256": "6367a73f562ecfcf636394d19bcab3abb7dac79b1f4061bf3291f6a1de6f5587"
+  },
+  "nhc/tcd/nolo_057.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtpa42.phfo.tcd.cp2.txt",
+    "recorded": "2026-10-31T08:28:33Z",
+    "sha256": "885c66e329d1ec4645ae2a56417a3f4f9aa1da401a4e048ef271b77433baeb28"
+  },
+  "nhc/tcm/erin_030.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/al05/al052025.fstadv.030.shtml",
+    "recorded": "2026-10-31T08:28:20Z",
+    "sha256": "ce9a0349b9c388d78ca4d19e340475ab7ba5749e2251bd6d386bb3a765829265"
+  },
+  "nhc/tcm/erin_046.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/al05/al052025.fstadv.046.shtml",
+    "recorded": "2026-10-31T08:28:25Z",
+    "sha256": "381931997563a491a271f9dbe20e3200b7fe31d8d37f971c3325edc0f80a8223"
+  },
+  "nhc/tcm/fay_039.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtnt21.knhc.tcm.at1.txt",
+    "recorded": "2026-10-31T08:28:28Z",
+    "sha256": "fd0fe1361dcc14b7ef40c7cae82a2794f67fcf11918f77884fd35c3d2f237d15"
+  },
+  "nhc/tcm/josephine_005.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtnt25.knhc.tcm.at5.txt",
+    "recorded": "2026-10-31T08:28:28Z",
+    "sha256": "3272de695fe19fbb72121f29d6fcc98108791a6d9c153e1e73f9e17610f63ef7"
+  },
+  "nhc/tcm/nolo_057.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtpa22.phfo.tcm.cp2.txt",
+    "recorded": "2026-10-31T08:28:29Z",
+    "sha256": "26d1cd55ddaf312d71ebdc6a830c7ccf2bba728eab34b82ed2fedfc2f6eeac2e"
+  },
+  "nhc/tcm/olana_007.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtpa23.phfo.tcm.cp3.txt",
+    "recorded": "2026-10-31T08:28:29Z",
+    "sha256": "c20157beb689e4210594a63502d9f9a74ca7adf5d432e47f6239f4240d0b722c"
+  },
+  "nhc/tcm/ptc08_001.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2024/al08/al082024.fstadv.001.shtml",
+    "recorded": "2026-10-31T08:28:26Z",
+    "sha256": "87951ef2f28b605e21a394774fc6f95af903788d9a93f392538aea4836729050"
+  },
+  "nhc/tcm/vance_035.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtpz22.knhc.tcm.ep2.txt",
+    "recorded": "2026-10-31T08:28:30Z",
+    "sha256": "bf8a8b88f6afa5bb1aab7c61db296febb54c7f7ad94326e4d1d12517492bd617"
+  },
+  "nhc/tcp/erin_030.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2025/al05/al052025.public.030.shtml",
+    "recorded": "2026-10-31T08:28:20Z",
+    "sha256": "3ad316d564364ac5006969998fa703f0310699ad3b9f235c06b1fb1fb3421bc9"
+  },
+  "nhc/tcp/fay_039.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtnt31.knhc.tcp.at1.txt",
+    "recorded": "2026-10-31T08:28:31Z",
+    "sha256": "fce7890f357dc566cad07230afe7412f9f795c47d2c98c802f1db13acff61046"
+  },
+  "nhc/tcp/isaias_015.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtnt34.knhc.tcp.at4.txt",
+    "recorded": "2026-10-31T08:28:31Z",
+    "sha256": "e6be8526ae397f4b33a55f9a66db1025932fec6064523454839bcaf33c6d6628"
+  },
+  "nhc/tcp/nolo_057.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/wt/wtpa32.phfo.tcp.cp2.txt",
+    "recorded": "2026-10-31T08:28:32Z",
+    "sha256": "0085556025a598fc3f6c96708a72fb48004c2cf76448f86c60e5010cdaa2dcfe"
+  },
+  "nhc/tcp/ptc08_001.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/2024/al08/al082024.public.001.shtml",
+    "recorded": "2026-10-31T08:28:27Z",
+    "sha256": "489932d1cd15a2403062484f723c91c04038c819275ae43a85b4c730f0daf726"
+  },
+  "nhc/two/at_20260910.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/xgtwo/gtwo_archive.php?basin=atl&fdays=7&current_issuance=202609100600",
+    "recorded": "2026-10-31T08:28:45Z",
+    "sha256": "7857825612dabeaf26169e5f2030c9ce3f454038728467190a423c36a53b36be"
+  },
+  "nhc/two/at_20261031.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/ab/abnt20.knhc.two.at.txt",
+    "recorded": "2026-10-31T08:28:34Z",
+    "sha256": "25c930e45451427087c9a6865a3502eb852b678e7e30691735b5dd5db9a57577"
+  },
+  "nhc/two/cp_20260910.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/xgtwo/gtwo_archive.php?basin=atl&fdays=7&current_issuance=202609100600",
+    "recorded": "2026-10-31T08:28:45Z",
+    "sha256": "5612c55021caf524ec2f1761fe8420b01d0fa381467c3fcff5777dccdaa97a61"
+  },
+  "nhc/two/cp_20261031.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/ac/acpn50.phfo.two.cp.txt",
+    "recorded": "2026-10-31T08:28:36Z",
+    "sha256": "1726ed7dc87cf5a39eb814095a5d0455edbd860e28c2e719e5ff726a1fd0188d"
+  },
+  "nhc/two/ep_20260910.txt": {
+    "source": "https://www.nhc.noaa.gov/archive/xgtwo/gtwo_archive.php?basin=atl&fdays=7&current_issuance=202609100600",
+    "recorded": "2026-10-31T08:28:45Z",
+    "sha256": "f68c5749f93d077244e334b26c487e114218f4c7c1a9426a15840a143d50f592"
+  },
+  "nhc/two/ep_20261031.txt": {
+    "source": "https://tgftp.nws.noaa.gov/data/raw/ab/abpz20.knhc.two.ep.txt",
+    "recorded": "2026-10-31T08:28:35Z",
+    "sha256": "63818c010c138397f7b4d426ec87a1163b46ded66a3d0a853f85410e3ecd9c9f"
+  }
+}

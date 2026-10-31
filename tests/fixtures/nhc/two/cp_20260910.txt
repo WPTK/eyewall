@@ -1,0 +1,45 @@
+ZCZC HFOTWOCP ALL
+TTAA00 PHFO DDHHMM
+
+Tropical Weather Outlook
+NWS Central Pacific Hurricane Center Honolulu HI
+Issued by NWS National Hurricane Center Miami FL
+800 PM HST Wed Sep 09 2026
+
+For the central North Pacific...between 140W and 180W:
+
+Active Systems:
+The National Hurricane Center is issuing advisories on Tropical
+Storm Lowell, located well northwest of the Hawaiian Islands, and on
+Tropical Depression Fourteen-E, located several hundred miles
+southwest of the southern tip of the Baja California Peninsula.
+
+1. Well South-Southeast of the Hawaiian Islands:
+Disorganized showers and thunderstorms located well to the
+south-southeast of the Hawaiian Islands are associated with a broad
+trough of low pressure. Some gradual development of this system is
+possible late this week and into the weekend while it moves
+generally northward and then meanders to the southeast of the
+Hawaiian Islands.
+* Formation chance through 48 hours...low...20 percent.
+* Formation chance through 7 days...low...30 percent.
+
+2. Central Portion and West Portion of the East Pacific:
+An area of low pressure is forecast to form several hundred miles
+south of the southern tip of the Baja California Peninsula this
+weekend. Gradual development of this system is expected thereafter,
+and a tropical depression is likely to form early next week while it
+moves generally westward over central and western portions of the
+East Pacific.
+* Formation chance through 48 hours...low...near 0 percent.
+* Formation chance through 7 days...high...70 percent.
+
+
+
+Public Advisories on Tropical Depression Fourteen-E are issued under
+WMO header WTPZ34 KNHC and under AWIPS header MIATCPEP4.
+Forecast/Advisories on Tropical Depression Fourteen-E are issued
+under WMO header WTPZ24 KNHC and under AWIPS header MIATCMEP4.
+
+
+Forecaster Reinhart

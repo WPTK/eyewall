@@ -1,0 +1,75 @@
+WTPA32 PHFO 042037
+TCPCP2
+ 
+BULLETIN
+Hurricane Nolo Advisory Number  57
+NWS Central Pacific Hurricane Center Honolulu HI   EP152026
+Issued by NWS National Hurricane Center Miami FL
+1100 AM HST Sun Oct 04 2026
+ 
+...NOLO CROSSING THE INTERNATIONAL DATELINE...
+...THIS IS THE LAST ADVISORY FROM NHC...
+ 
+ 
+SUMMARY OF 1100 AM HST...2100 UTC...INFORMATION
+-----------------------------------------------
+LOCATION...24.2N 180.0E
+ABOUT 395 MI...640 KM WSW OF LISIANSKI ISLAND
+MAXIMUM SUSTAINED WINDS...115 MPH...185 KM/H
+PRESENT MOVEMENT...W OR 280 DEGREES AT 17 MPH...28 KM/H
+MINIMUM CENTRAL PRESSURE...959 MB...28.32 INCHES
+ 
+ 
+WATCHES AND WARNINGS
+--------------------
+There are no coastal watches or warnings in effect.
+ 
+ 
+DISCUSSION AND OUTLOOK
+----------------------
+At 1100 AM HST (2100 UTC), the center of Hurricane Nolo was located 
+near latitude 24.2 North, longitude 180.0 West. Nolo is moving 
+toward the west near 17 mph (28 km/h), and a general westward motion 
+is expected to continue for the next few days.
+ 
+Maximum sustained winds are near 115 mph (185 km/h) with higher 
+gusts.  Nolo is a category 3 hurricane on the Saffir-Simpson 
+Hurricane Wind Scale. Additional strengthening is forecast over the 
+next day or so, before a weakening trend begins around the middle 
+part of the week.
+ 
+Hurricane-force winds extend outward up to 35 miles (55 km) from the
+center and tropical-storm-force winds extend outward up to 150 miles
+(240 km).
+ 
+The estimated minimum central pressure is 959 mb (28.32 inches).
+ 
+ 
+HAZARDS AFFECTING LAND
+----------------------
+SURF: Large swell associated with Nolo will continue to affect the
+Papahanaumokuakea Marine National Monument over the next few days.
+The surf will likely inundate some of the low-lying atolls from Maro
+Reef to Lisianski Island. Please consult products from your local
+weather office.
+ 
+ 
+NEXT ADVISORY
+-------------
+This is the last advisory issued by the National Hurricane Center on 
+this system. Future advisories will be issued by RSMC Tokyo, 
+Japan. Advisories issued by RSMC Tokyo are found on the web at:
+
+www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/RSMC_HP.htm 
+
+For U.S.interests, see advisories issued by the Joint Typhoon 
+Warning Center (JTWC) in Honolulu, Hawaii. Advisories issued by JTWC 
+can be found on the web at: 
+
+www.metoc.navy.mil/jtwc/jtwc.html
+ 
+$$
+Forecaster Kelly
+ 
+
+

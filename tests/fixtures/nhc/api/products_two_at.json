@@ -1,0 +1,260 @@
+{
+    "@context": {
+        "@version": "1.1",
+        "@vocab": "https://api.weather.gov/ontology#"
+    },
+    "@graph": [
+        {
+            "@id": "https://api.weather.gov/products/3ae4e478-d4e6-4c83-b209-60fbef9a5e73",
+            "id": "3ae4e478-d4e6-4c83-b209-60fbef9a5e73",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-31T05:07:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/60de2cb5-d897-4189-b93f-784fe28d6caf",
+            "id": "60de2cb5-d897-4189-b93f-784fe28d6caf",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-30T23:08:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/73bba3a2-0f6a-453f-b419-7efe54084572",
+            "id": "73bba3a2-0f6a-453f-b419-7efe54084572",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-30T17:11:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/ceafeb95-ee58-4713-aff3-7f3da06e9ea2",
+            "id": "ceafeb95-ee58-4713-aff3-7f3da06e9ea2",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-30T11:18:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/7df405f6-2090-4236-bd53-f9934af4486e",
+            "id": "7df405f6-2090-4236-bd53-f9934af4486e",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-30T05:06:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/c0186ad1-bf62-461f-85ef-9937800038f3",
+            "id": "c0186ad1-bf62-461f-85ef-9937800038f3",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-29T23:06:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/70885915-b067-4268-a063-2563eddbe2d7",
+            "id": "70885915-b067-4268-a063-2563eddbe2d7",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-29T17:08:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/786e91c6-0282-4d45-b34d-53bd1146c281",
+            "id": "786e91c6-0282-4d45-b34d-53bd1146c281",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-29T11:14:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/e31fba3a-fe56-4aac-a5dd-22eb8ed5be5b",
+            "id": "e31fba3a-fe56-4aac-a5dd-22eb8ed5be5b",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-29T05:12:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/508e971f-9f8a-484f-a314-b13bd774a232",
+            "id": "508e971f-9f8a-484f-a314-b13bd774a232",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-28T23:15:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/f871f354-5302-48ee-80a3-559bf4bd7d8c",
+            "id": "f871f354-5302-48ee-80a3-559bf4bd7d8c",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-28T17:21:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/a3790544-a63a-4e90-84c5-ddc235e0c78b",
+            "id": "a3790544-a63a-4e90-84c5-ddc235e0c78b",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-28T11:05:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/b6726262-4772-4e1a-b68f-74529c4b9973",
+            "id": "b6726262-4772-4e1a-b68f-74529c4b9973",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-28T05:01:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/652603f0-3b77-45ee-8328-a80cf21ecfa7",
+            "id": "652603f0-3b77-45ee-8328-a80cf21ecfa7",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-27T23:05:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/71c63997-379c-4ac7-957c-c4c7b5239f76",
+            "id": "71c63997-379c-4ac7-957c-c4c7b5239f76",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-27T17:12:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/2cde8a45-2c60-4bc7-b1c8-730dd1150402",
+            "id": "2cde8a45-2c60-4bc7-b1c8-730dd1150402",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-27T11:22:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/88bced09-a193-4421-9236-80ed5e598b75",
+            "id": "88bced09-a193-4421-9236-80ed5e598b75",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-27T05:12:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/26eb3d28-223d-470b-a98d-fe4f0b6c0f67",
+            "id": "26eb3d28-223d-470b-a98d-fe4f0b6c0f67",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-26T23:25:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/c15865ea-7e72-4b94-b369-e92b8b7999d4",
+            "id": "c15865ea-7e72-4b94-b369-e92b8b7999d4",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-26T17:10:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/e4df849b-5632-4516-aa58-d385b0c250d7",
+            "id": "e4df849b-5632-4516-aa58-d385b0c250d7",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-26T11:15:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/33290062-2863-46e9-9d02-964e4a81c08c",
+            "id": "33290062-2863-46e9-9d02-964e4a81c08c",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-26T05:20:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/4c19c1fe-2926-422f-939a-f3235b542b45",
+            "id": "4c19c1fe-2926-422f-939a-f3235b542b45",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-25T23:09:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/9427a182-41f1-4e89-a398-4b0a6c65883d",
+            "id": "9427a182-41f1-4e89-a398-4b0a6c65883d",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-25T17:41:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/eebfa607-98a5-4478-bc43-af8e602fa21a",
+            "id": "eebfa607-98a5-4478-bc43-af8e602fa21a",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-25T11:34:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/533660fd-5b99-4781-a746-69b316406cc6",
+            "id": "533660fd-5b99-4781-a746-69b316406cc6",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-25T05:28:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/9f905e3d-5ae7-4d2a-9d31-4ec12da91e92",
+            "id": "9f905e3d-5ae7-4d2a-9d31-4ec12da91e92",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-24T23:19:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/7a378074-a22f-40db-a37f-a433a0dbb8c2",
+            "id": "7a378074-a22f-40db-a37f-a433a0dbb8c2",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-24T17:29:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        },
+        {
+            "@id": "https://api.weather.gov/products/1339a2f3-efb8-4409-9c2a-3e5af682317f",
+            "id": "1339a2f3-efb8-4409-9c2a-3e5af682317f",
+            "wmoCollectiveId": "ABNT20",
+            "issuingOffice": "KNHC",
+            "issuanceTime": "2026-10-24T11:25:00+00:00",
+            "productCode": "TWO",
+            "productName": "Tropical Weather Outlook and Summary"
+        }
+    ]
+}

@@ -1,0 +1,59 @@
+WTNT31 KNHC 292033
+TCPAT1
+ 
+BULLETIN
+Post-Tropical Cyclone Fay Advisory Number  39
+NWS National Hurricane Center Miami FL       AL062026
+500 PM AST Tue Sep 29 2026
+ 
+...FAY BECOMES A POST-TROPICAL CYCLONE...
+...THIS IS THE LAST NHC ADVISORY ON THIS SYSTEM...
+ 
+ 
+SUMMARY OF 500 PM AST...2100 UTC...INFORMATION
+----------------------------------------------
+LOCATION...23.7N 48.2W
+ABOUT 1590 MI...2560 KM WSW OF THE AZORES
+MAXIMUM SUSTAINED WINDS...30 MPH...45 KM/H
+PRESENT MOVEMENT...WSW OR 240 DEGREES AT 12 MPH...19 KM/H
+MINIMUM CENTRAL PRESSURE...1011 MB...29.86 INCHES
+ 
+ 
+WATCHES AND WARNINGS
+--------------------
+There are no coastal watches or warnings in effect.
+ 
+ 
+DISCUSSION AND OUTLOOK
+----------------------
+At 500 PM AST (2100 UTC), the center of Post-Tropical Cyclone Fay 
+was located near latitude 23.7 North, longitude 48.2 West. The 
+post-tropical cyclone is moving toward the west-southwest near 12 
+mph (19 km/h), and this motion is expected to continue for the next 
+couple of days.
+ 
+Maximum sustained winds are near 30 mph (45 km/h) with higher gusts. 
+Little change in strength is forecast, and Fay is forecast to 
+dissipate in a day or so.
+ 
+The estimated minimum central pressure is 1011 mb (29.86 inches).
+ 
+ 
+HAZARDS AFFECTING LAND
+----------------------
+None.
+ 
+ 
+NEXT ADVISORY
+-------------
+This is the last public advisory issued by the National Hurricane 
+Center on this system. Additional information on this system can be 
+found in High Seas Forecasts issued by the National Weather Service, 
+under AWIPS header NFDHSFAT1, WMO header FZNT01 KWBC, and online at 
+ocean.weather.gov/shtml/NFDHSFAT1.php
+ 
+$$
+Forecaster Kelly
+ 
+
+

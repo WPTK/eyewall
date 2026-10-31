@@ -1,0 +1,170 @@
+{
+  "recorded_by": "scripts/record_obs_fixtures.py",
+  "payloads": [
+    {
+      "file": "stations_waterlevels.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json",
+      "params": {
+        "type": "waterlevels"
+      },
+      "status": 200,
+      "bytes": 25782,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "trimmed to chosen stations; the count field is the full listing's"
+    },
+    {
+      "file": "stations_met.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json",
+      "params": {
+        "type": "met"
+      },
+      "status": 200,
+      "bytes": 28339,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "trimmed to chosen stations; the count field is the full listing's"
+    },
+    {
+      "file": "water_level_latest.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "water_level",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "datum": "MLLW",
+        "date": "latest"
+      },
+      "status": 200,
+      "bytes": 186,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "latest reading"
+    },
+    {
+      "file": "wind_recent.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "wind",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "range": "3"
+      },
+      "status": 200,
+      "bytes": 2649,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "last 3 hours"
+    },
+    {
+      "file": "air_pressure_recent.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "air_pressure",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "range": "3"
+      },
+      "status": 200,
+      "bytes": 1672,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "last 3 hours"
+    },
+    {
+      "file": "predictions_hilo.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "predictions",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "datum": "MLLW",
+        "interval": "hilo",
+        "begin_date": "20261031 00:00",
+        "range": "48"
+      },
+      "status": 200,
+      "bytes": 372,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "high and low tides, 48 hours from UTC midnight"
+    },
+    {
+      "file": "predictions_interval.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "predictions",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "datum": "MLLW",
+        "begin_date": "20261031 00:00",
+        "range": "6"
+      },
+      "status": 200,
+      "bytes": 2330,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "6-minute predictions, 6 hours from UTC midnight"
+    },
+    {
+      "file": "wind_no_data.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "wind",
+        "station": "8735523",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "date": "latest"
+      },
+      "status": 200,
+      "bytes": 116,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "a gauge without an anemometer: HTTP 200 with an error object"
+    },
+    {
+      "file": "error_no_datum.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "water_level",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "date": "latest"
+      },
+      "status": 400,
+      "bytes": 92,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "water level without a datum: HTTP 400 with an error object"
+    },
+    {
+      "file": "water_level_recent.json",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "water_level",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "datum": "MLLW",
+        "date": "recent"
+      },
+      "status": 200,
+      "bytes": 54000,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "last 3 days at 8721604, with empty-string gaps"
+    }
+  ]
+}

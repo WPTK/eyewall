@@ -1,0 +1,42 @@
+WTNT41 KNHC 292034
+TCDAT1
+ 
+Post-Tropical Cyclone Fay Discussion Number  39
+NWS National Hurricane Center Miami FL       AL062026
+500 PM AST Tue Sep 29 2026
+ 
+Fay's time as a tropical cyclone has faded away. An earlier 
+scatterometer pass showed that the system had weakened with maximum 
+winds around 25 kt, and that the low-level center was becoming less 
+defined. While occasional bursts of convection may continue, the 
+convection has not been organized in several hours. Thus, the system 
+is being designated as a post-tropical cyclone with an initial 
+intensity of 25 kt.
+ 
+The post-tropical cyclone will continue to move generally 
+west-southwestward at around 10 kt, steered along the southern 
+periphery of the mid-level ridge located over the central Atlantic. 
+The system should continue to gradually weaken and is expected to 
+dissipate into an open trough in about a day or so. The latest NHC 
+track and intensity forecast is similar to the previous advisory and 
+lies near the latest consensus aids.
+ 
+This is the last public advisory issued by the National Hurricane 
+Center on this system. Additional information on this system can be 
+found in High Seas Forecasts issued by the National Weather Service, 
+under AWIPS header NFDHSFAT1, WMO header FZNT01 KWBC, and online at 
+ocean.weather.gov/shtml/NFDHSFAT1.php
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  29/2100Z 23.7N  48.2W   25 KT  30 MPH...POST-TROP/REMNT LOW
+ 12H  30/0600Z 23.1N  49.8W   25 KT  30 MPH...POST-TROP/REMNT LOW
+ 24H  30/1800Z 22.7N  52.0W   25 KT  30 MPH...POST-TROP/REMNT LOW
+ 36H  01/0600Z...DISSIPATED
+ 
+$$
+Forecaster Kelly
+ 
+
+
