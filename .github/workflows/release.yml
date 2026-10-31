@@ -1,0 +1,47 @@
+name: Release
+
+# Runs when a v* tag is pushed. The tag, __version__ and the CHANGELOG.md heading must all name the same version.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Check that tag, version and changelog agree, and extract the release notes
+        shell: bash
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/eyewall/__init__.py)
+          tag="${GITHUB_REF_NAME#v}"
+          [ "$version" = "$tag" ] || { echo "tag $GITHUB_REF_NAME does not match __version__ $version"; exit 1; }
+          python - "$version" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          version = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(rf"^## \[{re.escape(version)}\] - [^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          body = match.group(1) if match else ""
+          body = "\n".join(line for line in body.splitlines() if not re.match(r"^\[[^\]]+\]: ", line)).strip()
+          if not body:
+              sys.exit(f"CHANGELOG.md has no section, or an empty one, for {version}")
+          pathlib.Path("release-notes.md").write_text(body + "\n", encoding="utf-8")
+          PY
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Create the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file release-notes.md
