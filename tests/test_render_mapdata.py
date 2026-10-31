@@ -37,37 +37,83 @@ def near(layer, lat, lon, tolerance=0.15):
 # ------------------------------------------------------------------------------------------------ committed files
 
 
-def test_the_committed_data_is_under_the_size_budget():
-    sizes = {name: (DATA_DIR / f"{name}.bin").stat().st_size for name in loader.LAYERS}
-    assert all(size > 1000 for size in sizes.values())
-    assert sum(sizes.values()) < 600_000
+def test_the_committed_data_is_not_oversimplified():
+    """Floors that fail if the base map silently drops back to the 1:50 million detail it replaced (the old
+    coastline had about 16,000 vertices in this box; the 10 m data has about 150,000)."""
+    assert loader.load_layer("coast").vertex_count >= 120_000
+    assert loader.load_layer("land").vertex_count >= 120_000
+    assert loader.load_layer("lakes").vertex_count >= 40_000
+    assert loader.load_layer("borders").vertex_count >= 70_000
+    assert sum((DATA_DIR / f"{name}.bin").stat().st_size for name in loader.LAYERS) > 3_000_000
+
+
+def count_vertices(layer, south, west, north, east):
+    return sum(1 for path in layer.paths for lat, lon in path.points if south <= lat <= north and west <= lon <= east)
+
+
+@pytest.mark.parametrize(
+    ("name", "box", "floor"),
+    [
+        ("Florida Keys and the Florida coast", (24.0, -83.0, 26.0, -80.0), 400),
+        ("Outer Banks", (34.7, -76.9, 36.9, -75.2), 400),
+        ("Louisiana and Mississippi coast", (28.0, -95.0, 31.0, -88.0), 800),
+        ("Majuro atoll", (6.8, 170.8, 7.4, 171.6), 12),
+        ("Tarawa atoll", (1.2, 172.8, 1.8, 173.2), 25),
+    ],
+)
+def test_coastline_detail_per_region(name, box, floor):
+    assert count_vertices(loader.load_layer("coast"), *box) >= floor, name
+
+
+@pytest.mark.parametrize("name", ["land_lo", "coast_lo"])
+def test_the_coarse_tier_still_has_the_small_islands(name):
+    layer = loader.load_layer(name)
+    for place, lat, lon in [
+        ("Majuro", 7.1, 171.2),
+        ("Midway", 28.2, -177.35),
+        ("Tarawa", 1.45, 173.0),
+        ("Wake Island", 19.3, 166.6),
+        ("Dry Tortugas", 24.63, -82.87),
+    ]:
+        assert near(layer, lat, lon, 0.1), place
 
 
 @pytest.mark.parametrize("name", loader.LAYERS)
 def test_every_layer_parses_and_stays_inside_the_basin_box(name):
     layer = loader.load_layer(name)
     assert layer.paths
-    assert layer.rings == name.startswith("land")
+    assert layer.rings == name.startswith(("land", "lakes"))
     for path in layer.paths:
         assert len(path.points) >= (3 if layer.rings else 2)
         assert path.south == min(p[0] for p in path.points) and path.north == max(p[0] for p in path.points)
         assert path.west <= path.east
         for lat, lon in path.points:
-            assert -5.0 <= lat <= 60.0
-            assert 100.0 <= lon <= 180.0 or -180.0 <= lon <= -10.0
+            assert -10.0 <= lat <= 65.0  # the basin box plus its 5 degree margin
+            assert 95.0 <= lon <= 180.0 or -180.0 <= lon <= -5.0
 
 
 def test_layers_are_loaded_once():
-    assert loader.load_layer("coast110") is loader.load_layer("coast110")
+    assert loader.load_layer("coast_lo") is loader.load_layer("coast_lo")
 
 
 def test_the_detailed_data_is_more_detailed():
-    assert loader.load_layer("coast50").vertex_count > 3 * loader.load_layer("coast110").vertex_count
-    assert loader.load_layer("land50").vertex_count > 3 * loader.load_layer("land110").vertex_count
+    assert loader.load_layer("coast").vertex_count > 3 * loader.load_layer("coast_lo").vertex_count
+    assert loader.load_layer("land").vertex_count > 3 * loader.load_layer("land_lo").vertex_count
+
+
+def test_no_stored_line_is_longer_than_the_piece_limit(build):
+    assert max(len(p.points) for p in loader.load_layer("coast").paths) <= build.MAX_LINE_POINTS
+    assert max(len(p.points) for p in loader.load_layer("borders").paths) <= build.MAX_LINE_POINTS
+
+
+def test_the_great_lakes_are_there():
+    lakes = loader.load_layer("lakes")
+    assert near(lakes, 47.7, -87.5, 0.3)  # Superior
+    assert near(lakes, 26.95, -80.8, 0.3)  # Okeechobee
 
 
 def test_the_coast_is_where_it_should_be():
-    coast = loader.load_layer("coast50")
+    coast = loader.load_layer("coast")
     for name, lat, lon in [
         ("Cape Canaveral", 28.46, -80.53),
         ("Cabo Catoche", 21.60, -87.05),
@@ -83,7 +129,7 @@ def test_the_coast_is_where_it_should_be():
 
 
 def test_land_polygons_cover_land_and_not_sea():
-    land = loader.load_layer("land50")
+    land = loader.load_layer("land")
 
     def inside(lat, lon):
         crossings = 0
@@ -116,9 +162,9 @@ def test_unknown_layer_and_bad_data_are_rejected():
     with pytest.raises(ValueError, match="unknown map layer"):
         loader.load_layer("nope")
     with pytest.raises(ValueError, match="not an eyewall map data file"):
-        loader.parse(struct.pack("<4sBBHI", b"XXXX", 1, 0, 0, 0))
+        loader.parse(struct.pack("<4sBBHII", b"XXXX", 2, 0, 0, 10_000, 0))
     with pytest.raises(ValueError):
-        loader.parse(struct.pack("<4sBBHI", b"EWMD", 9, 0, 0, 0))
+        loader.parse(struct.pack("<4sBBHII", b"EWMD", 9, 0, 0, 10_000, 0))
 
 
 def test_the_attribution_page_matches_the_data(build):
@@ -185,13 +231,37 @@ def test_a_ring_keeps_its_corners(build):
     assert sorted(build.simplify_ring(ring, 0.05)) == [(0, 0), (0, 10), (10, 0), (10, 10)]
 
 
-def test_quantize_rounds_to_hundredths_and_drops_repeats(build):
-    assert build.quantize([(1.004, 2.006), (1.0049, 2.0051), (-0.015, 0.0)]) == [(100, 201), (-1, 0)]
-    assert build.quantize([(-122.449999, 37.775)]) == [(-12245, 3778)]
+def test_quantize_rounds_to_ten_thousandths_and_drops_repeats(build):
+    assert build.quantize([(1.00004, 2.00006), (1.000049, 2.000051), (-0.00015, 0.0)]) == [(10000, 20001), (-1, 0)]
+    assert build.quantize([(-122.449999, 37.77549)]) == [(-1224500, 377755)]
+
+
+def test_a_tiny_ring_survives_simplification_as_a_triangle(build):
+    islet = [(0, 0), (0.001, 0), (0.001, 0.001), (0.0005, 0.0015), (0, 0.001), (0, 0)]
+    assert len(build.simplify_ring(islet, 0.03)) == 3
+
+
+def test_a_big_ring_is_cut_into_tiles_that_cover_it_exactly(build):
+    ring = [(0.0, 0.0), (23.0, 0.0), (23.0, 4.0), (12.0, 2.0), (0.0, 4.0)]
+    pieces = build.tile_ring(ring, (0.0, 0.0, 30.0, 10.0))
+    assert len(pieces) > 3
+    assert sum(area(piece) for piece in pieces) == pytest.approx(area(ring))
+    assert all(max(p[0] for p in piece) - min(p[0] for p in piece) <= build.TILE + 1e-9 for piece in pieces)
+
+
+def test_a_long_line_is_split_with_one_shared_vertex(build):
+    points = [(i, i % 7) for i in range(1000)]
+    parts = build.split_line(points)
+    assert all(len(part) <= build.MAX_LINE_POINTS for part in parts)
+    assert all(a[-1] == b[0] for a, b in itertools.pairwise(parts))
+    assert [p for part in parts for p in part[:-1]] + [parts[-1][-1]] == points
 
 
 def test_the_encoding_round_trips_through_the_loader(build):
-    paths = [(0, [(-8000, 2500), (-7999, 2501), (18000, -500)]), (1, [(10000, 100), (10100, 200), (10050, 300)])]
+    paths = [
+        (0, [(-800000, 250000), (-799900, 250100), (1800000, -50000)]),
+        (1, [(10000, 100), (10100, 200), (10050, 300)]),
+    ]
     for rings in (False, True):
         data = build.pack(paths, rings=rings)
         assert build.unpack(data) == (rings, paths)
@@ -219,33 +289,35 @@ def polygon(*rings):
 def test_convert_splits_at_the_basin_box_and_keeps_both_sides_of_the_antimeridian(build):
     geometries = [
         (line((90, 10), (110, 10), (150, 12), (179.9, 12)), 0),  # starts west of the box
-        (line((-179.9, 12), (-120, 12), (-5, 12)), 0),  # ends east of the box
+        (line((-179.9, 12), (-120, 12), (0, 12)), 0),  # ends east of the box
         (line((0, 0), (5, 5)), 0),  # entirely outside
     ]
     paths = build.convert(geometries, rings=False, tolerance=0.01)
     assert len(paths) == 2
-    assert paths[0][1][0] == (10000, 1000)  # clipped at 100 E
-    assert paths[1][1][-1] == (-1000, 1200)  # clipped at 10 W
+    assert paths[0][1][0] == (950000, 100000)  # clipped at 95 E, the 5 degree margin west of 100 E
+    assert paths[1][1][-1] == (-50000, 120000)  # clipped at 5 W, the 5 degree margin east of 10 W
 
 
 def test_convert_rings_and_holes(build):
     outer = [(120, 10), (130, 10), (130, 20), (120, 20), (120, 10)]
     hole = [(123, 13), (127, 13), (127, 17), (123, 17), (123, 13)]
     far = [(0, 10), (5, 10), (5, 20), (0, 10)]
-    paths = build.convert([(polygon(outer, hole), 0), (polygon(far), 0)], rings=True, tolerance=0.01)
+    paths = build.convert([(polygon(outer, hole), 0), (polygon(far), 0)], rings=True, tolerance=0.01, tile=False)
     assert len(paths) == 2  # the outer ring and the hole; the distant island is dropped
     assert {len(points) for _, points in paths} == {4}
     assert all(points[0] != points[-1] for _, points in paths)  # rings are closed implicitly
+    tiled = build.convert([(polygon(outer, hole), 0)], rings=True, tolerance=0.01)
+    assert len(tiled) > 2  # a 10 degree ring is cut along the 5 degree grid
 
 
 def write_sources(directory: Path) -> None:
     sources = {
-        "ne_50m_coastline": line((105, 5), (120, 6), (125, 9)),
-        "ne_110m_coastline": line((105, 5), (125, 9)),
-        "ne_50m_land": polygon([(120, 10), (130, 10), (130, 20), (120, 20), (120, 10)]),
-        "ne_110m_land": polygon([(-80, 10), (-70, 10), (-70, 20), (-80, 20), (-80, 10)]),
-        "ne_50m_admin_0_boundary_lines_land": line((-100, 30), (-90, 31)),
-        "ne_50m_admin_1_states_provinces_lines": line((-95, 30), (-92, 33)),
+        "ne_10m_coastline": line((105, 5), (120, 6), (125, 9)),
+        "ne_10m_minor_islands_coastline": line((105, 5), (125, 9)),
+        "ne_10m_land": polygon([(120, 10), (130, 10), (130, 20), (120, 20), (120, 10)]),
+        "ne_10m_lakes": polygon([(-80, 10), (-70, 10), (-70, 20), (-80, 20), (-80, 10)]),
+        "ne_10m_admin_0_boundary_lines_land": line((-100, 30), (-90, 31)),
+        "ne_10m_admin_1_states_provinces_lines": line((-95, 30), (-92, 33)),
     }
     directory.mkdir(parents=True, exist_ok=True)
     for name, geometry in sources.items():
@@ -281,14 +353,14 @@ def test_the_build_is_reproducible(build, offline):
 def test_main_writes_the_files_and_check_notices_drift(build, offline, capsys):
     args = ["--cache", str(offline / "cache"), "--out", str(offline / "out")]
     assert build.main(args) == 0
-    assert (offline / "out" / "coast50.bin").exists() and (offline / "out" / "ATTRIBUTION.md").exists()
+    assert (offline / "out" / "coast.bin").exists() and (offline / "out" / "ATTRIBUTION.md").exists()
     assert build.main([*args, "--check"]) == 0
-    (offline / "out" / "land50.bin").write_bytes(b"changed")
+    (offline / "out" / "land.bin").write_bytes(b"changed")
     assert build.main([*args, "--check"]) == 1
-    assert "land50.bin" in capsys.readouterr().err
+    assert "land.bin" in capsys.readouterr().err
 
 
 def test_a_download_that_does_not_match_its_hash_is_refused(build, offline, monkeypatch):
-    monkeypatch.setattr(build, "SOURCE_SHA256", {**build.SOURCE_SHA256, "ne_50m_coastline": "0" * 64})
+    monkeypatch.setattr(build, "SOURCE_SHA256", {**build.SOURCE_SHA256, "ne_10m_coastline": "0" * 64})
     with pytest.raises(SystemExit, match="expected 0000"):
         build.build(offline / "cache")

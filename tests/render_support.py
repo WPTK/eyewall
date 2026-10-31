@@ -41,13 +41,17 @@ def assert_golden(name: str, text: str) -> None:
 
 
 def coast_run(south: float, north: float, west: float, east: float) -> tuple[LatLon, ...]:
-    """The longest unbroken run of 50 m coastline vertices inside a box, so a warning can sit exactly on the coast."""
+    """The longest unbroken run of coastline vertices inside a box, so a warning can sit exactly on the coast."""
     best: list[LatLon] = []
-    for path in load_layer("coast50").paths:
-        run: list[LatLon] = []
+    run: list[LatLon] = []
+    for path in load_layer("coast").paths:
+        # Long coastlines are stored in pieces that share an end vertex, so a run carries on into the next piece.
+        if not (run and path.points[0] == run[-1]):
+            run = []
         for lat, lon in path.points:
             if south <= lat <= north and west <= lon <= east:
-                run.append((lat, lon))
+                if not run or run[-1] != (lat, lon):
+                    run.append((lat, lon))
                 if len(run) > len(best):
                     best = run[:]
             else:

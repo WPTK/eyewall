@@ -1,7 +1,9 @@
 """The base map: land, coastline and borders from the vendored Natural Earth data.
 
-Zoomed out the 110 m data is enough; zoomed in the 50 m data takes over, and state and province lines appear. The raster
-for a viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
+Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except the whole-basin view, where
+one dot spans about a degree and a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
+State and province lines appear with the detailed data. The raster for a viewport is kept, because a map that only
+gains a cursor or a new advisory should not redraw the coast.
 """
 
 from __future__ import annotations
@@ -13,9 +15,9 @@ from eyewall.mapdata.loader import KIND_STATE, MapLayer, MapPath, load_layer
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
 from eyewall.render.projection import Bounds, Viewport
 
-# Degrees per dot at which the map switches from the 110 m to the 50 m data. A 120 by 40 cell view of the Gulf of Mexico
-# and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
-DETAIL_SWITCH = 0.3
+# Degrees per dot at which the map switches from the detailed data to the coarse copy. A 120 by 40 cell view of the Gulf
+# of Mexico and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
+DETAIL_SWITCH = 0.6
 
 
 @dataclass(frozen=True)
@@ -30,9 +32,9 @@ class BasemapStyle:
 DEFAULT_STYLE = BasemapStyle()
 
 
-def detail_for(viewport: Viewport) -> int:
-    """The Natural Earth scale to draw at this zoom: 50 for the 1:50 million data, 110 for the 1:110 million data."""
-    return 50 if viewport.deg_per_dot < DETAIL_SWITCH else 110
+def is_detailed(viewport: Viewport) -> bool:
+    """Whether this zoom draws the full 10 m data rather than the coarse whole-basin copy."""
+    return viewport.deg_per_dot < DETAIL_SWITCH
 
 
 def ensure_matches(canvas: Canvas, viewport: Viewport) -> None:
@@ -71,13 +73,22 @@ def draw_basemap(
 ) -> None:
     """Draw land fill, coastline and borders onto a canvas, in that order."""
     ensure_matches(canvas, viewport)
-    fine = detail_for(viewport) == 50
+    fine = is_detailed(viewport)
+    suffix = "" if fine else "_lo"
     if land:
-        rings = [viewport.project_path(path.points) for path in _visible("land50" if fine else "land110", viewport)]
+        # Lakes are rings inside the land, so the even-odd fill leaves them as holes.
+        rings = [
+            viewport.project_path(path.points)
+            for name in ("land" + suffix, "lakes" + suffix)
+            for path in _visible(name, viewport)
+        ]
         canvas.fill_polygon(rings, style.land, Priority.LAND, style.land_shade)
     if coast:
-        for path in _visible("coast50" if fine else "coast110", viewport):
+        for path in _visible("coast" + suffix, viewport):
             canvas.polyline(viewport.project_path(path.points), style.coast, Priority.COAST)
+        for path in _visible("lakes" + suffix, viewport):
+            dots = viewport.project_path(path.points)
+            canvas.polyline([*dots, dots[0]], style.coast, Priority.COAST)
     if borders:
         for path in _visible("borders", viewport):
             if path.kind == KIND_STATE and not fine:

@@ -5,18 +5,21 @@ which is in the public domain ("Made with Natural Earth. Free vector and raster 
 No permission or credit is required; it is given here anyway.
 
 The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror at
-commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), clipped to longitude 100 E eastward across the Pacific to 10 W and latitude 5 S to
-60 N, simplified with Douglas-Peucker and stored as 16-bit integers in hundredths of a degree.
+commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
+Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
+the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
 
 | File | Content | Natural Earth source | Bytes |
 |---|---|---|---|
-| `coast50.bin` | 50 m coastline | `ne_50m_coastline` | 64,621 |
-| `coast110.bin` | 110 m coastline | `ne_110m_coastline` | 6,080 |
-| `land50.bin` | 50 m land polygons | `ne_50m_land` | 62,362 |
-| `land110.bin` | 110 m land polygons | `ne_110m_land` | 5,807 |
-| `borders.bin` | 50 m country boundaries and state or province lines | `ne_50m_admin_0_boundary_lines_land, ne_50m_admin_1_states_provinces_lines` | 26,582 |
+| `coast.bin` | 10 m coastline with minor islands | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 1,220,538 |
+| `land.bin` | 10 m land polygons | `ne_10m_land` | 1,207,461 |
+| `lakes.bin` | 10 m lakes | `ne_10m_lakes` | 409,947 |
+| `borders.bin` | 10 m country boundaries and state or province lines | `ne_10m_admin_0_boundary_lines_land, ne_10m_admin_1_states_provinces_lines` | 795,885 |
+| `coast_lo.bin` | coarse coastline for whole-basin views | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 305,705 |
+| `land_lo.bin` | coarse land polygons for whole-basin views | `ne_10m_land` | 293,949 |
+| `lakes_lo.bin` | coarse lakes for whole-basin views | `ne_10m_lakes` | 87,507 |
 
-Total: 165,452 bytes. The format is described at the top of `scripts/build_mapdata.py`.
+Total: 4,320,992 bytes. The format is described at the top of `scripts/build_mapdata.py`.
 
 ## Rebuilding
 
@@ -24,9 +27,9 @@ Total: 165,452 bytes. The format is described at the top of `scripts/build_mapda
 page; `--check` rebuilds in memory and fails if the committed files differ. The sources are verified against these
 SHA-256 digests:
 
-- `ne_50m_coastline`: `271f1c4c1908312bac6b29d158ea1356544beafc129f260005300913aa5ea283`
-- `ne_50m_land`: `e874b27a51d146452be360cafb3cc50c86001074a67d534113e6534682f9826b`
-- `ne_50m_admin_0_boundary_lines_land`: `2faac4f6b34386f3d21b6e018cf151f241f00e5c936d44dd17d7d9bfb147fa48`
-- `ne_50m_admin_1_states_provinces_lines`: `72cca93c850d412628a5da4bc5ebfe21ba4d376eb34611bde6b623ee73f0fdcf`
-- `ne_110m_coastline`: `851f581ff5ffb844deed8ae1a9ce22e3c4bb3d74fa342cadb5d8e39b41ae7c3c`
-- `ne_110m_land`: `9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9`
+- `ne_10m_coastline`: `6f75ae0e0de157b14946e2255eb1f5486d9a13819032e26d4610852d296788f6`
+- `ne_10m_minor_islands_coastline`: `d51fadaffc954e9e85671b0a2ecaba78b883dda1714640a173c151932fd1f2fb`
+- `ne_10m_land`: `1ac90796408bc6ad6911d69448485d3c4dbf2190370080368a09976e1c9f7416`
+- `ne_10m_lakes`: `2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9`
+- `ne_10m_admin_0_boundary_lines_land`: `74d9c16229c095fde65943a9919e337682f044bcebccb120764f38edf3b70f4a`
+- `ne_10m_admin_1_states_provinces_lines`: `1a1f30ccaaf4cc9c4bde34266f0b8cbb955d3a4cf254b756912255f2ec7c75b6`

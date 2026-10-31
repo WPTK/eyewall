@@ -6,9 +6,9 @@ from eyewall.render.basemap import (
     DETAIL_SWITCH,
     BasemapStyle,
     basemap_canvas,
-    detail_for,
     draw_basemap,
     ensure_matches,
+    is_detailed,
 )
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
 from eyewall.render.projection import Viewport
@@ -31,10 +31,11 @@ def colors(canvas: Canvas) -> set[str | None]:
 
 
 def test_detail_follows_the_zoom():
-    assert detail_for(GULF) == 50
-    assert detail_for(Viewport(25.0, -75.0, DETAIL_SWITCH - 0.01, 100, 30)) == 50
-    assert detail_for(Viewport(25.0, -75.0, DETAIL_SWITCH, 100, 30)) == 110
-    assert detail_for(Viewport(30.0, -150.0, 1.0, 120, 40)) == 110  # the whole basin
+    assert is_detailed(GULF)
+    assert is_detailed(Viewport(25.0, -75.0, DETAIL_SWITCH - 0.01, 100, 30))
+    assert not is_detailed(Viewport(25.0, -75.0, DETAIL_SWITCH, 100, 30))
+    assert not is_detailed(Viewport(30.0, -150.0, 1.0, 120, 40))  # the whole Pacific basin
+    assert is_detailed(Viewport(25.0, -60.0, 0.45, 120, 40))  # a view of the Atlantic is still the 10 m data
 
 
 def test_each_layer_can_be_switched_off():
@@ -140,11 +141,25 @@ def test_central_pacific_golden():
     assert_golden("central_pacific_120x40.txt", basemap_canvas(PACIFIC).to_text())
 
 
-def test_a_view_of_the_whole_basin_uses_the_coarse_data_and_draws_quickly():
+def test_a_view_of_the_whole_basin_uses_the_coarse_data_and_keeps_the_atolls():
     basin = Viewport(27.0, -145.0, 0.95, 120, 40)
     canvas = basemap_canvas(basin)
     assert count_dots(canvas) > 500
-    assert detail_for(basin) == 110
+    assert not is_detailed(basin)
+    for name, lat, lon in [("Majuro", 7.1, 171.2), ("Midway", 28.2, -177.35), ("Wake", 19.3, 166.6)]:
+        x, y = basin.dot_at(lat, lon)
+        assert any(canvas.dot(x + dx, y + dy) for dx in range(-2, 3) for dy in range(-2, 3)), name
+
+
+def test_lakes_are_holes_in_the_land_with_a_shoreline():
+    style = BasemapStyle(land="#111111", coast="#222222", land_shade=Shade.SOLID)
+    view = Viewport(45.0, -84.0, 0.05, 120, 40)  # Lake Huron and Lake Michigan
+    canvas = Canvas(view.cols, view.rows)
+    draw_basemap(canvas, view, borders=False, style=style)
+    x, y = view.dot_at(44.8, -82.3)  # open water in Lake Huron
+    assert canvas.cell(x // 2, y // 4)[1].fg != "#111111"
+    x, y = view.dot_at(46.2, -84.6)  # Michigan's Upper Peninsula
+    assert canvas.cell(x // 2, y // 4)[1].fg == "#111111"
 
 
 def test_a_view_with_nothing_in_it_is_blank():

@@ -47,7 +47,7 @@ eyewall/
     sources/    protocol.py live.py replay.py cache.py
     state/      store.py nearby.py trends.py events.py alerts.py
     render/     projection.py canvas.py basemap.py layers.py chart.py images.py text.py
-    mapdata/    coast50.bin coast110.bin land50.bin land110.bin borders.bin loader.py ATTRIBUTION.md
+    mapdata/    coast.bin land.bin lakes.bin borders.bin coast_lo.bin land_lo.bin lakes_lo.bin loader.py ATTRIBUTION.md
     ui/         app.tcss theme.py glyphs.py
     ui/screens/ dashboard.py storm_detail.py outlook.py buoy_detail.py graphics.py alert_log.py help.py settings.py
     ui/widgets/ storm_list.py map_view.py headline_panel.py ww_panel.py wind_panel.py surge_panel.py
@@ -106,14 +106,18 @@ orange, Cat 3 red, Cat 4 magenta, Cat 5 purple; TS watch yellow, TS warning blue
 hurricane warning red; surge watch lavender, warning purple; invest risk low yellow / medium orange / high
 red. `ui/widgets/map_view.py` renders rows via Textual's `render_line(y) -> Strip` API.
 
-**Map data.** `scripts/build_mapdata.py` downloads the Natural Earth GeoJSON, clips to the basins' bbox
-(about 100°E eastward across the Pacific to 10°W, 5°S–60°N), simplifies (Douglas–Peucker ≈0.01° for 50 m,
-0.05° for 110 m), packs polylines/polygons as int16 hundredths of a degree into `mapdata/*.bin` (target
-< 600 KB) with `ATTRIBUTION.md` (public domain); `loader.py` reads with `struct`. Checked in.
+**Map data.** `scripts/build_mapdata.py` downloads the Natural Earth 1:10 million GeoJSON (coastline with minor
+islands, land, lakes, country boundaries and admin-1 state lines), clips to the basins' bbox plus a 5° margin
+(about 95°E eastward across the Pacific to 5°W, 10°S–65°N), simplifies (Douglas–Peucker 0.002° for the full tier,
+0.03° for the `_lo` tier), packs polylines/polygons as int32 ten-thousandths of a degree into `mapdata/*.bin`
+(about 4.3 MB, size is not a constraint; the map must never be oversimplified) with `ATTRIBUTION.md` (public
+domain); `loader.py` reads with `struct`. Checked in. Long lines and land fill are cut into pieces so a viewport
+only projects what it can see.
 The download is pinned to one commit of the mirror and verified by SHA-256, so a rebuild is byte for byte the
-same (`--check` confirms it). Land is filled from 50 m polygons when zoomed in and 110 m ones when zoomed out, so
-the fill meets the coastline at either scale; country boundaries and state lines share `borders.bin`, and state
-lines show only when zoomed in. The whole set is about 165 KB.
+same (`--check` confirms it). Every view draws the full 10 m tier except the whole-basin view (`DETAIL_SWITCH`, 0.6°
+per dot), which draws the `_lo` copy of the same data (every island kept) because the full tier takes about a
+second there. Lakes are holes in the land fill with their own shoreline; country boundaries and state lines share
+`borders.bin`, and state lines show only in detailed views.
 
 **Renderer interface.** `render/layers.py` defines its own render-ready inputs (`StormScene` with track, forecast,
 cone rings, warning segments and wind radii in nautical miles by quadrant; `OutlookArea`; `StationMark`;
