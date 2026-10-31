@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0] - 2026-10-31
+
+### Changed
+
+- Gate the api.weather.gov text fallback behind a `fallback` switch and validate its product list with the ETag ([`0af5283`](https://github.com/WPTK/eyewall/commit/0af528334b37b402179c67ef1a4649cadfda6143), [#11](https://github.com/WPTK/eyewall/pull/11))
+
+### Added
+
+- Add the `DataSource` protocol with a live source over a disk cache that serves the last responses and marks feeds stale when the network fails ([`46beb4c`](https://github.com/WPTK/eyewall/commit/46beb4c5d095deb32e7d7ad796714cf3424541ed), [#11](https://github.com/WPTK/eyewall/pull/11))
+- Add a replay source that serves a recorded storm on a virtual clock, the bundle format, `scripts/record_storm.py` and a trimmed Hurricane Erin recording that ships as the demo ([`46beb4c`](https://github.com/WPTK/eyewall/commit/46beb4c5d095deb32e7d7ad796714cf3424541ed), [#11](https://github.com/WPTK/eyewall/pull/11))
+- Add the multi-feed poller with freshness, exponential backoff, away mode and refetching of a storm's products only when its advisory changes ([`4490d7f`](https://github.com/WPTK/eyewall/commit/4490d7f010e870a032803f5e9a5cc96edc64f259), [#11](https://github.com/WPTK/eyewall/pull/11))
+- Add the store, the event diffs (storms, advisories, classification, watches and warnings, discussions, outlooks, buoy thresholds and silence) and the alert rules with a persisted seen set ([`4490d7f`](https://github.com/WPTK/eyewall/commit/4490d7f010e870a032803f5e9a5cc96edc64f259), [#11](https://github.com/WPTK/eyewall/pull/11))
+- Add the `--replay`, `--demo`, `--headless`, `--until` and `--state-dir` flags and a live source spot-check script ([`4490d7f`](https://github.com/WPTK/eyewall/commit/4490d7f010e870a032803f5e9a5cc96edc64f259), [#11](https://github.com/WPTK/eyewall/pull/11))
+- Add tests for the cache, sources, events, alerts, poller and the headless replay ([`a8f8917`](https://github.com/WPTK/eyewall/commit/a8f891788d48659fc59742dcf52b2148a5f33577), [#11](https://github.com/WPTK/eyewall/pull/11))
+
+### Fixed
+
+- Fix parsing of advisory headings that end in `...RESENT` and add the archive kinds for intermediate advisories ([`0af5283`](https://github.com/WPTK/eyewall/commit/0af528334b37b402179c67ef1a4649cadfda6143), [#11](https://github.com/WPTK/eyewall/pull/11))
+
+[0.4.0]: https://github.com/WPTK/eyewall/releases/tag/v0.4.0
+
 ## [0.3.0] - 2026-10-31
 
 ### Added
