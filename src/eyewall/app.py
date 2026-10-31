@@ -51,6 +51,7 @@ from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.screens.search import SearchChoice, SearchScreen
 from eyewall.ui.screens.settings import SettingsScreen
+from eyewall.ui.screens.small import TooSmallScreen, too_small
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
 from eyewall.units import PRESETS, Preset, next_preset
@@ -223,6 +224,10 @@ class EyewallApp(App[None]):
         self.poller.stop()
         if self._closer is not None:
             await self._closer()
+
+    def on_resize(self, event: events.Resize) -> None:
+        if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
+            self.push_screen(TooSmallScreen())
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
