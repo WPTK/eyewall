@@ -205,7 +205,7 @@ async def test_live_resize_through_too_small_and_back(journey) -> None:
         pytest.param(("enter",), id="detail"),
         pytest.param(("w",), id="watchlist"),
         pytest.param(("O",), id="outlook"),
-        pytest.param(("g",), id="graphics", marks=pytest.mark.xfail(strict=True, reason="#36")),
+        pytest.param(("g",), id="graphics"),
     ],
 )
 async def test_status_row_follows_a_resize(journey, monkeypatch, keys) -> None:
@@ -266,7 +266,6 @@ def test_sizes_are_the_agreed_ones() -> None:
     assert SIZES == [(80, 24), (120, 30)] and EXTRA_SIZES == [(100, 50), (200, 50), (280, 70)]
 
 
-@pytest.mark.xfail(strict=True, reason="#33")
 async def test_no_colour_mode_does_not_crash(journey, monkeypatch) -> None:
     monkeypatch.setenv("NO_COLOR", "1")
     async with journey((120, 30), app=gallery_app()) as j:

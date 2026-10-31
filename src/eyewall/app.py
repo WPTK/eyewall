@@ -249,6 +249,7 @@ class EyewallApp(App[None]):
     def on_resize(self, event: events.Resize) -> None:
         if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
             self.push_screen(TooSmallScreen())
+        self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every footer follows a resize
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):

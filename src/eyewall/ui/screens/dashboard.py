@@ -94,7 +94,6 @@ class DashboardScreen(Screen[None]):
 
     def on_resize(self, event: Resize) -> None:
         self._apply_layout(event.size.width)
-        self.refresh_status()
 
     def _apply_layout(self, width: int | None = None) -> None:
         width = self.size.width if width is None else width
