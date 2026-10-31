@@ -27,12 +27,17 @@ class AlertLogScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield DataTable(id="alert-table", zebra_stripes=True, cursor_type="row")
         yield Static("", id="alert-empty")
+        yield Static("", id="alert-status")
 
     HEADERS = ("Time (Z)", "Event", "Storm", "Message")
     _built_width: int | None = None
 
     def on_mount(self) -> None:
         self.refresh_data()
+        self.refresh_status()
+
+    def refresh_status(self) -> None:
+        self.query_one("#alert-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def on_resize(self, event: Resize) -> None:
         if self._message_width(self._rows()) != self._built_width:
@@ -66,7 +71,9 @@ class AlertLogScreen(Screen[None]):
             table.add_column(header, width=width)
         for time, title, storm, message in rows:
             table.add_row(time, title, storm, Text(message), height=None)
-        self.query_one("#alert-empty", Static).update("" if self.eye.alert_log else "No alerts yet this session.")
+        empty = self.query_one("#alert-empty", Static)
+        empty.update("No alerts yet this session.")
+        empty.display = not self.eye.alert_log
 
     def action_back(self) -> None:
         self.app.pop_screen()

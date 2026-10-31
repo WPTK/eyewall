@@ -26,7 +26,15 @@ from tests.ui_support import press, screen_text, settle
 
 SIZES = [(80, 24), (120, 30)]  # the floor and the main size; most scenarios run at both
 EXTRA_SIZES = [(100, 50), (200, 50), (280, 70)]  # tall-narrow and large terminals, for the every-screen sweep
-STATUS_IDS = ("#status", "#detail-status", "#buoy-status", "#graphics-status", "#outlook-status", "#watch-status")
+STATUS_IDS = (
+    "#status",
+    "#detail-status",
+    "#buoy-status",
+    "#graphics-status",
+    "#outlook-status",
+    "#watch-status",
+    "#alert-status",
+)
 SCROLLING = ("auto", "scroll")
 
 
