@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.2] - 2026-10-31
+
+### Added
+
+- Show a one-line notice, "Needs at least 60x16", instead of the layout when the terminal is smaller than that ([`b04e750`](https://github.com/WPTK/eyewall/commit/b04e750), [#21](https://github.com/WPTK/eyewall/pull/21))
+
 ## [0.8.1] - 2026-10-31
 
 ### Fixed
@@ -27,6 +33,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.8.2]: https://github.com/WPTK/eyewall/releases/tag/v0.8.2
 [0.8.1]: https://github.com/WPTK/eyewall/releases/tag/v0.8.1
 [0.8.0]: https://github.com/WPTK/eyewall/releases/tag/v0.8.0
 
