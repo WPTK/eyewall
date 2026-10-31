@@ -2,9 +2,9 @@
 
     python scripts/screenshots.py [--out docs/images]
 
-It drives the real app headless at 140x42 over the recording, paused at advisory 14, takes three pictures (the dashboard,
-the storm detail's Forecast tab and a buoy's charts) and converts each with `msedge --headless --screenshot`. Without Edge
-the SVG files are kept.
+It drives the real app headless at 140x42 over the recording, takes three pictures (the dashboard, the storm detail's
+Forecast tab and a buoy's charts) and converts each with `msedge --headless=new --screenshot`. Without Edge the SVG
+files are kept.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from eyewall.sources.bundle import DEMO, resolve_bundle
 from eyewall.sources.replay import ReplaySource
 
 SIZE = (140, 42)
-ADVISORIES = 14
+ADVISORIES = 14  # advisories to step into the recording before the first picture
 
 
 async def _settle(pilot) -> None:  # type: ignore[no-untyped-def]
