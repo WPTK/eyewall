@@ -44,18 +44,19 @@ def build(source=None):
 # ---- the poller ---------------------------------------------------------------------------------------------------
 
 
-async def test_a_product_answered_from_the_disk_cache_is_used_but_asked_for_again():
+async def test_only_the_product_answered_from_the_disk_cache_is_asked_for_again():
     poller, source, store, clock, _ = build()
     source.set_storm("1")
     source.texts["1"] = advisories("1")
-    source.cached.add(protocol.STORMS)  # every request of the poll was answered from the cache
+    source.cached_products.add("forecast_gis")  # the cone came from the cache; the radii, track and graphics did not
     await poller.tick()
     assert store.storms["al012026"].fetched_key is None
-    source.cached.clear()
+    source.cached_products.clear()
     clock.advance(300)
     await poller.tick()
     assert store.storms["al012026"].fetched_key is not None
     assert source.count("forecast_gis") == 2
+    assert source.count("radii_gis") == source.count("track") == source.count("graphics") == 1
 
 
 class AllSeriesFail(FakeSource):
@@ -295,3 +296,67 @@ def test_prune_removes_a_body_whose_metadata_is_gone(tmp_path):
     meta.unlink()
     assert cache.prune(timedelta(days=7), NOW) == 1
     assert not body.exists()
+
+
+def outlook_handler(bad_ep=False):
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("abnt20.knhc.two.at.txt"):
+            return httpx.Response(200, content=nhc_bytes("two/at_20261031.txt"))
+        if url.endswith("abpz20.knhc.two.ep.txt"):
+            return httpx.Response(
+                200, content=b"<html>not an outlook</html>" if bad_ep else nhc_bytes("two/ep_20261031.txt")
+            )
+        if url.endswith("acpn50.phfo.two.cp.txt"):
+            return httpx.Response(200, content=nhc_bytes("two/cp_20261031.txt"))
+        return httpx.Response(404)
+
+    return handler
+
+
+async def test_one_basin_text_that_cannot_be_parsed_keeps_its_last_outlook_and_reports_the_error(tmp_path):
+    bad = {"ep": False}
+    source = live(lambda r: outlook_handler(bad["ep"])(r), tmp_path)
+    try:
+        source.start_poll(protocol.OUTLOOK)
+        first = await source.outlook()
+        assert len(first.texts) == 3
+        assert source.throttle(protocol.OUTLOOK) is None
+        bad["ep"] = True
+        source.start_poll(protocol.OUTLOOK)
+        second = await source.outlook()
+        assert len(second.texts) == 3  # the East Pacific text from the last good poll, the others fresh
+        failure = source.throttle(protocol.OUTLOOK)
+        assert failure is not None
+        assert "ParseError" in str(failure[0])
+    finally:
+        await source.aclose()
+
+
+async def test_an_outlook_failure_reaches_the_poller_as_an_error_with_the_data_applied(tmp_path):
+    bad = {"ep": True}
+    source = live(lambda r: outlook_handler(bad["ep"])(r), tmp_path)
+    store = Store(Config())
+    poller = Poller(source, store, AlertEngine(), Config().poll, clock=VirtualClock(T0), sleep=no_sleep)
+    try:
+        result = await poller.poll_feed(protocol.OUTLOOK)
+    finally:
+        await source.aclose()
+    assert not result.ok
+    assert poller.freshness(protocol.OUTLOOK).failures == 1
+    assert len(store.outlook.texts) == 2  # the basins that did parse were applied
+
+
+class WrongDatum(FakeSource):
+    async def coops_series(self, station, datum):
+        raise HttpError("fake://coops", 400)
+
+
+async def test_a_gauge_without_the_datum_is_not_a_feed_failure():
+    poller, source, store, *_ = build(WrongDatum(VirtualClock(T0)))
+    source.tide_stations = (gauge("8000001", 25.5, -75.5),)
+    source.set_storm("1")
+    await poller.poll_feed(protocol.STORMS)
+    result = await poller.poll_feed(protocol.TIDES)
+    assert result.ok
+    assert "8000001" in store.tide_errors

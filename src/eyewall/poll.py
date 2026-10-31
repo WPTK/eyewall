@@ -47,10 +47,10 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.obs import TideStation
 from eyewall.models.watches import AlertsResult
-from eyewall.net import FetchError, RateLimited
+from eyewall.net import FetchError, HttpError, RateLimited
 from eyewall.providers.base import ParseError
 from eyewall.sources import protocol
-from eyewall.sources.protocol import DataSource, ThrottleReporting
+from eyewall.sources.protocol import CacheCounting, DataSource, ThrottleReporting
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.events import current_adv, fetched_adv, missing_products
 from eyewall.state.store import Store, storm_key
@@ -124,6 +124,16 @@ class _FeedState:
     polls: int = 0
     last_attempt: float | None = None
     not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
+
+
+def _all_transient(failures: list[Exception], requests: int) -> bool:
+    """True when every request failed in a way that says the feed is down (network, 5xx, 429, a bad body). A permanent
+    4xx (a gauge without the datum asked for) is that station's answer, not a feed failure."""
+    if len(failures) < requests:
+        return False
+    return all(
+        not (isinstance(f, HttpError) and 400 <= f.status < 500 and not isinstance(f, RateLimited)) for f in failures
+    )
 
 
 def _by_rank[T](lists: list[list[T]]) -> list[T]:
@@ -428,8 +438,9 @@ class Poller:
         got: dict[str, object] = {}
         for name in _PRODUCTS:
             if name in pending:
+                answered = self._cache_answers()
                 got[name] = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
-                if self.source.stale(protocol.STORMS):  # answered from the disk cache: use it, but ask again
+                if self._cache_answers() > answered:  # this product came from the disk cache: use it, ask again
                     failed.add(name)
         retry = bool(failed) and attempt < PRODUCT_ATTEMPTS  # a failed product is asked for again, within the cap
         if retry:
@@ -447,6 +458,13 @@ class Poller:
             track=got.get("track"),  # type: ignore[arg-type]
             graphics=got.get("graphics"),  # type: ignore[arg-type]
         )
+
+    def _cache_answers(self) -> int:
+        """Requests of the storms feed the disk cache has answered so far this poll. A source that cannot count them
+        reports 1 once anything was cached, so every product after that is asked for again."""
+        if isinstance(self.source, CacheCounting):
+            return self.source.cache_answers(protocol.STORMS)
+        return int(self.source.stale(protocol.STORMS))
 
     @staticmethod
     async def _optional[T](call: Awaitable[T], name: str, failed: set[str], storm_id: str) -> T | None:
@@ -499,7 +517,7 @@ class Poller:
                     failures.append(exc)
 
         await asyncio.gather(*(one(i, sid) for i, sid in enumerate(wanted)))
-        if wanted and len(failures) == len(wanted):
+        if wanted and _all_transient(failures, len(wanted)):
             raise failures[0]  # every request failed: the feed backs off instead of reporting fresh
         if self.source.stale(protocol.BUOYS):
             return []  # answered from the disk cache: old rows say nothing about whether a buoy is still reporting
@@ -534,7 +552,7 @@ class Poller:
 
         failures: list[Exception] = []
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
-        if gauges and len(failures) == len(gauges):
+        if gauges and _all_transient(failures, len(gauges)):
             raise failures[0]
         return []
 
@@ -547,6 +565,6 @@ class Poller:
             except Exception as exc:
                 log.debug("the satellite listing of %s could not be fetched", storm_id, exc_info=True)
                 failures.append(exc)
-        if storms and len(failures) == len(storms):
+        if storms and _all_transient(failures, len(storms)):
             raise failures[0]
         return []

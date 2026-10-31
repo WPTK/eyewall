@@ -31,8 +31,8 @@ from eyewall.models.obs import (
     TideSeries,
     TideStation,
 )
-from eyewall.models.outlook import Outlook
-from eyewall.models.storm import CurrentStorms, Storm
+from eyewall.models.outlook import Outlook, OutlookGis
+from eyewall.models.storm import Basin, CurrentStorms, Storm
 from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult
 from eyewall.models.wind import WindRadiiGis
@@ -45,7 +45,6 @@ from eyewall.sources import protocol
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
 
 CACHE_MAX_AGE = timedelta(days=7)
-PRUNE_EVERY = 24 * 3600.0  # seconds between prunes of the disk cache in one long session
 INVEST_MAX_AGE = timedelta(hours=48)
 MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
@@ -88,12 +87,13 @@ class LiveSource:
         self._clock: Clock = clock or SystemClock()
         self.cache = Cache(cache_dir)
         self._pruned: asyncio.Task[int] | None = None  # the first request starts it; every request waits for it
-        self._pruned_at = 0.0
         self._http = new_client(transport=CachingTransport(self.cache, transport))
         self.nhc = NhcClient(self._http)
         self.ndbc = NdbcClient(self._http)
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
+        self._answers: dict[str, int] = {}
+        self._outlook_kept: dict[str, Any] = {}  # the last good part of the outlook, by part, for a part that fails
         self._throttled: dict[str, tuple[FetchError, float | None]] = {}
         self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
         self._shared: dict[str, tuple[asyncio.Task[Any], float]] = {}  # request key -> (its task, when it started)
@@ -113,8 +113,12 @@ class LiveSource:
         except Exception:  # the cache is an optimization; a broken directory is not a reason to fail a request
             return 0
 
+    def cache_answers(self, feed: str) -> int:
+        return self._answers.get(feed, 0)
+
     def start_poll(self, feed: str) -> None:
         self._stale[feed] = False
+        self._answers[feed] = 0
         self._throttled.pop(feed, None)
 
     def throttle(self, feed: str) -> tuple[FetchError, float | None] | None:
@@ -126,11 +130,8 @@ class LiveSource:
         """Record whether any request made for this feed was answered from the cache instead of the network. A fetch
         a screen asks for on its own (an image, a gallery product) passes `report=False`: the poll in flight reads the
         feed's state when it ends, and a cached picture must not make that poll look stale or failed."""
-        now = self._clock.monotonic()
-        if self._pruned is None or (self._pruned.done() and now - self._pruned_at >= PRUNE_EVERY):
-            # old cache entries go on a worker thread, before the request reads any; a long session prunes daily
+        if self._pruned is None:  # old cache entries go on a worker thread, before the first request reads any
             self._pruned = asyncio.ensure_future(asyncio.to_thread(self._prune))
-            self._pruned_at = now
         await asyncio.shield(self._pruned)
         with watch_stale() as marker:
             try:
@@ -138,6 +139,7 @@ class LiveSource:
             finally:
                 if report:
                     self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
+                    self._answers[feed] = self._answers.get(feed, 0) + len(marker.urls)
                     if marker.failure is not None and feed not in self._throttled:
                         self._throttled[feed] = (marker.failure, marker.retry_after)
 
@@ -223,10 +225,34 @@ class LiveSource:
     # ---- outlook and alerts -----------------------------------------------------------------------------------
 
     async def outlook(self) -> Outlook:
+        """The outlook text of each basin, the areas and the invests. A part that fails keeps its last good answer and
+        the failure is reported to the poller (which backs off and shows it), so one bad basin text does not stop the
+        other parts from updating, and nothing is swallowed."""
+        failures: list[Exception] = []
+
+        async def part[T](name: str, call: Callable[[], Awaitable[T]], default: T) -> T:
+            try:
+                value = await call()
+            except (FetchError, ParseError) as exc:
+                failures.append(exc)
+                return self._outlook_kept.get(name, default)
+            self._outlook_kept[name] = value
+            return value
+
         async with self._feed(protocol.OUTLOOK):
-            texts = await self.nhc.outlook_text()
-            gis = await self.nhc.outlook_gis()
-            return Outlook(texts, gis, await self._invests())
+            texts = [
+                text
+                for basin in (Basin.AL, Basin.EP, Basin.CP)
+                if (text := await part(basin.value, lambda b=basin: self.nhc.outlook_basin(b), None)) is not None  # type: ignore[misc]
+            ]
+            gis = await part("gis", self.nhc.outlook_gis, OutlookGis(None))
+            no_invests: tuple[BestTrack, ...] = ()
+            invests = await part("invests", self._invests, no_invests)
+            if failures:
+                self._throttled.setdefault(
+                    protocol.OUTLOOK, (FetchError("outlook", f"{type(failures[0]).__name__}: {failures[0]}"), None)
+                )
+            return Outlook(tuple(texts), gis, invests)
 
     async def _invests(self) -> tuple[BestTrack, ...]:
         """Invest b-decks touched in the last two days whose newest fix is just as recent."""

@@ -353,14 +353,20 @@ class NhcClient:
         failure: Exception | None = None
         for basin in (Basin.AL, Basin.EP, Basin.CP):
             try:
-                response = await self.fetch_outlook_text(basin, fallback=fallback)
-                if response.value:
-                    found.append(parse_two(response.value))
+                text = await self.outlook_basin(basin, fallback=fallback)
             except (FetchError, ParseError) as exc:
                 failure = failure or exc
+            else:
+                if text is not None:
+                    found.append(text)
         if failure is not None:
             raise failure
         return tuple(found)
+
+    async def outlook_basin(self, basin: Basin, *, fallback: bool = False) -> OutlookText | None:
+        """One basin's outlook text; None when NOAA has none. A failed fetch or an unparsable text raises."""
+        response = await self.fetch_outlook_text(basin, fallback=fallback)
+        return parse_two(response.value) if response.value else None
 
     async def outlook_gis(self) -> OutlookGis:
         """The outlook areas. A zip NOAA does not serve (404) is no areas; any other failure raises."""

@@ -449,7 +449,8 @@ def _chance(match: re.Match[str]) -> Chance:
 def parse_two(text: str | bytes) -> OutlookText:
     """Parse a tropical weather outlook: its areas with 48 hour and 7 day chances, and the active systems paragraph."""
     text = normalize_newlines(text)
-    start = re.search(r"^\s*Tropical Weather Outlook\s*$", text, re.IGNORECASE | re.MULTILINE)
+    # A special outlook replaces the routine one in the same file and product header, under a longer heading.
+    start = re.search(r"^\s*(?:Special\s+)?Tropical Weather Outlook\s*$", text, re.IGNORECASE | re.MULTILINE)
     if start is None:
         raise ParseError("not a tropical weather outlook: no 'Tropical Weather Outlook' heading")
     lines = text[start.end() :].split("\n")

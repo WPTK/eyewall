@@ -400,3 +400,10 @@ def test_outlook_text_from_api_weather_gov_parses_the_same():
 def test_outlook_without_a_heading_raises():
     with pytest.raises(ParseError):
         parse_two("Hello")
+
+
+def test_a_special_outlook_parses_like_the_routine_one():
+    """NHC issues a Special Tropical Weather Outlook under the same product header, into the same tgftp file."""
+    special = parse_two(nhc_bytes("two/at_special_20261031.txt"))
+    routine = parse_two(nhc_bytes("two/at_20261031.txt"))
+    assert special == routine
