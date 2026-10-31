@@ -31,6 +31,7 @@ class AlertLogScreen(Screen[None]):
 
     HEADERS = ("Time (Z)", "Event", "Storm", "Message")
     _built_width: int | None = None
+    _built: tuple[object, ...] | None = None  # what the table shows now: its rows and its message width
 
     def on_mount(self) -> None:
         self.refresh_data()
@@ -66,11 +67,18 @@ class AlertLogScreen(Screen[None]):
         table = self.query_one("#alert-table", DataTable)
         rows = self._rows()
         self._built_width = self._message_width(rows)
-        table.clear(columns=True)
-        for header, width in zip(self.HEADERS, (*self._fixed_widths(rows), self._built_width), strict=True):
-            table.add_column(header, width=width)
-        for time, title, storm, message in rows:
-            table.add_row(time, title, storm, Text(message), height=None)
+        built = (self._built_width, [(time, title.plain, storm, message) for time, title, storm, message in rows])
+        if built != self._built:  # a poll that added no alert leaves the reader where they are
+            self._built = built
+            cursor, scroll = table.cursor_row, table.scroll_y
+            table.clear(columns=True)
+            for header, width in zip(self.HEADERS, (*self._fixed_widths(rows), self._built_width), strict=True):
+                table.add_column(header, width=width)
+            for time, title, storm, message in rows:
+                table.add_row(time, title, storm, Text(message), height=None)
+            if rows:
+                table.move_cursor(row=min(cursor, len(rows) - 1), scroll=False)
+                table.scroll_to(y=scroll, animate=False)
         empty = self.query_one("#alert-empty", Static)
         empty.update("No alerts yet this session.")
         empty.display = not self.eye.alert_log

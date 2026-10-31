@@ -40,5 +40,5 @@ pipx install git+https://github.com/WPTK/eyewall
 ## Settings
 
 The first save from the settings screen (`S`, then `Ctrl+S`) creates `config.toml` in the per-user config directory
-(`%APPDATA%\eyewall` on Windows, `~/.config/eyewall` on Linux, `~/Library/Application Support/eyewall` on macOS).
+(`%LOCALAPPDATA%\eyewall` on Windows, `~/.config/eyewall` on Linux, `~/Library/Application Support/eyewall` on macOS).
 `--config PATH` reads another file; `--no-config` ignores the file for one run.

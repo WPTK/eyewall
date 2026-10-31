@@ -170,8 +170,10 @@ async def test_basin_filter_and_units() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await press(pilot, "2")
-        assert "ERIN" not in screen_text(app).split("Headline")[0].split("╮")[0]
         assert app.basin_filter == "EP"
+        storms = app.screen.query_one("#storms").region
+        listed = screen_text(app).splitlines()[storms.y : storms.bottom]
+        assert not any("ERIN" in line[storms.x : storms.right] for line in listed)
         await press(pilot, "a")
         assert "ERIN" in screen_text(app)
         preset = app.units

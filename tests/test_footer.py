@@ -245,8 +245,11 @@ async def test_help_survives_a_crowded_status_at_every_width(width: int) -> None
         app.poller.freshness = lambda feed: Freshness(FreshnessState.STALE, age=7500.0)  # type: ignore[method-assign]
         app.poller.active = lambda feed: True  # type: ignore[method-assign]
         app.alert_log = [object()] * 12  # type: ignore[list-item]
+        app.screen.refresh_status()  # type: ignore[attr-defined]
         await pilot.pause()
-        one_row(app, width)
+        row = one_row(app, width)
+        assert app.status_text(width, app.screen).plain.strip() == row.strip()  # redrawn from the crowded state
+        assert "enter detail" in row
 
 
 async def test_no_footer_below_the_help_threshold() -> None:

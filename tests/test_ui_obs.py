@@ -382,7 +382,7 @@ async def test_a_silent_watchlist_buoy_reads_not_reporting_on_its_chart_screen()
         app.open_buoy("42001")
         await settle(pilot)
         assert isinstance(app.screen, BuoyDetailScreen)
-        assert "not reporting" in screen_text(app) or "waiting" in screen_text(app)
+        assert "not reporting" in screen_text(app)
 
 
 # ---- review fixes ------------------------------------------------------------------------------------------------

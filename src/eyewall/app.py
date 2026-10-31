@@ -227,7 +227,7 @@ class EyewallApp(App[None]):
         self.theme = THEME_NAME
         self.set_interval(1.0, self._pulse)
         if self.replay is None and self.config_path is not None and not self.config_path.exists():
-            self.notify(f"Settings are saved to {self.config_path}", timeout=6)
+            self.notify(f"Settings are saved to {self.config_path}", timeout=6, markup=False)
         if self.replay is not None:
             times = self.replay.advisory_times()
             if times and times[0] > self.replay.now():
@@ -304,6 +304,7 @@ class EyewallApp(App[None]):
                 title=fmt.event_title(event),
                 severity="warning" if event.severity is Severity.WARNING else "information",
                 timeout=TOAST_SECONDS,
+                markup=False,
             )
         if events_ and self.config.alerts.bell:
             self.bell()
@@ -426,6 +427,7 @@ class EyewallApp(App[None]):
 
         def saved(config: Config | None) -> None:
             if config is not None:
+                self.units = config.units.preset  # the screen was seeded from the shown units, which `u` may have moved
                 self.apply_config(config)
 
         self.push_screen(SettingsScreen(self.config, self.units), saved)
@@ -439,8 +441,6 @@ class EyewallApp(App[None]):
         self.store.config = new
         self.poller.config = new.poll
         self.poller.engine.rules = new.alerts
-        if new.units != old.units:
-            self.units = new.units.preset
         if new.map != old.map:
             self.glyphs = glyphs_for(new.map.glyph_set)
             self.map_mode = Mode.ASCII if new.map.glyph_set == "ascii" else Mode.BRAILLE
@@ -494,10 +494,12 @@ class EyewallApp(App[None]):
                         break
                     backup = path.with_name(f"{path.name}.bak{n}")
                 shutil.copy2(path, backup)
-                self.notify(f"{path.name} could not be read; the original is kept as {backup.name}.", timeout=8)
+                self.notify(
+                    f"{path.name} could not be read; the original is kept as {backup.name}.", timeout=8, markup=False
+                )
             save_config(self._for_save(new), path)
         except OSError as exc:
-            self.notify(f"Could not save {path}: {exc.strerror or exc}", severity="error", timeout=8)
+            self.notify(f"Could not save {path}: {exc.strerror or exc}", severity="error", timeout=8, markup=False)
             return False
         self._file_broken = False
         return True
@@ -599,7 +601,7 @@ class EyewallApp(App[None]):
                 await self.set_watch(kind, station_id, wanted)
             except Exception as exc:
                 log.exception("could not %s %s", "pin" if wanted else "unpin", station_id)
-                self.notify(f"Could not change the watchlist: {exc}", severity="error", timeout=8)
+                self.notify(f"Could not change the watchlist: {exc}", severity="error", timeout=8, markup=False)
 
         self.run_worker(work(), exclusive=False, exit_on_error=False)
 
@@ -623,6 +625,8 @@ class EyewallApp(App[None]):
     # ---- replay transport -------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        if isinstance(self.screen, TooSmallScreen):  # nothing opens a screen on top of the notice
+            return action in ("quit", "help_quit")
         return not (action in REPLAY_ACTIONS and self.replay is None)
 
     def action_play_pause(self) -> None:

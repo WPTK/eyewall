@@ -87,6 +87,12 @@ class StormDetailScreen(Screen[None]):
             self.query_one("#detail-tabs", TabbedContent).active = f"tab-{self._first_tab}"
         self.refresh_data()
         self.refresh_status()
+        self.call_after_refresh(self._focus_active_pane)
+
+    def _focus_active_pane(self) -> None:
+        tabs = self.query_one("#detail-tabs", TabbedContent)
+        if tabs.active and not isinstance(self.focused, DataTable | VerticalScroll | OptionList):
+            self._focus_pane(tabs.get_pane(tabs.active))
 
     # ---- data -------------------------------------------------------------------------------------------------
 
@@ -165,7 +171,7 @@ class StormDetailScreen(Screen[None]):
     def action_back(self) -> None:
         self.app.pop_screen()
 
-    def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Keys that do something on one tab only are off, and so out of the footer, on the others."""
         try:
             tabs = self.query_one("#detail-tabs", TabbedContent)
@@ -176,7 +182,18 @@ class StormDetailScreen(Screen[None]):
             return tab == "public"
         if action == "pin":
             return tab in STATION_TABS
+        if action == "tab" and parameters:
+            return not self._table_can_scroll(
+                1 if parameters[0] == 1 else -1
+            )  # sideways first, then on to the next tab
         return True
+
+    def _table_can_scroll(self, step: int) -> bool:
+        """Whether the focused table has columns off screen in the direction of `step`, so the arrow should scroll."""
+        table = self.focused
+        if not isinstance(table, DataTable):
+            return False
+        return table.scroll_x < table.max_scroll_x if step > 0 else table.scroll_x > 0
 
     def action_tab(self, step: int) -> None:
         ids = [f"tab-{t}" for t, _ in TABS]
@@ -186,13 +203,17 @@ class StormDetailScreen(Screen[None]):
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Land the focus on the tab's table, so the arrows and Enter act on its rows straight away."""
-        gallery = self.query_one("#graphics-gallery", GalleryPanel)
-        gallery.set_active(event.pane.id == "tab-graphics")
-        for table in event.pane.query(StationTable):
-            table.focus()
-            break
-        if event.pane.id == "tab-graphics":
-            gallery.query_one(OptionList).focus()
+        self.query_one("#graphics-gallery", GalleryPanel).set_active(event.pane.id == "tab-graphics")
+        self._focus_pane(event.pane)
+
+    def _focus_pane(self, pane: TabPane) -> None:
+        """The gallery's list, or the pane's table or text, whichever it has: the arrows scroll it at once."""
+        if pane.id == "tab-graphics":
+            pane.query_one(OptionList).focus()
+            return
+        for content in pane.query("DataTable, VerticalScroll"):
+            content.focus()
+            return
 
     def on_screen_suspend(self) -> None:
         self.query_one("#graphics-gallery", GalleryPanel).set_active(False)

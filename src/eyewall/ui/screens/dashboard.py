@@ -236,11 +236,28 @@ class DashboardScreen(Screen[None]):
 
     def action_toggle_map(self) -> None:
         self._map_toggled = not self._map_toggled
-        self._apply_layout()
+        self._relayout()
 
     def action_full_map(self) -> None:
         self._full_map = not self._full_map
+        self._relayout()
+
+    def _relayout(self) -> None:
+        """A layout key: the panels are refitted to the new width, and the focus goes where the keys still work."""
         self._apply_layout()
+        self.call_after_refresh(self.fit_stack)
+        self.call_after_refresh(self._refocus)
+
+    def _refocus(self) -> None:
+        """Hiding a focused widget clears the focus; give it to the map when it is shown, else to the storm list."""
+        if self.focused is not None:
+            return
+        map_shown = (
+            self._full_map
+            or self.has_class("show-map")
+            or not (self.has_class("compact") or self.has_class("hide-map"))
+        )
+        (self.map_view if map_shown else self.query_one("#storms", StormList)).focus()
 
     def action_layers(self) -> None:
         self.eye.open_layers()

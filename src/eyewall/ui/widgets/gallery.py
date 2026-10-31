@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import textwrap
 import webbrowser
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -71,6 +72,7 @@ class ImageView(Widget):
         super().__init__(id=id)
         self._lines: list[Strip] = []
         self._is_picture = False
+        self._message = ""
 
     def show(self, frame: FallbackFrame) -> None:
         self._lines = [
@@ -81,11 +83,20 @@ class ImageView(Widget):
         self.refresh()
 
     def say(self, message: str) -> None:
-        self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in message.splitlines() or [""]]
+        self._message = message
         self._is_picture = False
+        self._wrap()
         self.refresh()
 
+    def _wrap(self) -> None:
+        """The message in lines no wider than the widget, so a long reason or a key hint is never cut off."""
+        width = self.size.width or 10_000
+        lines = [part for line in self._message.splitlines() or [""] for part in textwrap.wrap(line, width) or [""]]
+        self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in lines]
+
     def on_resize(self, event: events.Resize) -> None:
+        if not self._is_picture:
+            self._wrap()
         self.post_message(self.Resized())
 
     def render_line(self, y: int) -> Strip:
@@ -163,6 +174,9 @@ class GalleryPanel(Vertical):
         items = build_items(state, self.eye.floaters_for(self.storm_id)) if state is not None else []
         if [i.key for i in items] != [i.key for i in self.items]:
             self._fill(items)
+        elif not items:
+            self._drop_picture()
+            self._say(self._empty_message())
         else:
             by_key = {i.key: i for i in items}
             self.items = items
@@ -256,7 +270,7 @@ class GalleryPanel(Vertical):
         wanted = (item.key, item.url, item.version)
         if (self._shown == wanted and self._frames is not None) or self._loading == wanted or self._failed == wanted:
             return
-        self._shown = None
+        self._drop_picture()  # the old picture must not keep playing under the new title
         self._loading = wanted
         self._update_caption(loading=True)
         self._say("Loading...")

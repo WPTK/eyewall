@@ -127,7 +127,7 @@ class OutlookScreen(Screen[None]):
             with Vertical(id="outlook-left"):
                 with VerticalScroll(id="outlook-scroll"):
                     yield Static("", id="outlook-text")
-                yield Static("Watchlist   Enter: charts   w: edit", id="watchlist-title")
+                yield Static("Watchlist   w: edit", id="watchlist-title")
                 yield StationTable(id="watchlist")
             yield MapPane(self.map_view, id="outlook-map")
         yield Static("", id="outlook-status")

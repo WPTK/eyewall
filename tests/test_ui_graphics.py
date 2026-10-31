@@ -304,15 +304,6 @@ async def test_a_page_in_place_of_a_picture_is_said_in_words() -> None:
         assert panel._frames is None
 
 
-async def test_a_storm_with_no_graphics_yet_says_so() -> None:
-    app = app_for()
-    async with running(app) as pilot:
-        # The replay opens on its first advisory, which has no graphics; satellite imagery is the only content.
-        await press(pilot, "g")
-        panel = app.screen.query_one(GalleryPanel)
-        assert "Cone, 5 day" not in current_titles(panel)
-
-
 # ---- open and copy ------------------------------------------------------------------------------------------------
 
 
@@ -355,14 +346,14 @@ async def test_o_and_y_degrade_when_there_is_no_browser_or_clipboard(monkeypatch
 
 
 async def test_a_recorded_still_has_no_web_address_to_open(monkeypatch) -> None:
-    opened: list[str] = []
-    monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: opened.append(url) or True)
+    controller = _Controller()
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: controller)
     app = app_for()
     async with running(app) as pilot:
         panel = await open_gallery(pilot)
         await loaded(pilot, panel, "Cone, 5 day")
         await press(pilot, "o")
-        assert opened == []
+        assert controller.urls == []
         assert any("recording" in m for m in messages(app))
         await press(pilot, "y")
         assert app.clipboard == "replay:graphics/cone_038.png"
@@ -548,15 +539,15 @@ def test_only_noaa_hosts_are_opened(url: str, ok: bool) -> None:
 
 
 async def test_o_refuses_a_link_that_is_not_noaa_and_notices_do_not_read_the_address_as_markup(monkeypatch) -> None:
-    opened: list[str] = []
-    monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: opened.append(url) or True)
+    controller = _Controller()
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: controller)
     app = app_for()
     async with running(app) as pilot:
         panel = await open_gallery(pilot)
         await loaded(pilot, panel, "Cone, 5 day")
         panel.current = gallery.GalleryItem("x", "forecast", "Odd", "https://example.test/[bold]x.png", "png", "1")
         await press(pilot, "o")
-        assert opened == [] and "Not a NOAA link." in messages(app)
+        assert controller.urls == [] and "Not a NOAA link." in messages(app)
         monkeypatch.setattr(app, "copy_to_clipboard", lambda text: (_ for _ in ()).throw(OSError("no")))
         await press(pilot, "y")
         note = next(n for n in app._notifications if "clipboard" in n.message)

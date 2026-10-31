@@ -33,6 +33,20 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         ),
     ),
     (
+        "Graphics",
+        (
+            ("o  y", "open the image's address in a browser; copy it"),
+            ("[ ]  space", "step through a loop; play or pause it"),
+        ),
+    ),
+    (
+        "Watchlist",
+        (
+            ("a  d", "add a station; remove the one under the cursor"),
+            ("Tab  Enter", "other table; open a buoy's charts"),
+        ),
+    ),
+    (
         "Anywhere",
         (
             ("O  w  /", "outlook; watchlist; find a station (Ctrl+P pins)"),

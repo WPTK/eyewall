@@ -186,6 +186,7 @@ DashboardScreen.hide-map #side-tabs {
 
 DashboardScreen.hide-map #side-stack {
     width: 1fr;
+    max-width: 100%;
 }
 
 DashboardScreen.full-map #storms,
@@ -250,7 +251,6 @@ StormDetailScreen DataTable {
 
 #watchlist {
     height: 1fr;
-    min-height: 5;
 }
 
 #outlook-map {
