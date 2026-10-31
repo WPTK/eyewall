@@ -32,6 +32,7 @@ NARROW_BELOW = 110
 COMPACT_BELOW = 90
 ROW_REFRESH_SECONDS = 30.0
 HEADLINE_ROWS = 6  # the least the stacked headline is given: its border and four lines
+MIN_PANEL_ROWS = 4  # the least any other stacked panel is given: its border and two lines
 
 
 class DashboardMap(MapView):
@@ -99,32 +100,45 @@ class DashboardScreen(Screen[None]):
         self.call_after_refresh(self.fit_stack)
 
     def fit_stack(self) -> None:
-        """Share the stacked column's height between its panels. The headline keeps at least `HEADLINE_ROWS`. The
-        others take what their text needs, up to their cap, the shortest first, and an even share when there is not
-        enough room. The headline gets the rest, up to what its text needs; a panel whose text is longer than its rows
-        scrolls inside itself."""
+        """Share the stacked column's height between its panels. The headline keeps at least `HEADLINE_ROWS` and every
+        other panel at least `MIN_PANEL_ROWS`; when the column is too short for that, panels are dropped from the
+        bottom until the rest fit. The others take what their text needs, up to their cap, the shortest first, and an
+        even share when there is not enough room. The headline gets the rest, up to what its text needs. Once it has
+        all of its text, rows still free go to the panels cut short by their cap. A panel whose text is longer than
+        its rows scrolls inside itself."""
         stack = self.query_one("#side-stack")
-        panels = [p for p in stack.query(Panel) if p.display]
-        if not stack.display or not panels or stack.size.height < 1:
+        filled = [p for p in stack.query(Panel) if p.filled]
+        if not stack.display or not filled or stack.size.height < 1:
             return
+        headline = next((p for p in filled if p.kind == "headline"), None)
+        others = [p for p in filled if p is not headline]
+        reserved = HEADLINE_ROWS if headline is not None else 0
+        while others and reserved + MIN_PANEL_ROWS * len(others) > stack.size.height:
+            others.pop().display = False
+        panels = ([headline] if headline is not None else []) + others
+        full: dict[Panel, int] = {}
         wants: dict[Panel, int] = {}
         for panel in panels:
-            want = panel.body.outer_size.height + 2  # the text and the border
-            cap = panel.styles.max_height
-            if cap is not None and cap.unit == Unit.CELLS:
-                want = min(want, int(cap.value))
-            wants[panel] = max(want, int(panel.styles.min_height.value) if panel.styles.min_height else 3)
+            panel.display = True
+            full[panel] = max(panel.body.outer_size.height + 2, MIN_PANEL_ROWS)  # the text and the border
+            cap = panel.styles.base.max_height  # the stylesheet's cap, not the lifted one set below
+            capped = int(cap.value) if cap is not None and cap.unit == Unit.CELLS else full[panel]
+            wants[panel] = max(min(full[panel], capped), MIN_PANEL_ROWS)
         rows = dict.fromkeys(panels, 0)
-        headline = next((p for p in panels if p.kind == "headline"), None)
-        left = stack.size.height - (HEADLINE_ROWS if headline is not None else 0)
-        others = sorted((p for p in panels if p is not headline), key=lambda p: wants[p])
-        for index, panel in enumerate(others):
+        left = stack.size.height - reserved
+        for index, panel in enumerate(sorted(others, key=lambda p: wants[p])):
             rows[panel] = min(wants[panel], max(left, 0) // (len(others) - index))
             left -= rows[panel]
         if headline is not None:
             rows[headline] = min(wants[headline], stack.size.height - sum(rows.values()))
+            spare = stack.size.height - sum(rows.values())
+            if rows[headline] >= wants[headline]:  # the headline is whole: the cut-short panels may grow
+                for panel in others:
+                    grow = min(spare, full[panel] - rows[panel])
+                    rows[panel] += grow
+                    spare -= grow
         for panel, height in rows.items():
-            panel.styles.height = max(height, 3)
+            panel.styles.height = panel.styles.max_height = max(height, MIN_PANEL_ROWS)  # lifts the cap when it grew
 
     def _apply_layout(self, width: int | None = None) -> None:
         width = self.size.width if width is None else width

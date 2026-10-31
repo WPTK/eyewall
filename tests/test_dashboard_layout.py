@@ -8,11 +8,17 @@ import pytest
 from textual.widgets import TabbedContent
 
 from eyewall.ui.adapt import storm_scene
-from eyewall.ui.screens.dashboard import DashboardScreen
+from eyewall.ui.screens.dashboard import HEADLINE_ROWS, MIN_PANEL_ROWS, DashboardScreen
 from eyewall.ui.widgets.panels import Panel
 from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app
 
-STACKED = [(120, 30), (200, 50), (280, 70)]  # 110 columns and up: the panels are stacked beside the map
+STACKED = [
+    (110, 30),
+    (120, 24),
+    (120, 30),
+    (200, 50),
+    (280, 70),
+]  # 110 columns and up: the panels are stacked beside the map
 TABBED = [(100, 50), (80, 24)]
 ALL = STACKED + TABBED
 
@@ -31,11 +37,34 @@ async def test_the_stacked_column_fits_the_screen(size) -> None:  # type: ignore
         shown = [p for p in _stack(app).values() if p.display]
         assert {p.kind for p in shown} == {"headline", "ww", "wind", "surge", "buoys"}
         for panel in shown:
-            assert panel.region.height >= 4  # a border and at least two lines
+            assert panel.region.height >= MIN_PANEL_ROWS
             assert panel.region.bottom <= side.region.bottom <= app.size.height - 1  # clear of the status line
         assert sum(p.region.height for p in shown) <= side.size.height
         # The headline gets what is left: its first line is always there, and at 120x30 it is not squeezed below four.
         assert "advisory" in screen_text(app)
+
+
+async def test_a_short_stacked_column_drops_panels_from_the_bottom() -> None:
+    app = replay_app()
+    async with running(app, (120, 20)) as pilot:
+        await into_the_storm(pilot)
+        side = app.screen.query_one("#side-stack")
+        panels = _stack(app)
+        assert [k for k, p in panels.items() if p.display] == ["headline", "ww", "wind", "surge"]  # buoys is cut
+        assert side.virtual_size.height <= side.size.height  # nothing runs off the column
+        assert panels["headline"].region.height >= HEADLINE_ROWS
+        for kind in ("ww", "wind", "surge"):
+            assert panels[kind].region.height >= MIN_PANEL_ROWS
+        status = app.screen.query_one("#status")
+        assert status.region.bottom == app.size.height and "advisory" in screen_text(app)
+
+
+async def test_a_very_tall_column_lets_every_panel_show_all_its_text() -> None:
+    app = replay_app()
+    async with running(app, (280, 70)) as pilot:
+        await into_the_storm(pilot)
+        for panel in _stack(app).values():
+            assert panel.virtual_size.height <= panel.size.height  # nothing scrolls, no cap holds a panel back
 
 
 @pytest.mark.parametrize("size", TABBED, ids=lambda s: f"{s[0]}x{s[1]}")
@@ -65,6 +94,27 @@ async def test_the_legend_is_never_cut(size) -> None:  # type: ignore[no-untyped
         assert all(
             name in shown for name in ("storm", "forecast", "buoy", "gauge")
         )  # on the screen, not just in the text
+
+
+async def test_the_legend_keeps_its_height_when_the_cursor_is_set() -> None:
+    app = replay_app()
+    async with running(app, (200, 50)) as pilot:
+        await into_the_storm(pilot)
+        view = app.screen.map_view
+        for _ in range(2):  # the overview, then zoomed in to the 10m coast whose label is longer
+            for width in range(60, 141):
+                assert view.cursor is None
+                lines = view.legend(width).plain.count(chr(10))
+                view.cursor = (25.0, -75.0)
+                assert view.legend(width).plain.count(chr(10)) == lines, width
+                view.cursor = None
+            for _ in range(6):
+                view.action_zoom_in()
+        assert view.detailed
+        legend, before = app.screen.query_one(".legend"), view.size
+        await pilot.click(view, offset=(5, 5))
+        await pilot.pause()
+        assert view.cursor is not None and view.size == before and legend.size.height == 1
 
 
 @pytest.mark.parametrize("size", ALL, ids=lambda s: f"{s[0]}x{s[1]}")

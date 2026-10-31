@@ -31,6 +31,7 @@ class Panel(VerticalScroll):
         self.kind = kind
         self.border_title = title
         self.body = Static("")
+        self.filled = True  # has text to show; the stacked column may still hide a filled panel when rows run short
 
     def compose(self) -> ComposeResult:
         yield self.body
@@ -40,7 +41,7 @@ class Panel(VerticalScroll):
         text.rstrip()  # the builders end every line with a newline; the last one would show as a blank row
         self.body.update(text)
         if self.kind != "headline":  # no text, no panel: an empty box says nothing
-            self.display = has_text(text)
+            self.filled = self.display = has_text(text)
 
 
 class StatusBar(Static):
