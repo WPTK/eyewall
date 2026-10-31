@@ -8,11 +8,17 @@ import pytest
 from textual.widgets import TabbedContent
 
 from eyewall.ui.adapt import storm_scene
-from eyewall.ui.screens.dashboard import DashboardScreen
+from eyewall.ui.screens.dashboard import HEADLINE_ROWS, MIN_PANEL_ROWS, DashboardScreen
 from eyewall.ui.widgets.panels import Panel
-from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app
+from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app, settle
 
-STACKED = [(120, 30), (200, 50), (280, 70)]  # 110 columns and up: the panels are stacked beside the map
+STACKED = [
+    (110, 30),
+    (120, 24),
+    (120, 30),
+    (200, 50),
+    (280, 70),
+]  # 110 columns and up: the panels are stacked beside the map
 TABBED = [(100, 50), (80, 24)]
 ALL = STACKED + TABBED
 
@@ -31,11 +37,34 @@ async def test_the_stacked_column_fits_the_screen(size) -> None:  # type: ignore
         shown = [p for p in _stack(app).values() if p.display]
         assert {p.kind for p in shown} == {"headline", "ww", "wind", "surge", "buoys"}
         for panel in shown:
-            assert panel.region.height >= 4  # a border and at least two lines
+            assert panel.region.height >= MIN_PANEL_ROWS
             assert panel.region.bottom <= side.region.bottom <= app.size.height - 1  # clear of the status line
         assert sum(p.region.height for p in shown) <= side.size.height
         # The headline gets what is left: its first line is always there, and at 120x30 it is not squeezed below four.
         assert "advisory" in screen_text(app)
+
+
+async def test_a_short_stacked_column_drops_panels_from_the_bottom() -> None:
+    app = replay_app()
+    async with running(app, (120, 20)) as pilot:
+        await into_the_storm(pilot)
+        side = app.screen.query_one("#side-stack")
+        panels = _stack(app)
+        assert [k for k, p in panels.items() if p.display] == ["headline", "ww", "wind", "surge"]  # buoys is cut
+        assert side.virtual_size.height <= side.size.height  # nothing runs off the column
+        assert panels["headline"].region.height >= HEADLINE_ROWS
+        for kind in ("ww", "wind", "surge"):
+            assert panels[kind].region.height >= MIN_PANEL_ROWS
+        status = app.screen.query_one("#status")
+        assert status.region.bottom == app.size.height and "advisory" in screen_text(app)
+
+
+async def test_a_very_tall_column_lets_every_panel_show_all_its_text() -> None:
+    app = replay_app()
+    async with running(app, (280, 70)) as pilot:
+        await into_the_storm(pilot)
+        for panel in _stack(app).values():
+            assert panel.virtual_size.height <= panel.size.height  # nothing scrolls, no cap holds a panel back
 
 
 @pytest.mark.parametrize("size", TABBED, ids=lambda s: f"{s[0]}x{s[1]}")
@@ -65,6 +94,50 @@ async def test_the_legend_is_never_cut(size) -> None:  # type: ignore[no-untyped
         assert all(
             name in shown for name in ("storm", "forecast", "buoy", "gauge")
         )  # on the screen, not just in the text
+
+
+async def test_the_legend_never_changes_height_when_the_cursor_is_set() -> None:
+    """A regression guard for #47, which could not be reproduced: the legend is at most 74 cells wide and the cursor
+    only joins it from 80, so setting the cursor must never wrap it or resize the map. This pins that, it fixes nothing."""
+    app = replay_app()
+    async with running(app, (200, 50)) as pilot:
+        await into_the_storm(pilot)
+        view = app.screen.map_view
+        for width in range(60, 141):
+            view.cursor = None
+            lines = view.legend(width).plain.count("\n")
+            view.cursor = (25.0, -75.0)
+            assert view.legend(width).plain.count("\n") == lines, width
+        view.cursor = None
+        legend, before = app.screen.query_one(".legend"), view.size
+        await pilot.click(view, offset=(5, 5))
+        await pilot.pause()
+        assert view.cursor is not None and view.size == before and legend.size.height == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [[(120, 20), (200, 50)], [(120, 20), (280, 70)], [(200, 50), (120, 20), (200, 50)]],
+    ids=lambda p: "-".join(f"{w}x{h}" for w, h in p),
+)
+async def test_a_live_resize_matches_a_fresh_start(path) -> None:  # type: ignore[no-untyped-def]
+    """A regression guard, not a reproduction: it passes on the code before the measurement change too. After a live resize
+    the panels (dropped, shown again, grown) are the same as when the app starts at the final size."""
+    app = replay_app()
+    async with running(app, path[0]) as pilot:
+        await into_the_storm(pilot)
+        for size in path[1:]:
+            await pilot.resize_terminal(*size)
+            await settle(pilot)
+            await settle(pilot)
+        heights = {k: (p.display, p.region.height) for k, p in _stack(app).items()}
+    fresh = replay_app()
+    async with running(fresh, path[-1]) as pilot:
+        await into_the_storm(pilot)
+        assert heights == {k: (p.display, p.region.height) for k, p in _stack(fresh).items()}  # as if started there
+        if path[-1] == (280, 70):
+            for panel in _stack(fresh).values():
+                assert panel.virtual_size.height <= panel.size.height
 
 
 @pytest.mark.parametrize("size", ALL, ids=lambda s: f"{s[0]}x{s[1]}")
