@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0] - 2026-10-31
+
+### Changed
+
+- Poll the watchlisted buoys and tide gauges when no storm is active, so the outlook watchlist fills on a quiet day ([`621a924`](https://github.com/WPTK/eyewall/commit/621a924d300690cd79719b02b2c03f0446521a0f), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Make the outlook watchlist a station table that opens a buoy's charts with Enter ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Show "not reporting" in the nearest-buoys strip for stations that have gone silent ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Color the buoy and tide gauge marks on the map by reported wind and dim them when stale ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+
+### Added
+
+- Add the Buoys tab with distance, wind bands at 34, 50 and 64 kt, falling-pressure flags, wave height, water temperature, age and closest approach ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add the Tides tab with observed and predicted water level and the residual ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add the buoy detail screen with Sparklines, braille charts of pressure, wind with gust and wave height over 24, 48 and 72 hours, the latest observation and the interval extremes from the supplemental file ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add the watchlist screen, the `/` station search and pinning with `p`, saved to the config file ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add the settings screen for poll intervals, units, basins, nearby radii, alert rules and glyph set, saved to the TOML config ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add 6-minute tide predictions to the live and replay sources and the supplemental file to the data source protocol ([`621a924`](https://github.com/WPTK/eyewall/commit/621a924d300690cd79719b02b2c03f0446521a0f), [#13](https://github.com/WPTK/eyewall/pull/13))
+- Add Pilot tests for the new screens and snapshot tests for the Buoys tab, Tides tab, buoy detail, watchlist and settings ([`54018ae`](https://github.com/WPTK/eyewall/commit/54018aec8c45d07bd5affc8c6298416447843097), [#13](https://github.com/WPTK/eyewall/pull/13))
+
+[0.6.0]: https://github.com/WPTK/eyewall/releases/tag/v0.6.0
+
 ## [0.5.0] - 2026-10-31
 
 ### Changed
