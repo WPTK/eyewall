@@ -59,4 +59,60 @@ The commands in `CLAUDE.md`, plus `python -m eyewall --replay demo --headless --
 
 ## State after
 
-(to be filled in by the session)
+**What exists.**
+
+- `sources/protocol.py` (`DataSource`, the feed names), `sources/cache.py` (a caching `httpx` transport: ETag and
+  Last-Modified validators, a 304 answered with the cached body, a stale copy served when the network fails or the
+  server answers 429 or 5xx), `sources/live.py` (`LiveSource`, which marks a feed stale when any of its requests came
+  from the cache), `sources/replay.py` and `sources/bundle.py` (the bundle format and its loader).
+- `poll.py` (`Poller`): six feeds on the `[poll]` intervals, a freshness model (loading, fresh, stale, error; stale
+  after 2.5 intervals or when the source answered from its cache), exponential backoff, away mode (intervals times 3),
+  `refresh()`, injectable clock and sleep. The storm products are fetched only when a storm's newest advisory number or
+  `lastUpdate` changes; alerts are polled only while a storm is a US threat; buoy series and tide gauges run at most
+  four at a time, staggered.
+- `state/store.py`, `state/events.py`, `state/alerts.py`: the store with nearby buoys and gauges, the pure event diffs,
+  the `[alerts]` rules and the seen set (`seen_events.json` under `user_data_dir("eyewall")`, keys pruned after 30 days).
+- `eyewall --replay BUNDLE|demo`, `--demo`, `--headless`, `--until +12h|ISO`, `--state-dir`. Headless replay polls on the
+  virtual clock and prints one line per event; without `--replay` it polls the live services once (or for `--until +30m`).
+- `scripts/record_storm.py` and the trimmed Erin bundle at `tests/fixtures/replay/erin2025/` (4.6 MB, 19 August 03Z to
+  21 August 12Z, eight buoys, three tide gauges, two cone graphics). The wheel ships it as `eyewall/demo/erin2025`
+  (hatch `force-include`); a source checkout reads it from the fixtures. `scripts/spot_check_live.py` runs the live
+  source, cuts the network and checks that feeds go stale.
+
+**Result.** `eyewall --replay demo --headless --until +12h` logs 13 events: advisories 31, 31A, 32, 32A and 33; the
+buoy 41047 crossing 34 kt at 03:10Z; at advisory 33 the Storm Surge Warning issued, the tropical storm watch and warning
+changes and the Storm Surge Watch discontinued; and discussions 32 and 33. A second run on the same state directory logs
+none.
+
+**Deviations from the brief and from the plan.**
+
+- The bundle window is 19 to 21 August (the brief said about three days around the crossings), chosen so that `+12h`
+  covers four advisories, the first 34 kt buoy crossing and the surge warning. The bundle also holds the intermediate
+  advisories (`public_a/b/c`), which the brief's layout did not list.
+- Event rules: watches and warnings, classification changes and discussions are compared with the previous state, so what
+  was already in effect at the first load is not news; storms, advisories and outlooks are keyed by identity and
+  de-duplicated by the seen set. Buoy crossings count when they happened within three hours of the poll, silence when the
+  buoy stopped within the last day. Keys are (storm id, advisory number, kind) plus a subject (the watch label, the
+  station and threshold), because one advisory can carry several of the same kind.
+- A storm's advisory number for change detection is the newest across its products (`state.events.current_adv`), not
+  `Storm.adv_num`, which prefers the forecast advisory and so misses intermediate advisories (31A has only a public
+  advisory).
+- M1 fixes: the four text heading patterns tolerate NHC's `...RESENT` suffix (the archive has advisories 22 and 35 of Erin
+  that way; the recorder found it); `ids.ARCHIVE_KINDS` gained `public_a/b/c`; `NhcClient` gained `radii_gis()` and the
+  `fallback` switch on `advisory()`, `outlook_text()` and the API text fetch, which also takes the list's validators.
+- The replay serves no outlook, invests, alerts or satellite (empty values); the bundle format has no place for them yet.
+- The Erin b-deck starts at 06Z on 19 August, so the replay has no past track for its first three hours.
+
+**What the next session must know.**
+
+- The UI (M5) reads `Store` and `Poller`; build `Poller(source, store, AlertEngine(config.alerts, state_dir), config.poll,
+  clock=..., on_events=..., idle_for=...)`, call `run()` in a worker and `observe_presence()` once a second. For a replay,
+  pass the `ReplaySource.clock` (a `VirtualClock`) as the poller's clock and advance it; `step_advisory(+1|-1)` jumps the
+  clock to the next or previous advisory.
+- `Poller.on_result` reports every feed attempt with its `Freshness` for the status bar; `Freshness.from_cache` is the
+  offline marker.
+- `Store.tendency(station, now)` is the only place a pressure tendency should come from (it refuses a quiet station);
+  `state.store.track_fixes(state)` gives the nearby-station inputs with hours counted from the center.
+- Tide gauges use MLLW, or IGLD for `great_lakes` gauges; a gauge that errors is in `Store.tide_errors`, not an exception.
+- Poll granularity in a replay is the storms interval (300 s), so an event is stamped up to five minutes after the
+  advisory's issue time.
