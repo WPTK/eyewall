@@ -7,7 +7,7 @@ so tests and the replay mode can control time. All datetimes in eyewall are time
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Protocol
 
 
@@ -86,3 +86,13 @@ def format_zulu(moment: datetime, *, day: bool = False) -> str:
     utc = ensure_utc(moment)
     stamp = f"{utc:%H:%M}Z"
     return f"{utc:%a} {stamp}" if day else stamp
+
+
+def format_when(moment: datetime, tz: tzinfo | None = None, *, day: bool = False) -> str:
+    """Format as 21:00Z (17:00 EDT), or Wed 21:00Z (Wed 17:00 EDT) with day=True; just the Zulu part without a zone."""
+    stamp = format_zulu(moment, day=day)
+    if tz is None:
+        return stamp
+    local = ensure_utc(moment).astimezone(tz)
+    clock = f"{local:%a %H:%M}" if day else f"{local:%H:%M}"
+    return f"{stamp} ({clock} {local.tzname() or ''})".replace(" )", ")")

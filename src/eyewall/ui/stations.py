@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, tzinfo
 
 from rich.text import Text
 
-from eyewall.clock import format_age, format_zulu
+from eyewall.clock import format_age, format_when, format_zulu
 from eyewall.geo import compass_point
 from eyewall.models.obs import Observation, Station, SupplementalReading, TideStation
 from eyewall.palette import wind_band_color
@@ -376,8 +376,7 @@ def extremes_text(ext: Extremes, hours: float, preset: Preset, tz: tzinfo | None
     def when(moment: datetime | None) -> str:
         if moment is None:
             return ""
-        local = moment.astimezone(tz) if tz is not None else moment
-        return f"  {format_zulu(moment)} ({local:%H:%M})"
+        return f"  {format_when(moment, tz)}"
 
     _kv(out, "Min pressure", preset.fmt_pressure(ext.min_pressure_hpa, "hpa") + when(ext.min_pressure_time))
     gust = None if ext.peak_gust_mps is None else convert(ext.peak_gust_mps, "mps", "kt")

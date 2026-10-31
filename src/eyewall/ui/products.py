@@ -10,7 +10,7 @@ from datetime import datetime, tzinfo
 
 from rich.text import Text
 
-from eyewall.clock import format_zulu
+from eyewall.clock import format_when, format_zulu
 from eyewall.models.forecast import ForecastAdvisory, ForecastFix
 from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import WATCH_WARNING_COLORS, category_color, category_for_knots
@@ -58,12 +58,7 @@ def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None)
     adv = state.advisories.adv_num or storm.adv_num
     age, _ = advisory_age(storm, now)
     _line(out, "Advisory", f"{adv or MISSING}  ({age})")
-    _line(
-        out,
-        "Updated",
-        f"{format_zulu(storm.last_update, day=True) if storm.last_update else MISSING}"
-        f"  {fmt_local(storm.last_update, tz)}",
-    )
+    _line(out, "Updated", format_when(storm.last_update, tz, day=True) if storm.last_update else MISSING)
     _line(out, "Position", f"{fmt_lat(storm.lat)} {fmt_lon(storm.lon)}")
     _line(out, "Max wind", preset.fmt_wind(storm.intensity_kt), style=f"bold {category_color(storm.intensity_kt)}")
     _line(out, "Pressure", preset.fmt_pressure(storm.pressure_mb))

@@ -202,6 +202,8 @@ class EyewallApp(App[None]):
         self.register_theme(EYEWALL_THEME)
         self.theme = THEME_NAME
         self.set_interval(1.0, self._pulse)
+        if self.replay is None and self.config_path is not None and not self.config_path.exists():
+            self.notify(f"Settings are saved to {self.config_path}", timeout=6)
         if self.replay is not None:
             times = self.replay.advisory_times()
             if times and times[0] > self.replay.now():

@@ -15,7 +15,6 @@ class UiGlyphs:
     stale: str
     error: str
     loading: str
-    idle: str
     play: str
     pause: str
     chip: str
@@ -33,7 +32,6 @@ UNICODE = UiGlyphs(
     stale="◐",
     error="✕",
     loading="○",
-    idle="·",
     play="▶",
     pause="⏸",
     chip="■",
@@ -51,7 +49,6 @@ ASCII = UiGlyphs(
     stale="~",
     error="x",
     loading="o",
-    idle=".",
     play=">",
     pause="||",
     chip="#",

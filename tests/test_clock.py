@@ -61,3 +61,13 @@ def test_format_age():
 def test_format_zulu():
     assert format_zulu(START) == "06:00Z"
     assert format_zulu(START, day=True) == "Fri 06:00Z"
+
+
+def test_format_when():
+    from eyewall.clock import format_when
+
+    moment = datetime(2025, 8, 20, 21, 0, tzinfo=UTC)
+    edt = timezone(timedelta(hours=-4), "EDT")
+    assert format_when(moment) == "21:00Z"
+    assert format_when(moment, edt) == "21:00Z (17:00 EDT)"
+    assert format_when(moment, edt, day=True) == "Wed 21:00Z (Wed 17:00 EDT)"
