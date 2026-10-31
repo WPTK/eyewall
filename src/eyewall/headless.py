@@ -54,6 +54,8 @@ class HeadlessResult:
     events: list[Event] = field(default_factory=list)
     polls: int = 0
     ended: datetime | None = None
+    feeds_ok: int = 0  # feed polls that worked
+    feeds_failed: int = 0  # feed polls that raised, timed out or were answered by a server that was failing
 
 
 async def run_replay(
@@ -125,7 +127,11 @@ async def run_live(
         poller = Poller(source, Store(config), AlertEngine(config.alerts, state_dir), config.poll, on_events=collect)
         end = None if until is None else parse_until(until, source.now())
         while True:
-            await poller.tick()
+            for polled in await poller.tick():
+                if polled.ok and not polled.freshness.data_old:
+                    result.feeds_ok += 1
+                else:
+                    result.feeds_failed += 1
             result.polls += 1
             due = poller.seconds_until_next()  # 0.0 means a feed is due now: poll it now, not after a full interval
             wait = poller.interval("storms") if due is None else due

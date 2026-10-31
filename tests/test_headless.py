@@ -200,7 +200,7 @@ async def test_live_headless_polls_a_feed_that_is_due_now_without_waiting_an_int
             pass
 
         async def tick(self):
-            return None
+            return []
 
         def seconds_until_next(self):
             return next(waits)
@@ -306,3 +306,14 @@ async def test_a_newer_set_whose_newest_product_predates_a_stored_intermediate_s
     events = store.apply_products(storm.id, moments[-1], key=("2", None), advisories=mixed)
     assert EventKind.NEW_DISCUSSION in {e.kind for e in events}
     assert store.storms[storm.id].advisories.discussion == late.discussion
+
+
+def test_a_replay_never_reads_a_file_outside_its_bundle(tmp_path):
+    import shutil
+
+    source = demo_source()
+    shutil.copytree(source.directory, tmp_path / "bundle")
+    (tmp_path / "outside.json").write_text("{}", encoding="utf-8")
+    source.directory = tmp_path / "bundle"
+    assert source._read("../outside.json") is None
+    assert source._read("manifest.toml") is not None

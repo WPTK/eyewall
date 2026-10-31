@@ -37,7 +37,7 @@ from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult
 from eyewall.models.wind import WindRadiiGis
 from eyewall.ndbc.client import NdbcClient
-from eyewall.net import FetchError, new_client
+from eyewall.net import FetchError, HttpError, RateLimited, new_client
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.client import NhcClient
 from eyewall.render.images import fetch_image
@@ -45,12 +45,23 @@ from eyewall.sources import protocol
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
 
 CACHE_MAX_AGE = timedelta(days=7)
+PRUNE_EVERY = 24 * 3600.0  # seconds between prunes of the disk cache in one long session
 INVEST_MAX_AGE = timedelta(hours=48)
 MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
 FLOATER_LISTING_TTL = 60.0  # seconds a NESDIS listing of storms is reused, so one satellite poll asks for it once
 PREDICTION_DAYS_BEHIND = 2  # predictions start at midnight UTC this many days back, so the URL (and its cache entry)
 PREDICTION_HOURS = 120  # changes once a day instead of every poll, and the range reaches into the next day or two
+
+
+def _items[T](parsed: Parsed[T] | None, what: str) -> tuple[T, ...]:
+    """The records of a parsed listing. A body that held none and came with a message (an HTML page, bad XML) is not
+    "no records": it raises, so the store keeps its last good listing and the feed shows the failure."""
+    if parsed is None:
+        return ()
+    if not parsed.items and parsed.message:
+        raise ParseError(f"{what}: {parsed.message}")
+    return parsed.items
 
 
 def _is_nesdis(url: str) -> bool:
@@ -77,6 +88,7 @@ class LiveSource:
         self._clock: Clock = clock or SystemClock()
         self.cache = Cache(cache_dir)
         self._pruned: asyncio.Task[int] | None = None  # the first request starts it; every request waits for it
+        self._pruned_at = 0.0
         self._http = new_client(transport=CachingTransport(self.cache, transport))
         self.nhc = NhcClient(self._http)
         self.ndbc = NdbcClient(self._http)
@@ -110,18 +122,24 @@ class LiveSource:
         return self._throttled.get(feed)
 
     @contextlib.asynccontextmanager
-    async def _feed(self, feed: str) -> AsyncIterator[None]:
-        """Record whether any request made for this feed was answered from the cache instead of the network."""
-        if self._pruned is None:  # old cache entries go on a worker thread, before the first request reads any
+    async def _feed(self, feed: str, *, report: bool = True) -> AsyncIterator[None]:
+        """Record whether any request made for this feed was answered from the cache instead of the network. A fetch
+        a screen asks for on its own (an image, a gallery product) passes `report=False`: the poll in flight reads the
+        feed's state when it ends, and a cached picture must not make that poll look stale or failed."""
+        now = self._clock.monotonic()
+        if self._pruned is None or (self._pruned.done() and now - self._pruned_at >= PRUNE_EVERY):
+            # old cache entries go on a worker thread, before the request reads any; a long session prunes daily
             self._pruned = asyncio.ensure_future(asyncio.to_thread(self._prune))
+            self._pruned_at = now
         await asyncio.shield(self._pruned)
         with watch_stale() as marker:
             try:
                 yield
             finally:
-                self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
-                if marker.failure is not None and feed not in self._throttled:
-                    self._throttled[feed] = (marker.failure, marker.retry_after)
+                if report:
+                    self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
+                    if marker.failure is not None and feed not in self._throttled:
+                        self._throttled[feed] = (marker.failure, marker.retry_after)
 
     async def _shared_call[T](self, key: str, call: Callable[[], Awaitable[T]], reuse: float = 0.0) -> T:
         """One request for every caller that asks for `key` while it is in flight, and for `reuse` seconds after it
@@ -190,7 +208,7 @@ class LiveSource:
 
     async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
         """One more NESDIS product for a storm, fetched when the gallery opens; None when NESDIS does not list it."""
-        async with self._feed(protocol.SATELLITE):
+        async with self._feed(protocol.SATELLITE, report=False):
             try:
                 if storm.id.upper() not in await self._floater_storms():
                     return None
@@ -199,7 +217,7 @@ class LiveSource:
                 return None
 
     async def image(self, url: str) -> bytes:
-        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS):
+        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS, report=False):
             return await fetch_image(self._http, url)
 
     # ---- outlook and alerts -----------------------------------------------------------------------------------
@@ -212,10 +230,7 @@ class LiveSource:
 
     async def _invests(self) -> tuple[BestTrack, ...]:
         """Invest b-decks touched in the last two days whose newest fix is just as recent."""
-        try:
-            listing = (await self.nhc.fetch_bdeck_index()).value or ()
-        except (FetchError, ParseError):
-            return ()
+        listing = (await self.nhc.fetch_bdeck_index()).value or ()  # a failure fails the feed
         now = self.now()
         recent = [f for f in listing if f.is_invest and f.modified is not None and now - f.modified <= INVEST_MAX_AGE]
         recent.sort(key=lambda f: f.modified or now, reverse=True)
@@ -239,26 +254,34 @@ class LiveSource:
     async def ndbc_stations(self) -> tuple[Station, ...]:
         async with self._feed(protocol.BUOYS):
             response = await self.ndbc.stations()
-            return response.value.items if response.value else ()
+            if response.value is not None and not response.value.items:  # a catalog without stations is not one
+                raise ParseError(f"the NDBC station catalog: {response.value.message or 'no stations'}")
+            return _items(response.value, "the NDBC station catalog")
 
     async def ndbc_latest(self) -> tuple[LatestObservation, ...]:
         async with self._feed(protocol.BUOYS):
             response = await self.ndbc.latest_obs()
-            return response.value.items if response.value else ()
+            return _items(response.value, "the NDBC latest observations")
 
     async def ndbc_series(self, station_id: str) -> ObservationSeries:
         async with self._feed(protocol.BUOYS):
             response = await self.ndbc.series(station_id)
-            return response.value or ObservationSeries(station_id.upper())
+            series = response.value or ObservationSeries(station_id.upper())
+            if not series.observations and series.skipped:  # an HTML page or a table of unreadable rows: not data
+                raise ParseError(f"the NDBC file of {station_id} has no readable rows")
+            return series
 
     async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
-        async with self._feed(protocol.BUOYS):
+        async with self._feed(protocol.BUOYS, report=False):
             response = await self.ndbc.supplemental(station_id)
             return response.value or Parsed()
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
         async with self._feed(protocol.TIDES):
-            return await self.coops.all_stations()
+            stations = await self.coops.all_stations()
+            if not stations:  # the listings answered with something that is not a station list
+                raise ParseError("the CO-OPS station listings have no stations")
+            return stations
 
     async def coops_series(self, station: TideStation, datum: str) -> TideSeries:
         """Water level (an HTTP error here, such as a 400 for the wrong datum, propagates) plus wind and pressure.
@@ -298,8 +321,13 @@ class LiveSource:
             found: Parsed = await self.coops.predictions(
                 station.id, datum=datum, interval=None, begin=begin, hours=PREDICTION_HOURS
             )
+        except HttpError as exc:
+            found = Parsed(message=str(exc))
+            if not 400 <= exc.status < 500 or isinstance(exc, RateLimited):
+                return found  # a 5xx or 429 passes: ask again next poll
+            # a subordinate station answers with a 4xx; the answer will not change today, so it is remembered
         except FetchError as exc:
-            found = Parsed(message=str(exc))  # a subordinate station answers with an error; do not ask again today
+            return Parsed(message=str(exc))  # the network failed (timeout, no connection): ask again next poll
         self._predictions = {k: v for k, v in self._predictions.items() if k[2] == key[2]}
         self._predictions[key] = found
         return found

@@ -155,7 +155,7 @@ def _storm(entry: dict[str, Any]) -> Storm | None:
 
 
 def parse_current_storms(data: bytes | str) -> CurrentStorms:
-    """Parse CurrentStorms.json. Raises ParseError when the payload is not a JSON object."""
+    """Parse CurrentStorms.json. Raises ParseError when the payload is not a JSON object with an `activeStorms` list."""
     try:
         document = json.loads(data)
     except (ValueError, UnicodeDecodeError) as exc:
@@ -163,8 +163,8 @@ def parse_current_storms(data: bytes | str) -> CurrentStorms:
     if not isinstance(document, dict):
         raise ParseError("CurrentStorms is not a JSON object")
     entries = document.get("activeStorms")
-    if not isinstance(entries, list):
-        return CurrentStorms()
+    if not isinstance(entries, list):  # an error object is not "no storms": only an empty list is quiet
+        raise ParseError("CurrentStorms has no activeStorms list")
     storms: dict[str, Storm] = {}
     skipped = 0
     for entry in entries:

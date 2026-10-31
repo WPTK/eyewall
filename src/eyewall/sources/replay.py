@@ -112,9 +112,14 @@ class ReplaySource:
     # ---- loading ----------------------------------------------------------------------------------------------
 
     def _read(self, relative: str) -> bytes | None:
+        """A file of the bundle, or None when it is missing. A name from the bundle's own listings (a tide station id)
+        that climbs out of the folder is refused, not read."""
         try:
-            return (self.directory / relative).read_bytes()
-        except OSError:
+            path = (self.directory / relative).resolve()
+            if not path.is_relative_to(self.directory.resolve()):
+                return None
+            return path.read_bytes()
+        except (OSError, ValueError):
             return None
 
     def _load_text(self) -> None:
