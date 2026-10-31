@@ -1,0 +1,90 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Erin Discussion Number  31
+NWS National Hurricane Center Miami FL       AL052025
+1100 PM EDT Mon Aug 18 2025
+
+Erin has weakened some since the last advisory. Multiple microwave 
+overpasses show that the convection has eroded on the northwestern 
+side and that the mid-level center is displaced to the southeast 
+of the low-level center by northwesterly shear. Reports from NOAA 
+and Air Force Reserve Hurricane Hunter aircraft show that the 
+central pressure has risen to near 949 mb, and that flight-level 
+winds at 8000 and 10000 ft are in the 105-115 kt range.  The 
+initial intensity is reduced to 110 kt for this advisory, and this 
+could be a bit generous.  It should be noted that the wind field 
+has become very spread out, with flight-level winds of hurricane 
+force noted by the two aircraft more than 100 n mi from the center.
+
+Erin has slowed its forward speed with the initial motion now 320/7 
+kt. The overall track reasoning remains unchanged, with Erin 
+expected to turn northward during the next day or two into a break 
+in the subtropical ridge, followed by recurvature into the 
+westerlies with some acceleration thereafter.  However, there is 
+some spread in the track guidance in both direction and speed.  The 
+UKMET and ECMWF are slower and on the left side of the guidance 
+envelope, while the GFS and Canadian are on the right side of the 
+guidance and faster. The new forecast track is similar in direction 
+to the previous track, but it is going to be slower than the 
+previous track in deference to the ECMWF/UKMET and the consensus 
+models.
+
+The dynamical model guidance suggests that the current shear should 
+diminish in 18-24 h, and as that happens the upper-level winds 
+become divergent over the hurricane. However, due to the current 
+poor organization, it is unclear whether Erin will be able to take 
+advantage of the more favorable environment. The intensity forecast 
+first calls for some additional weakening due to the ongoing 
+shear. After that, it calls for modest re-intensification as the 
+upper-level winds become more favorable.  Once Erin has recurved 
+into the westerlies, there should be substantial weakening due to 
+another round of shear and the onset of extratropical transition.
+ 
+Erin's expanding wind field will result in rough ocean conditions 
+over much of the western Atlantic. It should be noted that the 34- 
+and 50-kt wind speed probabilities beyond 36 hours in the text and 
+graphical products are likely underestimating the risk of those 
+winds occurring.  This is because the forecast wind field of Erin 
+is considerably larger than average compared to the wind field used 
+to derive the wind speed probability product.
+ 
+KEY MESSAGES:
+ 
+1. Heavy rainfall is expected into Wednesday for portions of the 
+southeastern Bahamas. Flash and urban flooding are possible. 
+ 
+2. Tropical storm conditions are expected in the Turks and Caicos
+Islands and in the southeast Bahamas for a few more hours.  Tropical
+storm conditions are possible in portions of the central Bahamas
+tonight through Tuesday.
+ 
+3. Erin is expected to produce life-threatening surf and rip
+currents along the beaches of the Bahamas, much of the east coast of
+the U.S., Bermuda, and Atlantic Canada during the next several days.
+Beachgoers in those areas should follow advice from lifeguards,
+local authorities, and beach warning flags.
+ 
+4. Tropical storm conditions and coastal flooding are possible in
+the North Carolina Outer Banks beginning late Wednesday where
+Tropical Storm and Storm Surge Watches are in effect.  Interests in
+Bermuda should also monitor the progress of Erin as strong winds are
+possible beginning on Thursday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  19/0300Z 24.4N  71.7W  110 KT 125 MPH
+ 12H  19/1200Z 25.4N  72.3W  105 KT 120 MPH
+ 24H  20/0000Z 27.1N  73.2W  105 KT 120 MPH
+ 36H  20/1200Z 29.2N  73.7W  110 KT 125 MPH
+ 48H  21/0000Z 31.4N  73.5W  110 KT 125 MPH
+ 60H  21/1200Z 33.5N  72.5W  105 KT 120 MPH
+ 72H  22/0000Z 35.4N  70.0W  100 KT 115 MPH
+ 96H  23/0000Z 38.5N  62.9W   80 KT  90 MPH
+120H  24/0000Z 41.1N  54.8W   65 KT  75 MPH
+ 
+$$
+Forecaster Beven
+ 
+NNNN

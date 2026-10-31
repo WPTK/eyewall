@@ -70,7 +70,7 @@ def watch_warning_kind(label: str) -> WatchWarning | None:
 
 _TCP_HEADING = re.compile(
     r"^[ \t]*(?P<title>[A-Za-z][A-Za-z0-9 \-]*?)[ \t]+(?:Intermediate[ \t]+)?Advisory[ \t]+Number[ \t]+"
-    r"(?P<num>\d+[ \t]*[A-Za-z]?)[ \t]*$",
+    r"(?P<num>\d+[ \t]*[A-Za-z]?)(?:\.\.\.[A-Za-z ]+)?[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 _IN_EFFECT = re.compile(r"^(?:An?\s+)?(?P<label>[A-Za-z][A-Za-z \-]*?(?:Watch|Warning))\s+is in effect for\b", re.I)
@@ -272,7 +272,8 @@ def parse_tcp(text: str | bytes) -> PublicAdvisory:
 # ---- discussion (TCD) ---------------------------------------------------------------------------------------------
 
 _TCD_HEADING = re.compile(
-    r"^[ \t]*(?P<title>[A-Za-z][A-Za-z0-9 \-]*?)[ \t]+Discussion[ \t]+Number[ \t]+(?P<num>\d+[ \t]*[A-Za-z]?)[ \t]*$",
+    r"^[ \t]*(?P<title>[A-Za-z][A-Za-z0-9 \-]*?)[ \t]+Discussion[ \t]+Number[ \t]+"
+    r"(?P<num>\d+[ \t]*[A-Za-z]?)(?:\.\.\.[A-Za-z ]+)?[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 _TCD_TABLE = re.compile(r"^\s*FORECAST POSITIONS AND MAX WINDS\s*$", re.MULTILINE)
@@ -361,7 +362,7 @@ def _tcd_fix(line: str, issued: datetime) -> DiscussionFix | None:
 
 _PWS_HEADING = re.compile(
     r"^[ \t]*(?P<title>[A-Z][A-Z0-9 \-]*?)[ \t]+WIND SPEED PROBABILITIES[ \t]+NUMBER[ \t]+"
-    r"(?P<num>\d+[ \t]*[A-Z]?)[ \t]*$",
+    r"(?P<num>\d+[ \t]*[A-Z]?)(?:\.\.\.[A-Z ]+)?[ \t]*$",
     re.MULTILINE,
 )
 _PWS_HOURS = re.compile(r"^\s*FORECAST HOUR\s+(?P<hours>(?:\(\s*\d+\s*\)\s*)+)$")

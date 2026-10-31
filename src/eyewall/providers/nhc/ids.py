@@ -229,11 +229,15 @@ def gtwo_archive_zip_url(basin: str, issuance: str) -> str:
 
 # ---- NHC archive pages (replay and fixture recording only) --------------------------------------------------------
 
-ARCHIVE_KINDS = ("fstadv", "public", "discus", "wndprb")
+ARCHIVE_KINDS = ("fstadv", "public", "public_a", "public_b", "public_c", "discus", "wndprb")
 
 
 def archive_product_url(kind: str, storm_id: str, adv: AdvNum) -> str:
-    """`…/archive/2025/al05/al052025.fstadv.030.shtml`. Kind is fstadv, public, discus or wndprb."""
+    """`…/archive/2025/al05/al052025.fstadv.030.shtml`. Kind is fstadv, public, discus or wndprb.
+
+    An intermediate public advisory (30A) is filed as kind `public_a` under its plain number (`al052025.public_a.030`);
+    `public_b` and `public_c` follow for later ones.
+    """
     if kind not in ARCHIVE_KINDS:
         raise ValueError(f"unknown archive product {kind!r}")
     parsed = parse_storm_id(storm_id)

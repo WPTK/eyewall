@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from eyewall.geo import LatLon
+from eyewall.models.track import BestTrack
 from eyewall.models.wind import Ring
 
 
@@ -79,3 +80,12 @@ class OutlookGis:
     @property
     def empty(self) -> bool:
         return not self.systems
+
+
+@dataclass(frozen=True, slots=True)
+class Outlook:
+    """Everything the outlook feed brings: the text per basin, the area shapes and the active invest b-decks."""
+
+    texts: tuple[OutlookText, ...] = ()
+    gis: OutlookGis = OutlookGis(None)
+    invests: tuple[BestTrack, ...] = ()

@@ -1,0 +1,90 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM CCA
+ 
+Hurricane Erin Discussion Number  37...Corrected
+NWS National Hurricane Center Miami FL       AL052025
+1100 AM EDT Wed Aug 20 2025
+
+Corrected eye dropsonde wind to 19 kt and minimum pressure to 941 mb
+
+Observations from an Air Force Hurricane Hunter aircraft indicate 
+that the hurricane has strengthened with peak 700 mb flight-level 
+winds of 115 kt well to the east of the center.  Using a reduction 
+factor somewhat greater than that which would be used for eyewall 
+winds, the intensity is set at 95 kt for this advisory.  A dropsonde 
+in the eye measured a surface pressure of 943 mb with 19 kt winds 
+so the minimum central pressure has fallen to an estimated 941 mb.  
+The hurricane has become better organized on satellite images this 
+morning with a symmetric-looking cloud pattern and numerous banding 
+features.  The eye has again become evident on the imagery and 
+upper-level outflow is well-defined over all quadrants.
+  
+Erin's is now moving northward with an initial motion estimate of 
+350/11 kt.  There has been no significant change in the track 
+forecast guidance since the last advisory package.  Over the 
+next couple of days, Erin should move northward along the western 
+periphery of a 500 mb high, and then turn northeastward as it 
+rounds the northwestern side of the high.  Then, the system should 
+accelerate northeastward to east-northeastward while moving within 
+the southern belt of the the mid-latitude westerlies.  The official 
+track forecast is close to the previous one and in good agreement 
+with the various dynamical model consensus predictions.
+ 
+Erin still has a rather broad inner core but the eyewall appears to 
+be reforming.  The system is over warm waters and within a moist 
+low- to mid-level air mass.  Although the vertical wind shear is 
+currently light, the SHIPS model predicts a significant increase in 
+shear in 12-24 hours.  Therefore the hurricane has the potential to 
+strengthen some more in the short term, particularly if the inner 
+core becomes even better defined. By 36 hours and beyond, westerly 
+shear is predicted to become prohibitively high, so a weakening 
+trend is likely to commence later on Thursday.  Simulated satellite 
+imagery from the global models suggest that Erin will become an 
+extratropical cyclone in 96 hours or sooner.   
+ 
+It should be noted that the 34- and 50-kt wind speed probabilities
+in the text and graphical products are likely underestimating the
+risk of those winds occurring.  This is because the forecast wind
+field of Erin is considerably larger than average compared to the
+wind field used to derive the wind speed probability product.
+ 
+ 
+KEY MESSAGES:
+ 
+1. Erin is expected to produce life-threatening surf and rip 
+currents along the beaches of the Bahamas, much of the east coast of 
+the U.S., Bermuda, and Atlantic Canada during the next several days. 
+Beachgoers in those areas should follow advice from lifeguards, 
+local authorities, and beach warning flags.
+ 
+2. Storm surge flooding and tropical storm conditions are expected 
+in the North Carolina Outer Banks beginning later today. The 
+storm surge will be accompanied by large waves, leading to 
+significant beach erosion and overwash, making some roads 
+impassible.  
+
+3. Tropical storm conditions are expected on Thursday along the 
+Virginia coast. Wind gusts to tropical storm force are likely along 
+portions of the remainder of the U.S. Mid-Atlantic and southern New 
+England coasts Thursday through early Friday. 
+ 
+4. Tropical storm conditions are possible on Bermuda on Thursday and 
+Friday.
+
+
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  20/1500Z 30.1N  73.7W   95 KT 110 MPH
+ 12H  21/0000Z 32.0N  73.6W  105 KT 120 MPH
+ 24H  21/1200Z 34.4N  72.2W  105 KT 120 MPH
+ 36H  22/0000Z 36.6N  69.4W  100 KT 115 MPH
+ 48H  22/1200Z 38.6N  65.5W   90 KT 105 MPH
+ 60H  23/0000Z 40.4N  60.5W   80 KT  90 MPH
+ 72H  23/1200Z 42.5N  54.3W   65 KT  75 MPH
+ 96H  24/1200Z 47.4N  40.0W   55 KT  65 MPH...POST-TROP/EXTRATROP
+120H  25/1200Z 52.5N  27.4W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Pasch
+ 
+NNNN

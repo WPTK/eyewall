@@ -186,9 +186,17 @@ class NhcClient:
             return Response(response.value, response.fetched, "tgftp")
         return await self.fetch_api_text(ProductKind.TWO, ids.outlook_location(basin)) if fallback else response
 
-    async def fetch_api_text(self, kind: ProductKind, location: str) -> Response[str]:
-        """The newest api.weather.gov product of a type at a bin or basin: a list request, then the product."""
-        listing = await self._get(ids.api_products_url(kind, location), parse_product_list)
+    async def fetch_api_text(
+        self, kind: ProductKind, location: str, *, etag: str | None = None, last_modified: str | None = None
+    ) -> Response[str]:
+        """The newest api.weather.gov product of a type at a bin or basin: a list request, then the product.
+
+        The validators apply to the list request, which is the one repeated on every poll; a 304 there means the newest
+        product is the one already held and the product itself is not fetched.
+        """
+        listing = await self._get(
+            ids.api_products_url(kind, location), parse_product_list, etag=etag, last_modified=last_modified
+        )
         if not listing.value:
             return Response(None, listing.fetched, "api")
         product = await self.fetch_api_product(listing.value[0].id)
@@ -245,13 +253,13 @@ class NhcClient:
         return response.value or CurrentStorms()
 
     async def _product[P: _Identified](
-        self, storm: Storm, kind: ProductKind, ref: ProductRef | None, parse: Callable[[str], P]
+        self, storm: Storm, kind: ProductKind, ref: ProductRef | None, parse: Callable[[str], P], *, fallback: bool
     ) -> P | None:
         """Fetch, parse and staleness-check one text product for a storm; None when it is missing or not current."""
         if storm.bin_number is None or ref is None:
             return None
         try:
-            response = await self.fetch_text(kind, ids.parse_bin(storm.bin_number))
+            response = await self.fetch_text(kind, ids.parse_bin(storm.bin_number), fallback=fallback)
             if not response.value:
                 return None
             parsed = parse(response.value)
@@ -261,13 +269,22 @@ class NhcClient:
             return None
         return parsed
 
-    async def advisory(self, storm: Storm) -> AdvisorySet:
-        """The four text products for a storm, each None when it is missing, unparsable or stale."""
+    async def advisory(self, storm: Storm, *, fallback: bool = False) -> AdvisorySet:
+        """The four text products for a storm, each None when it is missing, unparsable or stale.
+
+        tgftp is the source. `fallback` also allows the api.weather.gov copy (two more requests per product) when tgftp
+        fails or has nothing; the poller sets it only after tgftp has failed to produce a current product, so the
+        fallback is not paid for on every poll.
+        """
         return AdvisorySet(
-            forecast=await self._product(storm, ProductKind.TCM, storm.forecast_advisory, parse_tcm),
-            public=await self._product(storm, ProductKind.TCP, storm.public_advisory, parse_tcp),
-            discussion=await self._product(storm, ProductKind.TCD, storm.forecast_discussion, parse_tcd),
-            wind_probabilities=await self._product(storm, ProductKind.PWS, storm.wind_speed_probabilities, parse_pws),
+            forecast=await self._product(storm, ProductKind.TCM, storm.forecast_advisory, parse_tcm, fallback=fallback),
+            public=await self._product(storm, ProductKind.TCP, storm.public_advisory, parse_tcp, fallback=fallback),
+            discussion=await self._product(
+                storm, ProductKind.TCD, storm.forecast_discussion, parse_tcd, fallback=fallback
+            ),
+            wind_probabilities=await self._product(
+                storm, ProductKind.PWS, storm.wind_speed_probabilities, parse_pws, fallback=fallback
+            ),
         )
 
     async def forecast_gis(self, storm: Storm) -> ForecastGis | None:
@@ -279,18 +296,27 @@ class NhcClient:
         except (FetchError, ParseError):
             return None
 
+    async def radii_gis(self, storm: Storm) -> WindRadiiGis | None:
+        ref = storm.forecast_wind_radii
+        if ref is None or not ref.zip_url:
+            return None
+        try:
+            return (await self.fetch_radii_gis(ref.zip_url)).value
+        except (FetchError, ParseError):
+            return None
+
     async def track(self, storm: Storm) -> BestTrack | None:
         try:
             return (await self.fetch_bdeck(storm.id)).value
         except (FetchError, ParseError, ValueError):
             return None
 
-    async def outlook_text(self) -> tuple[OutlookText, ...]:
-        """The outlook text for each basin that could be fetched and parsed."""
+    async def outlook_text(self, *, fallback: bool = False) -> tuple[OutlookText, ...]:
+        """The outlook text for each basin that could be fetched and parsed (tgftp only unless `fallback`)."""
         found: list[OutlookText] = []
         for basin in (Basin.AL, Basin.EP, Basin.CP):
             try:
-                response = await self.fetch_outlook_text(basin)
+                response = await self.fetch_outlook_text(basin, fallback=fallback)
                 if response.value:
                     found.append(parse_two(response.value))
             except (FetchError, ParseError):

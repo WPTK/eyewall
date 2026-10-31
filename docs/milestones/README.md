@@ -20,7 +20,7 @@ Everything after M3 runs in order.
 | M1 NHC data layer | [M1-nhc-data.md](M1-nhc-data.md) | 0.1.0 | done |
 | M2 Observations data layer | [M2-observations-data.md](M2-observations-data.md) | 0.2.0 | done |
 | M3 Renderer and basemap | [M3-renderer.md](M3-renderer.md) | 0.3.0 | done |
-| M4 Core | [M4-core.md](M4-core.md) | 0.4.0 | not started |
+| M4 Core | [M4-core.md](M4-core.md) | 0.4.0 | done |
 | M5 Storm UI | [M5-storm-ui.md](M5-storm-ui.md) | 0.5.0 | not started |
 | M6 Observations UI | [M6-observations-ui.md](M6-observations-ui.md) | 0.6.0 | not started |
 | M7 Graphics | [M7-graphics.md](M7-graphics.md) | 0.7.0 | not started |

@@ -43,7 +43,8 @@ _KINDS = (
 )
 
 _HEADING = re.compile(
-    r"^\s*(?P<title>[A-Z][A-Z0-9 /\-]*?)\s+FORECAST/ADVISORY NUMBER\s+(?P<num>\d+\s*[A-Z]?)\s*$", re.MULTILINE
+    r"^\s*(?P<title>[A-Z][A-Z0-9 /\-]*?)\s+FORECAST/ADVISORY NUMBER\s+(?P<num>\d+\s*[A-Z]?)(?:\.\.\.[A-Z ]+)?\s*$",
+    re.MULTILINE,
 )
 _STORM_ID = re.compile(r"\b(?P<id>(?:AL|EP|CP)\d{6})\b")
 _UTC_LINE = re.compile(r"^\s*\d{3,4}\s+UTC\s+\w{3}\s+\w{3}\s+\d{1,2}\s+\d{4}", re.MULTILINE)
