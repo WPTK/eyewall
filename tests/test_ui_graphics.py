@@ -19,14 +19,14 @@ from eyewall.app import EyewallApp
 from eyewall.config import Config, GraphicsConfig, MapConfig
 from eyewall.models.graphics import FloaterProduct
 from eyewall.net import FetchError
-from eyewall.render.images import InlineBackend
+from eyewall.render.images import ImageError, InlineBackend, inline_wanted
 from eyewall.sources import bundle
 from eyewall.sources.replay import ReplaySource
 from eyewall.ui import gallery
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.widgets import gallery as gallery_widget
-from eyewall.ui.widgets.gallery import GalleryPanel, ImageView
+from eyewall.ui.widgets.gallery import GalleryPanel, ImageView, _open_frames
 from tests.ui_support import EDT, into_the_storm, press, running, settle, wait_until
 
 STILL = "https://cdn.star.nesdis.noaa.gov/FLOATER/data/AL052025/GEOCOLOR/1000x1000.jpg"
@@ -451,7 +451,7 @@ def test_the_terminal_is_probed_only_when_inline_graphics_are_possible(monkeypat
     monkeypatch.setattr(EyewallApp, "run", lambda self, *a, **k: None)
     for config in (Config(), Config(graphics=GraphicsConfig("never")), Config(map=MapConfig(glyph_set="ascii"))):
         app_module.run_app(config, replay_source_for_run(), state_dir=None)
-    assert asked == ["auto", "never"]  # the ascii glyph set never probes
+    assert asked == ["auto"]  # neither "never" nor the ascii glyph set probes the terminal
 
 
 def replay_source_for_run() -> ReplaySource:
@@ -543,3 +543,19 @@ async def test_o_refuses_a_link_that_is_not_noaa_and_notices_do_not_read_the_add
         await press(pilot, "y")
         note = next(n for n in app._notifications if "clipboard" in n.message)
         assert note.markup is False
+
+
+def test_one_predicate_decides_whether_inline_graphics_are_possible() -> None:
+    assert inline_wanted("auto", "unicode")
+    assert not inline_wanted("never", "unicode")
+    assert not inline_wanted("auto", "ascii")
+
+
+def test_the_first_frame_is_decoded_when_the_image_is_opened_not_when_it_is_drawn() -> None:
+    out = io.BytesIO()
+    first = Image.new("RGB", (8, 8), (255, 0, 0))
+    first.save(out, "GIF", save_all=True, append_images=[Image.new("RGB", (8, 8), (0, 0, 255))], duration=100)
+    frames = _open_frames(out.getvalue())
+    assert list(frames._cache) == [0] and frames.animated
+    with pytest.raises(ImageError):
+        _open_frames(b"not an image")

@@ -9,7 +9,7 @@ from eyewall.config import Config, PollConfig, WatchlistConfig
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
-from eyewall.poll import FALLBACK_ATTEMPTS, FreshnessState, Poller, no_sleep
+from eyewall.poll import FALLBACK_ATTEMPTS, RETURN_STAGGER_SECONDS, FreshnessState, Poller, no_sleep
 from eyewall.sources import protocol
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.store import Store
@@ -117,7 +117,7 @@ async def test_an_answer_served_from_the_disk_cache_marks_the_feed_stale():
 # ---- away mode and refresh ----------------------------------------------------------------------------------------
 
 
-async def test_away_mode_triples_every_interval_and_coming_back_polls_at_once():
+async def test_away_mode_triples_every_interval_and_coming_back_polls_storms_first():
     poller, source, _, clock, _ = build()
     await poller.tick()
     poller.set_away(True)
@@ -130,6 +130,23 @@ async def test_away_mode_triples_every_interval_and_coming_back_polls_at_once():
     poller.set_away(False)
     assert next(r.feed for r in await poller.tick()) == protocol.STORMS
     assert source.count("storms") == 3
+
+
+async def test_coming_back_from_away_spreads_the_first_polls_out_in_feed_order():
+    poller, source, _store, clock, _ = build()
+    source.set_storm("1")
+    source.texts["1"] = advisories("1")
+    await poller.tick()
+    poller.set_away(True)
+    clock.advance(10)  # nothing is due yet
+    poller.set_away(False)
+    assert [r.feed for r in await poller.tick()] == [protocol.STORMS]  # storms now, the rest on their own seconds
+    seen = [protocol.STORMS]
+    for _ in protocol.FEEDS[1:]:
+        clock.advance(RETURN_STAGGER_SECONDS)
+        seen += [r.feed for r in await poller.tick()]
+    assert seen == [f for f in protocol.FEEDS if poller._enabled(f)]
+    assert source.count("storms") == 2
 
 
 async def test_presence_follows_the_idle_time():
