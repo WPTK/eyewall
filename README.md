@@ -1,75 +1,98 @@
 # eyewall
 
-A terminal app that tracks tropical cyclones with free NOAA data and shows the buoys and tide gauges near each storm.
+eyewall is a terminal app that tracks tropical cyclones in the Atlantic, East Pacific and Central Pacific. It reads free
+NOAA feeds, so it needs no account or key, and it shows the buoys and tide gauges near each storm next to the forecast.
 
-![The dashboard: storm list, map with the forecast cone and track, and the headline, warnings and wind panels](docs/images/dashboard.png)
+![The dashboard at 120x30: storm list, map with the forecast cone and track, and panels for the headline, warnings, wind, surge and nearest buoys](docs/images/dashboard.png)
 
-eyewall follows storms in the Atlantic, East Pacific and Central Pacific. For each one it shows the National Hurricane
-Center advisory and discussion, the forecast track and cone, watches and warnings, wind radii and probabilities, and
-NOAA's graphics. It pairs that with live readings from National Data Buoy Center buoys and CO-OPS tide gauges near the
-storm's path, with pressure, wind and wave charts, and it alerts you when NOAA posts something new. Between storms it
-shows the tropical weather outlook and a watchlist of buoys you choose.
+For each active storm you get the National Hurricane Center advisory and discussion, the forecast track and cone,
+watches and warnings, wind radii and NOAA's graphics. For the buoys and tide gauges along the storm's path you get the
+latest readings with pressure, wind and wave charts. When NOAA posts something new, eyewall tells you. With no storm
+active it shows the tropical weather outlook and a watchlist of stations you pick.
 
-eyewall is not an official source of warnings. For decisions about life and property, use the National Hurricane Center
+eyewall is not an official source of warnings. For decisions about life or property, use the National Hurricane Center
 and your local National Weather Service office.
 
-## Try it
+## Try it without a storm
 
-Most of the year nothing is active, so eyewall carries a recording of Hurricane Erin (2025):
+Most of the year nothing is active, so eyewall ships with a recording of Hurricane Erin (August 2025):
 
 ```
 eyewall --demo
 ```
 
-| Forecast table | A buoy's charts |
-|---|---|
-| ![The storm detail's Forecast tab](docs/images/forecast.png) | ![Pressure, wind and wave charts for a buoy](docs/images/buoy.png) |
+A buoy's charts from the same recording:
 
-`?` lists every key. `docs/replay.md` explains replay and how to record another storm.
+![Pressure, wind and wave charts for buoy 41001 with its latest readings](docs/images/buoy.png)
 
 ## Install
 
-Download a standalone binary for Windows, Linux or macOS from the
-[releases page](https://github.com/WPTK/eyewall/releases) once a release is published, or install from the repository
-with `pipx install git+https://github.com/WPTK/eyewall` (Python 3.12 or newer).
-`docs/install.md` has the details, and `docs/smoke-test.md` is the checklist used before each release.
+Standalone binaries for Windows, Linux (x86_64 and arm64) and macOS (Apple silicon and Intel) are on the
+[releases page](https://github.com/WPTK/eyewall/releases). They need no Python and are not signed, so Windows and macOS
+may warn on first run; `docs/install.md` covers that and the checksums.
 
-From a clone:
+With Python 3.12 or newer you can install from the repository:
 
-```bash
+```
+pipx install git+https://github.com/WPTK/eyewall
+```
+
+Or from a clone:
+
+```
 python -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"      # Windows: .venv\Scripts\python
+.venv/bin/python -m pip install -e .        # Windows: .venv\Scripts\python
 .venv/bin/python -m eyewall --demo
 ```
 
-## Data
+`eyewall --selftest` checks an installation: it replays an hour of the bundled storm and prints `selftest ok`.
 
-Everything comes from public NOAA feeds that need no key: NHC and CPHC advisories and GIS products, NWS alerts, NDBC
-buoys, CO-OPS tide gauges and NESDIS satellite imagery. The feeds, their formats and how often eyewall polls them are in
-`docs/data-sources.md`. A weekly workflow checks that each feed still parses.
+## Use
 
-## Status
+```
+eyewall                           # live data
+eyewall --demo                    # the bundled Erin recording
+eyewall --replay DIR              # a recording of your own
+eyewall --basin AL                # only the Atlantic; repeat the flag for EP and CP
+eyewall --glyphs ascii            # plain symbols for terminals that cannot draw braille
+eyewall --headless --until +12h   # no interface; print events as they happen
+```
 
-Version 0.8.0. All eight milestones are done; `docs/plan.md` has the design and `docs/milestones/` what each release
-added.
+Other flags: `--config PATH` and `--no-config` for the settings file, `--state-dir DIR` for where seen events are kept,
+`--version`, and `--help` for the full list.
 
-| Milestone | Release | Status |
-|---|---|---|
-| M1 NHC data layer | 0.1.0 | done |
-| M2 Observations data layer | 0.2.0 | done |
-| M3 Renderer and basemap | 0.3.0 | done |
-| M4 Core: sources, store, poller, replay | 0.4.0 | done |
-| M5 Storm UI | 0.5.0 | done |
-| M6 Observations UI | 0.6.0 | done |
-| M7 Graphics | 0.7.0 | done |
-| M8 Polish and release | 0.8.0 | done |
+Keys: `Enter` opens the selected storm's detail and `Esc` goes back. `g` shows graphics, `O` the tropical weather
+outlook, `w` the watchlist, `/` finds a station, `A` the alert log, `u` changes units, `r` refreshes, `S` opens the
+settings, `?` lists every key and `q` quits. In a replay, `Space` pauses, `<` and `>` change the speed, and `[` and `]`
+step between advisories.
 
-Open work is tracked in the [issues](https://github.com/WPTK/eyewall/issues).
+Use a terminal that draws Unicode, such as Windows Terminal, iTerm2, kitty or GNOME Terminal. Inline images need Sixel
+or the Kitty graphics protocol; elsewhere eyewall draws an approximation. `docs/replay.md` explains replays and how to
+record another storm.
 
-## Contributing
+## Data sources
 
-`CLAUDE.md` holds the working rules. Run the checks listed in `docs/development.md` before opening a pull request.
+Everything comes from public NOAA services:
+
+- NHC and CPHC: advisories, forecast discussions, GIS products and storm graphics
+- NWS: watches, warnings and other alerts
+- NDBC: buoy observations
+- CO-OPS: tide gauge water levels
+- NESDIS: satellite imagery
+
+None of them needs a key. eyewall identifies itself with a User-Agent, makes conditional requests and polls no faster
+than each feed allows. `docs/data-sources.md` lists the feeds, their formats and the polling cadence. A weekly workflow
+checks that each feed still parses.
+
+## Documentation
+
+- `docs/install.md`: binaries, pipx, settings and the config file
+- `docs/replay.md`: replaying and recording storms
+- `docs/data-sources.md`: the NOAA feeds
+- `docs/development.md`: setup, checks, tests and releases
+
+Bugs and ideas go in the [issues](https://github.com/WPTK/eyewall/issues).
 
 ## License
 
-MIT. Map outlines come from Natural Earth, which is in the public domain.
+MIT. The map outlines come from Natural Earth, which is in the public domain.

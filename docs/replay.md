@@ -27,7 +27,7 @@ A replay never reads or writes your real seen-alert set; it keeps none unless yo
 
 A bundle is a directory. The layout is documented at the top of `src/eyewall/sources/bundle.py`: a `manifest.toml`, the
 best track, each advisory's text products and GIS zips, the recorded buoys' historical rows, the tide gauges' datagetter
-answers and a few cone stills. The replay serves no outlook, invests, alerts or satellite imagery (see `deferred.md`).
+answers and a few cone stills. The replay serves no outlook, invests, alerts or satellite imagery.
 
 ## Recording another storm
 

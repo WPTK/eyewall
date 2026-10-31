@@ -24,3 +24,6 @@ htmlcov/
 # Local run data
 /cache/
 *.log
+
+# Local working rules for the maintainer's tooling
+CLAUDE.md

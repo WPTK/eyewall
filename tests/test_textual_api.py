@@ -1,4 +1,4 @@
-"""The Textual features later milestones rely on exist in the installed version and behave as expected."""
+"""The Textual features the app relies on exist in the installed version and behave as expected."""
 
 import importlib.util
 

@@ -19,7 +19,7 @@ Python is needed.
 
 Check the download against `SHA256SUMS` from the same release. On Linux and macOS, unpack the archive
 (`tar -xzf eyewall-linux-x86_64.tar.gz`); it holds one executable file, `eyewall`, with the executable bit set, so there
-is no `chmod`. The binaries are not signed; see `smoke-test.md` for the SmartScreen and Gatekeeper prompts. Then try it:
+is no `chmod`. The binaries are not signed; Windows SmartScreen may warn on first run ("More info", then "Run anyway"), and on macOS `xattr -d com.apple.quarantine eyewall` clears the quarantine flag. Then try it:
 
 ```
 eyewall --demo         # replay the bundled recording of Hurricane Erin (2025)
