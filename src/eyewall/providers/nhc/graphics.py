@@ -20,6 +20,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 from eyewall.models.graphics import FloaterProduct, GraphicKind, GraphicLink
 from eyewall.providers.nhc.ids import floater_url, parse_adv_num, parse_storm_id
+from eyewall.urls import is_noaa_url
 
 _ASSET = re.compile(r"[A-Za-z0-9_./:+%~\-]+\.(?:png|gif|jpe?g|kmz|kml)(?![A-Za-z0-9])", re.IGNORECASE)
 _CHROME = ("/css/", "/assets/", "/images/", "notready", "logo", "skipgraphic", "usa_gov", "thumb", "favicon", "icon")
@@ -72,7 +73,12 @@ def parse_graphics_page(html: str | bytes, base_url: str) -> tuple[GraphicLink, 
     seen: set[str] = set()
     links: list[GraphicLink] = []
     for match in _ASSET.finditer(text):
-        url = urljoin(base_url, match.group(0))
+        raw = match.group(0)
+        if "//" in raw[:8]:  # an absolute link is kept only when it points at NOAA (an http one is upgraded)
+            raw = re.sub(r"^http://", "https://", raw, flags=re.IGNORECASE)
+            if not is_noaa_url(urljoin(base_url, raw)):
+                continue
+        url = urljoin(base_url, raw)
         if url in seen:
             continue
         seen.add(url)

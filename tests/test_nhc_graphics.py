@@ -153,3 +153,18 @@ def test_floater_loop_falls_back_to_the_newest_time_ranged_gif():
 def test_an_empty_floater_listing_has_no_urls():
     product = parse_floater_listing("<html></html>", "al052025", "GEOCOLOR")
     assert (product.still_url, product.latest_url, product.loop_url) == (None, None, None)
+
+
+def test_absolute_links_to_other_hosts_are_ignored_and_http_noaa_links_are_upgraded():
+    html = (
+        '<img src="/storm_graphics/AT05/a_5day_cone_with_line_and_wind.png">'
+        '<img src="https://evil.example/storm_graphics/AT05/x_5day_cone.png">'
+        '<img src="//evil.example/storm_graphics/AT05/y_5day_cone.png">'
+        '<img src="https://noaa.gov.evil.example/storm_graphics/AT05/z_5day_cone.png">'
+        '<img src="http://www.nhc.noaa.gov/storm_graphics/AT05/w_5day_cone.png">'
+    )
+    urls = [link.url for link in parse_graphics_page(html, LANDING)]
+    assert urls == [
+        "https://www.nhc.noaa.gov/storm_graphics/AT05/a_5day_cone_with_line_and_wind.png",
+        "https://www.nhc.noaa.gov/storm_graphics/AT05/w_5day_cone.png",
+    ]

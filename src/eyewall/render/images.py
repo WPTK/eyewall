@@ -24,14 +24,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin
 
 import httpx
 from PIL import Image as PILImage
 from PIL import ImageChops, ImageFilter, ImageOps
 
-from eyewall.net import TooLarge, fetch_bytes
+from eyewall.net import MAX_BYTES_EXTENSION, HttpError, NetworkError, TooLarge
 from eyewall.render.canvas import Mode, Run, Style
+from eyewall.urls import is_noaa_url
 
 MAX_IMAGE_BYTES = 24 * 1024 * 1024  # the full GEOCOLOR loop of a long storm is about 13 MB
 MAX_PIXELS = 36_000_000  # per frame; the satellite loops are 1000 by 1000
@@ -81,18 +82,44 @@ def check_image_bytes(url: str, data: bytes, max_bytes: int = MAX_IMAGE_BYTES) -
     return data
 
 
+MAX_REDIRECTS = 5
+
+
 async def fetch_image(client: httpx.AsyncClient, url: str, *, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
     """GET an image through eyewall's HTTP client (User-Agent, timeouts, and the cache's conditional requests).
 
-    Raises `eyewall.net.FetchError` when the request fails and `ImageError` when the answer is not a usable image.
+    Only https NOAA addresses are fetched, and a redirect is followed only to another one; the client's own redirect
+    following is switched off for these requests so each hop can be checked. Raises `eyewall.net.FetchError` when the
+    request fails and `ImageError` when the address is refused or the answer is not a usable image.
     """
-    if urlsplit(url).scheme not in ("http", "https"):
-        raise ImageError(f"{url}: not a web address")
-    try:
-        fetched = await fetch_bytes(client, url, max_bytes=max_bytes)
-    except TooLarge as exc:
-        raise ImageError(f"{url}: over the {max_bytes // (1024 * 1024)} MB limit") from exc
-    return check_image_bytes(url, fetched.body, max_bytes)
+    for _hop in range(MAX_REDIRECTS + 1):
+        if not is_noaa_url(url):
+            raise ImageError(f"{url}: not an https NOAA address")
+        try:
+            async with client.stream(
+                "GET", url, follow_redirects=False, extensions={MAX_BYTES_EXTENSION: max_bytes}
+            ) as response:
+                if response.is_redirect and (location := response.headers.get("Location")):
+                    url = urljoin(url, location)
+                    continue
+                if not response.is_success:
+                    raise HttpError(url, response.status_code)
+                declared = response.headers.get("Content-Length", "")
+                if declared.isdigit() and int(declared) > max_bytes:
+                    raise TooLarge(url, max_bytes)
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise TooLarge(url, max_bytes)
+                    chunks.append(chunk)
+        except TooLarge as exc:
+            raise ImageError(f"{url}: over the {max_bytes // (1024 * 1024)} MB limit") from exc
+        except httpx.TransportError as exc:
+            raise NetworkError(url, str(exc) or type(exc).__name__) from exc
+        return check_image_bytes(url, b"".join(chunks), max_bytes)
+    raise ImageError(f"{url}: too many redirects")
 
 
 class Frames:

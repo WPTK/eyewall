@@ -124,3 +124,153 @@ def test_a_replay_never_touches_the_user_seen_file_unless_asked(tmp_path, monkey
     first = capsys.readouterr().out
     assert main(["--demo", "--headless", "--until", "+4h", "--no-config"]) == 0
     assert capsys.readouterr().out == first  # nothing was remembered between the two runs
+
+
+def test_pressure_tendency_freshness_follows_the_newest_row_with_a_pressure():
+    store = Store()
+    # The newest row is fresh but has no pressure; the newest pressure is hours old, so no tendency is shown.
+    store.apply_series(
+        series(
+            "41001",
+            obs(T0 - timedelta(hours=6), pressure=1000.0),
+            obs(T0 - timedelta(hours=3, minutes=10), pressure=1000.0),
+            obs(T0 - timedelta(hours=3), pressure=996.0),
+            obs(T0 - timedelta(minutes=5), wind_kt=20),
+        )
+    )
+    assert store.tendency("41001", T0) is None
+    store.apply_series(series("41001", obs(T0 - timedelta(hours=3), pressure=1000.0), obs(T0, pressure=997.0)))
+    assert store.tendency("41001", T0) is not None
+
+
+async def _demo_state(times: int):
+    from eyewall.models.storm import CurrentStorms
+
+    source = demo_source()
+    moments = source.advisory_times()
+    store = Store()
+    source.clock.set(moments[times])
+    storm = (await source.storms()).storms[0]
+    store.apply_storms(CurrentStorms((storm,)), moments[times])
+    return source, moments, store, storm
+
+
+async def test_stepping_back_shows_the_older_advisory_without_events_or_newer_products():
+    source, moments, store, storm = await _demo_state(-1)
+    newer = await source.advisory(storm)
+    store.apply_products(storm.id, moments[-1], key=("n", None), advisories=newer)
+    source.clock.set(moments[2])
+    older = await source.advisory((await source.storms()).storms[0])
+    assert older != newer
+    events = store.apply_products(storm.id, moments[2], key=("o", None), advisories=older)
+    assert events == []
+    assert store.storms[storm.id].advisories == older
+
+
+async def test_a_newer_advisory_still_keeps_a_product_that_did_not_come_back():
+    source, moments, store, storm = await _demo_state(2)
+    first = await source.advisory(storm)
+    store.apply_products(storm.id, moments[2], key=("1", None), advisories=first)
+    source.clock.set(moments[3])
+    second = await source.advisory((await source.storms()).storms[0])
+    partial = AdvisorySet(public=second.public)
+    store.apply_products(storm.id, moments[3], key=("2", None), advisories=partial)
+    kept = store.storms[storm.id].advisories
+    assert kept.public == second.public and kept.forecast == (second.forecast or first.forecast)
+
+
+async def test_live_headless_polls_a_feed_that_is_due_now_without_waiting_an_interval(monkeypatch):
+    import asyncio
+
+    from eyewall import headless
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    waits = iter([0.0, 10_000_000.0])
+    slept: list[float] = []
+
+    class FakeSource:
+        def now(self):
+            return now
+
+        async def aclose(self):
+            return None
+
+    class FakePoller:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def tick(self):
+            return None
+
+        def seconds_until_next(self):
+            return next(waits)
+
+        def interval(self, feed):
+            return 600.0
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(headless, "LiveSource", FakeSource)
+    monkeypatch.setattr(headless, "Poller", FakePoller)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    result = await headless.run_live(Config(), None, "+30m")
+    assert slept == [0.0] and result.polls == 2
+
+
+def _copy_demo(tmp_path):
+    import shutil
+
+    target = tmp_path / "bundle"
+    shutil.copytree(bundle.demo_bundle_path(), target)
+    return target
+
+
+@pytest.mark.parametrize(
+    "storm_id", ["../../etc", "al05/2025", "al05\\2025", "..", "", "al05", "al052025/../x", "xx052025"]
+)
+def test_a_storm_id_that_is_not_a_storm_id_is_refused_before_it_names_a_folder(tmp_path, storm_id):
+    target = _copy_demo(tmp_path)
+    manifest = bundle.read_manifest(target)
+    (target / bundle.MANIFEST).write_text(
+        (target / bundle.MANIFEST)
+        .read_text(encoding="utf-8")
+        .replace(f'storm_id = "{manifest.storm_id}"', f'storm_id = "{storm_id}"'.replace("\\", "\\\\")),
+        encoding="utf-8",
+    )
+    with pytest.raises(bundle.BundleError, match="storm_id"):
+        ReplaySource(target)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("format = 1", 'format = "x"'),
+        ("format = 1", "format = [1]"),
+        ("graphics = [", "graphics = 5\nold = ["),
+        ('{ file = "cone_033.png",', "{ nofile = 1,"),
+        ("start = 2025-08-19 03:00:00+00:00", 'start = "soon"'),
+    ],
+)
+def test_a_malformed_manifest_is_a_bundle_error_not_a_traceback(tmp_path, old, new):
+    target = _copy_demo(tmp_path)
+    text = (target / bundle.MANIFEST).read_text(encoding="utf-8")
+    assert old in text
+    (target / bundle.MANIFEST).write_text(text.replace(old, new, 1), encoding="utf-8")
+    with pytest.raises(bundle.BundleError):
+        ReplaySource(target)
+
+
+def test_the_cli_reports_a_malformed_bundle_with_exit_code_2_and_no_traceback(tmp_path, capsys):
+    target = _copy_demo(tmp_path)
+    (target / bundle.MANIFEST).write_text('format = "x"\nname = "n"\n', encoding="utf-8")
+    code = main(["--replay", str(target), "--headless", "--no-config", "--state-dir", str(tmp_path / "s")])
+    err = capsys.readouterr().err
+    assert code == 2 and err.startswith("eyewall:") and "Traceback" not in err
+
+
+def test_unreadable_recorded_files_are_a_bundle_error(tmp_path, monkeypatch):
+    target = _copy_demo(tmp_path)
+    monkeypatch.setattr(ReplaySource, "_load_stations", lambda self: (_ for _ in ()).throw(ValueError("bad xml")))
+    with pytest.raises(bundle.BundleError, match="could not be read"):
+        ReplaySource(target)

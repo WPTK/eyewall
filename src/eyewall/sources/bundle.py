@@ -20,6 +20,7 @@ suffix for intermediates, as in NHC's own GIS file names):
 from __future__ import annotations
 
 import importlib.resources
+import re
 import tomllib
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,6 +36,7 @@ GIS_LAYERS = ("5day", "fcst")
 TIDE_PRODUCTS = ("water_level", "predictions", "wind", "air_pressure")
 TIDE_LISTINGS = ("water_level", "met")
 STATIONS_XML = "ndbc/activestations.xml"
+_STORM_ID = re.compile(r"(?:al|ep|cp)\d{6}")  # also the folder name under nhc/ and gis/, so nothing else is allowed
 
 
 class BundleError(ValueError):
@@ -107,9 +109,12 @@ def read_manifest(directory: Path) -> Manifest:
             GraphicEntry(str(g["file"]), str(g["kind"]), str(g["product"]), str(g["adv"]))
             for g in data.get("graphics", [])
         )
+        storm_id = str(data["storm_id"]).lower()
+        if not _STORM_ID.fullmatch(storm_id):
+            raise BundleError(f"{path}: storm_id {storm_id!r} is not a storm id such as al052025")
         return Manifest(
             name=str(data["name"]),
-            storm_id=str(data["storm_id"]).lower(),
+            storm_id=storm_id,
             storm_name=str(data["storm_name"]),
             bin=str(data["bin"]).upper(),
             start=_moment(data["start"], "start"),
@@ -120,6 +125,8 @@ def read_manifest(directory: Path) -> Manifest:
         )
     except KeyError as exc:
         raise BundleError(f"{path}: missing {exc.args[0]!r}") from exc
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise BundleError(f"{path}: a field has the wrong type or value ({exc})") from exc
 
 
 def write_manifest(directory: Path, manifest: Manifest) -> None:

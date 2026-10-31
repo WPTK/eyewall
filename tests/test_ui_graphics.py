@@ -6,6 +6,7 @@ to zero. No real terminal graphics were drawn by these tests; the inline path is
 
 from __future__ import annotations
 
+import asyncio
 import io
 import webbrowser
 from dataclasses import replace
@@ -106,6 +107,16 @@ def caption(panel: GalleryPanel) -> str:
 
 def current_titles(panel: GalleryPanel) -> list[str]:
     return [i.title for i in panel.items]
+
+
+async def until(pilot, condition, tries: int = 200) -> None:  # type: ignore[no-untyped-def]
+    """Let the loop run until a worker thread has finished what the condition looks for."""
+    for _ in range(tries):
+        if condition():
+            return
+        await asyncio.sleep(0.01)
+        await pilot.pause()
+    raise AssertionError("the condition was never met")
 
 
 def messages(app: EyewallApp) -> list[str]:
@@ -306,8 +317,8 @@ async def test_a_storm_with_no_graphics_yet_says_so() -> None:
 
 
 async def test_y_copies_the_address_and_o_opens_it(monkeypatch) -> None:
-    opened: list[str] = []
-    monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: opened.append(url) or True)
+    controller = _Controller()
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: controller)
     app = app_for()
     async with running(app) as pilot:
         panel = await open_gallery(pilot)
@@ -316,7 +327,8 @@ async def test_y_copies_the_address_and_o_opens_it(monkeypatch) -> None:
         await press(pilot, "y")
         assert app.clipboard == STILL
         await press(pilot, "o")
-        assert opened == [STILL]
+        await until(pilot, lambda: controller.urls)
+        assert controller.urls == [STILL]
 
 
 async def test_o_and_y_degrade_when_there_is_no_browser_or_clipboard(monkeypatch) -> None:
@@ -326,17 +338,19 @@ async def test_o_and_y_degrade_when_there_is_no_browser_or_clipboard(monkeypatch
     def no_clipboard(text: str) -> None:
         raise OSError("no clipboard")
 
-    monkeypatch.setattr(webbrowser, "open", no_browser)
+    monkeypatch.setattr(webbrowser, "get", no_browser)
     app = app_for()
     async with running(app) as pilot:
         panel = await open_gallery(pilot)
         await pick(pilot, panel, "GEOCOLOR still")
         monkeypatch.setattr(app, "copy_to_clipboard", no_clipboard)
         await press(pilot, "o", "y")
+        await until(pilot, lambda: sum(STILL in m for m in messages(app)) == 2)
         assert sum(STILL in m for m in messages(app)) == 2  # both say the address instead of failing
         assert app.is_running
-        monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: False)
+        monkeypatch.setattr(webbrowser, "get", lambda *a, **k: _Controller(opened=False))
         await press(pilot, "o")
+        await until(pilot, lambda: "No browser" in messages(app)[-1])
         assert "No browser" in messages(app)[-1]
 
 
@@ -523,6 +537,10 @@ def test_a_picture_with_no_version_is_stamped_with_the_poll_that_listed_it() -> 
         ("https://evilnoaa.gov/x", False),
         ("https://example.test/x?u=https://noaa.gov/", False),
         ("file:///c:/noaa.gov/x", False),
+        ("http://www.nhc.noaa.gov/x.png", False),
+        ("https://noaa.gov@evil.test/x", False),
+        ("https://x.noaa.gov.evil.com/x", False),
+        ("https://evil.test\\@noaa.gov/x", False),
     ],
 )
 def test_only_noaa_hosts_are_opened(url: str, ok: bool) -> None:
@@ -559,3 +577,58 @@ def test_the_first_frame_is_decoded_when_the_image_is_opened_not_when_it_is_draw
     assert list(frames._cache) == [0] and frames.animated
     with pytest.raises(ImageError):
         _open_frames(b"not an image")
+
+
+class _Controller:
+    def __init__(self, name: str = "xdg-open", opened: bool = True) -> None:
+        self.name, self.opened, self.urls = name, opened, []
+
+    def open(self, url: str) -> bool:
+        self.urls.append(url)
+        return self.opened
+
+
+@pytest.mark.parametrize("name", ["lynx", "w3m", "/usr/bin/links", "elinks"])
+def test_a_console_browser_is_never_started(monkeypatch, name: str) -> None:
+    controller = _Controller(name)
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: controller)
+    assert gallery_widget.open_in_browser(STILL) == "console"
+    assert controller.urls == []
+
+
+def test_a_blocking_command_line_browser_is_not_started_but_a_background_one_is(monkeypatch) -> None:
+    plain = webbrowser.GenericBrowser("firefox")
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: plain)
+    monkeypatch.setattr(plain, "open", lambda url: pytest.fail("a blocking browser was started"))
+    assert gallery_widget.open_in_browser(STILL) == "console"
+    background = _Controller("firefox")
+    monkeypatch.setattr(webbrowser, "get", lambda *a, **k: background)
+    assert gallery_widget.open_in_browser(STILL) == "opened" and background.urls == [STILL]
+    background.opened = False
+    assert gallery_widget.open_in_browser(STILL) == "none"
+
+
+async def test_o_opens_in_a_thread_and_points_a_console_browser_user_to_copy(monkeypatch) -> None:
+    import threading
+
+    main_thread = threading.get_ident()
+    seen: list[int] = []
+    controller = _Controller("lynx")
+
+    def fake_get(*a, **k):
+        seen.append(threading.get_ident())
+        return controller
+
+    monkeypatch.setattr(webbrowser, "get", fake_get)
+    app = app_for()
+    async with running(app) as pilot:
+        panel = await open_gallery(pilot)
+        await pick(pilot, panel, "GEOCOLOR still")
+        await loaded(pilot, panel, "GEOCOLOR still")
+        await press(pilot, "o")
+        await until(pilot, lambda: any("Press y to copy" in m for m in messages(app)))
+        assert controller.urls == []
+        controller.name = "xdg-open"
+        await press(pilot, "o")
+        await until(pilot, lambda: controller.urls)
+        assert controller.urls and seen and main_thread not in seen

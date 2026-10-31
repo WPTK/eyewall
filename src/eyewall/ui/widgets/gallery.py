@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import webbrowser
 from typing import TYPE_CHECKING, Any, ClassVar
-from urllib.parse import urlsplit
 
 from rich.segment import Segment
 from rich.style import Style as RichStyle
@@ -42,6 +42,7 @@ from eyewall.render.images import (
 )
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
 from eyewall.ui.theme import DIM
+from eyewall.urls import is_noaa_url
 
 if TYPE_CHECKING:
     from eyewall.app import EyewallApp
@@ -49,7 +50,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 0.25  # a key held on the list picks one image, not every image it passes
-NOAA_DOMAINS = ("noaa.gov", "weather.gov")
 RENDER_CACHE = 48  # a loop's worth of drawn frames at most; the colour lookups are memoised in render.images
 
 
@@ -442,7 +442,7 @@ class GalleryPanel(Vertical):
         self._restart_timer()
         self._update_caption()
 
-    def action_open_url(self) -> None:
+    async def action_open_url(self) -> None:
         item = self.current
         if item is None:
             return
@@ -453,11 +453,17 @@ class GalleryPanel(Vertical):
             self.eye.notify("Not a NOAA link.", severity="warning", timeout=5)
             return
         try:
-            opened = webbrowser.open(item.url)
+            outcome = await asyncio.to_thread(open_in_browser, item.url)
         except Exception:
             log.exception("could not open %s", item.url)
-            opened = False
-        if not opened:
+            outcome = "none"
+        if outcome == "console":
+            self.eye.notify(
+                "The only browser here runs inside this terminal. Press y to copy the address instead.",
+                severity="warning",
+                timeout=10,
+            )
+        elif outcome != "opened":
             self.eye.notify(
                 f"No browser could be opened here. Address: {item.url}", severity="warning", timeout=10, markup=False
             )
@@ -477,6 +483,23 @@ class GalleryPanel(Vertical):
         self.eye.notify("Copied the address (the terminal must allow clipboard access).", timeout=4)
 
 
+CONSOLE_BROWSERS = frozenset({"lynx", "w3m", "links", "links2", "elinks", "browsh", "www-browser", "wget", "curl"})
+
+
+def open_in_browser(url: str) -> str:
+    """Open the address in the desktop browser: `opened`, `console` (refused) or `none`. Blocks, so run it in a thread.
+
+    A browser that runs in the terminal (lynx, w3m, links) would take over the screen Textual draws on, and the
+    standard library waits for a plain command-line browser to exit, so those are never started.
+    """
+    controller = webbrowser.get()
+    name = os.path.basename(str(getattr(controller, "name", ""))).lower().removesuffix(".exe")
+    plain = type(controller) is webbrowser.GenericBrowser  # started in this terminal and waited for
+    if plain or (name.split() or [""])[0] in CONSOLE_BROWSERS:
+        return "console"
+    return "opened" if controller.open(url) else "none"
+
+
 def _open_frames(data: bytes) -> Frames:
     """Open the image and decode its first frame, in a worker thread, so the event loop only draws."""
     frames = Frames(data)
@@ -486,16 +509,6 @@ def _open_frames(data: bytes) -> Frames:
         frames.close()
         raise
     return frames
-
-
-def is_noaa_url(url: str) -> bool:
-    """True for an http(s) address whose parsed host is noaa.gov or weather.gov or a subdomain of either."""
-    try:
-        parts = urlsplit(url)
-        host = (parts.hostname or "").lower()
-    except ValueError:
-        return False
-    return parts.scheme in ("http", "https") and any(host == d or host.endswith("." + d) for d in NOAA_DOMAINS)
 
 
 def _option_text(item: GalleryItem) -> Text:
