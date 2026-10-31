@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0] - 2026-10-31
+
+### Changed
+
+- Launch the Textual app from `python -m eyewall`, live or with `--replay` and `--demo`, in place of the "not built yet" stub ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+
+### Added
+
+- Add the storm dashboard: the storm list by basin, the map with cone, track, forecast points, wind radii and warning segments, and the headline, warnings, wind, surge and buoy panels, which fold into tabs below 110 columns ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+- Add the map widget over the renderer, with layer toggles, zoom, pan, fit to the cone and the 10 m coastline once zoomed in ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+- Add the storm detail screen with Summary, Forecast, Public Advisory (TCP and TCM toggle), Discussion, Wind Probabilities, Warnings and History tabs ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+- Add the tropical weather outlook screen with the watchlist, the alert log, the help screen, the layer menu and toasts from alert events ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+- Add replay transport keys (pause, speed, previous and next advisory) and a status bar with per-feed freshness and the next poll ([`a863041`](https://github.com/WPTK/eyewall/commit/a863041e0689bb8b433cda1f8ad66d2fc918d66d), [#12](https://github.com/WPTK/eyewall/pull/12))
+- Add Pilot journey tests, SVG snapshot tests for the dashboard, a detail tab and the outlook, and launch tests for the command line ([`0c7cab9`](https://github.com/WPTK/eyewall/commit/0c7cab9f9fd9520440b9264488af804d06516a05), [#12](https://github.com/WPTK/eyewall/pull/12))
+
+[0.5.0]: https://github.com/WPTK/eyewall/releases/tag/v0.5.0
+
 ## [0.4.0] - 2026-10-31
 
 ### Changed

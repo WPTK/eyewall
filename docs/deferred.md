@@ -34,3 +34,9 @@ and move an item into a milestone brief when it is scheduled.
 - M4: `LiveSource.satellite` makes one listing request per storm per satellite poll; cache the listing across storms.
 - M4: coming back from away mode makes every feed due at once (a burst of requests); stagger the first poll after the return.
 - M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh.
+- M5: README screenshots; `scripts/screenshot_terminal.ps1` needs a visible Windows Terminal, so take them by hand once M6 is in.
+- M5: the poller fetches buoys only for a storm, so the outlook watchlist is empty on a quiet day until M6 changes that.
+- M5: the replay serves no outlook, so the outlook screen is only populated live.
+- M5: only the current wind radii are drawn; the forecast radii at each forecast point are not.
+- M5: surge geometry (KML) is not parsed, so the map has no surge lines and the surge panel shows text only.
+- M5: on a quiet day the dashboard stays the first screen; opening on the outlook automatically is not done.

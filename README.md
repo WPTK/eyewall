@@ -12,9 +12,11 @@ storm (Hurricane Erin, 2025) so every screen can be tried in the off-season.
 
 ## Status
 
-Pre-alpha, version 0.4.0. The data layers (NHC, NDBC, CO-OPS), the terminal map renderer, the live and replay data
-sources, the store and the poller are in; there is no interface yet, so `python -m eyewall` reports its version, and
-`python -m eyewall --demo --headless --until +12h` replays Hurricane Erin and prints the events. Each milestone ships as its own `0.y.0` release.
+Pre-alpha, version 0.5.0. The data layers (NHC, NDBC, CO-OPS), the terminal map renderer, the live and replay data
+sources, the store, the poller and the storm interface are in: `python -m eyewall` opens the dashboard, and
+`python -m eyewall --demo` replays Hurricane Erin in it. The buoy and tide screens and the images come in later
+milestones. `python -m eyewall --demo --headless --until +12h` replays Erin without the interface and prints the events.
+Each milestone ships as its own `0.y.0` release.
 
 | Milestone | Release | Status |
 |---|---|---|
@@ -22,8 +24,8 @@ sources, the store and the poller are in; there is no interface yet, so `python 
 | M2 Observations data layer | 0.2.0 | done |
 | M3 Renderer and basemap | 0.3.0 | done |
 | M4 Core: sources, store, poller, replay | 0.4.0 | done |
-| M5 Storm UI | 0.5.0 | next |
-| M6 Observations UI | 0.6.0 | planned |
+| M5 Storm UI | 0.5.0 | done |
+| M6 Observations UI | 0.6.0 | next |
 | M7 Graphics | 0.7.0 | planned |
 | M8 Polish and release | 0.8.0 | planned |
 
