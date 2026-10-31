@@ -51,9 +51,6 @@ and move an item into a milestone brief when it is scheduled.
 - M6: the watchlist holds 60 stations per kind, but series files are capped at 24 buoys (open pages first, then the storm's nearest; a watchlist-only buoy is read from `latest_obs`) and gauges at 12 (the storm's nearest first, then the watchlist), so a long gauge watchlist is only partly polled; rotate through it.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
 - M6: a watchlisted gauge that is missing from the CO-OPS catalog shows "waiting" forever; say it is unknown.
-- M8: CI binary builds install runtime dependencies unpinned (no lock file); lock them when a lock file exists.
-- M8: binaries pass between jobs as artifacts, which drop the executable bit; the release uploads the files as built, so users `chmod +x`. Ship tar.gz archives if that bites.
-- M8: the canary issue lists only `FAIL` lines; print the last 40 lines of a traceback too. GitHub disables scheduled workflows after 60 days without repository activity, so a quiet repo needs a manual dispatch now and then.
 - M7: the cone crop margins (`CONE_MARGINS` in `render/images.py`) were measured on the 2025 Erin cone only; check them against the next live cone and the `no_line` variants.
 - M7: the gallery has no key to pick the image size (`500x500`, `2000x2000`) or a satellite band other than 13; the product list is fixed in `ui/gallery.py`.
 - M7: a loop over 24 MB (a long storm's full GEOCOLOR loop) is refused with a message; fall back to the newest ranged loop instead.
