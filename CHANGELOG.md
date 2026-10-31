@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.1] - 2026-10-31
+
+### Fixed
+
+- Keep the `? help` hint visible on a crowded status line by trimming the status text instead of the hint ([`e93af7a`](https://github.com/WPTK/eyewall/commit/e93af7a), [#19](https://github.com/WPTK/eyewall/pull/19))
+
 ## [0.8.0] - 2026-10-31
 
 ### Changed
@@ -21,6 +27,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.8.1]: https://github.com/WPTK/eyewall/releases/tag/v0.8.1
 [0.8.0]: https://github.com/WPTK/eyewall/releases/tag/v0.8.0
 
 ## [0.7.0] - 2026-10-31
