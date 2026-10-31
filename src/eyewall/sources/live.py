@@ -37,6 +37,7 @@ from eyewall.ndbc.client import NdbcClient
 from eyewall.net import FetchError, new_client
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.client import NhcClient
+from eyewall.render.images import fetch_image
 from eyewall.sources import protocol
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
 
@@ -128,6 +129,21 @@ class LiveSource:
             except ParseError:
                 return ()
             return () if product is None else (product,)
+
+    async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
+        """One more NESDIS product for a storm, fetched when the gallery opens; None when NESDIS does not list it."""
+        async with self._feed(protocol.SATELLITE):
+            try:
+                listed = (await self.nhc.fetch_floater_storms()).value or ()
+                if storm.id.upper() not in listed:
+                    return None
+                return (await self.nhc.fetch_floater_product(storm.id, product)).value
+            except ParseError:
+                return None
+
+    async def image(self, url: str) -> bytes:
+        async with self._feed(protocol.SATELLITE if "nesdis" in url else protocol.STORMS):
+            return await fetch_image(self._http, url)
 
     # ---- outlook and alerts -----------------------------------------------------------------------------------
 

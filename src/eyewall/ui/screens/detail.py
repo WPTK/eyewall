@@ -9,19 +9,20 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import DataTable, Static, TabbedContent, TabPane
+from textual.widgets import DataTable, OptionList, Static, TabbedContent, TabPane
 
 from eyewall.config import watchlist_ids
 from eyewall.ui import format as fmt
 from eyewall.ui import products
 from eyewall.ui import stations as st
 from eyewall.ui.theme import DIM
+from eyewall.ui.widgets.gallery import GalleryPanel
 from eyewall.ui.widgets.station_table import StationTable
 
 if TYPE_CHECKING:
     from eyewall.app import EyewallApp
 
-# (tab id, title). Buoys and Tides are station tables, the Graphics tab is still a placeholder (M7).
+# (tab id, title). Buoys and Tides are station tables, Graphics is the image gallery.
 TABS: tuple[tuple[str, str], ...] = (
     ("summary", "Summary"),
     ("forecast", "Forecast"),
@@ -34,7 +35,6 @@ TABS: tuple[tuple[str, str], ...] = (
     ("graphics", "Graphics"),
     ("history", "History"),
 )
-PLACEHOLDERS = {"graphics": "The graphics gallery arrives in 0.7.0."}
 TABLE_TABS = ("forecast", "probs", "history")
 STATION_TABS = {"buoys": "ndbc", "tides": "coops"}  # tab id -> watchlist kind
 
@@ -70,12 +70,14 @@ class StormDetailScreen(Screen[None]):
                     if tab_id in STATION_TABS:
                         yield Static("", id=f"{tab_id}-note", classes="note")
                         yield StationTable(id=f"{tab_id}-table")
+                    elif tab_id == "graphics":
+                        yield GalleryPanel(self.storm_id, id="graphics-gallery")
                     elif tab_id in TABLE_TABS:
                         yield Static("", id=f"{tab_id}-note", classes="note")
                         yield DataTable(id=f"{tab_id}-table", zebra_stripes=True, cursor_type="row")
                     else:
                         with VerticalScroll():
-                            yield Static(PLACEHOLDERS.get(tab_id, ""), id=f"{tab_id}-text", classes="detail-text")
+                            yield Static("", id=f"{tab_id}-text", classes="detail-text")
         yield Static("", id="detail-status")
 
     def on_mount(self) -> None:
@@ -129,6 +131,7 @@ class StormDetailScreen(Screen[None]):
         self._set_text("ww", products.watches_warnings(eye.store, state, g))
         self._set_table("history", products.history_table(state, preset), "Best track, newest first.")
         self._refresh_stations()
+        self.query_one("#graphics-gallery", GalleryPanel).refresh_data()
 
     def _refresh_stations(self) -> None:
         eye = self.eye
@@ -168,9 +171,13 @@ class StormDetailScreen(Screen[None]):
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Land the focus on the tab's table, so the arrows and Enter act on its rows straight away."""
+        gallery = self.query_one("#graphics-gallery", GalleryPanel)
+        gallery.set_active(event.pane.id == "tab-graphics")
         for table in event.pane.query(StationTable):
             table.focus()
             break
+        if event.pane.id == "tab-graphics":
+            gallery.query_one(OptionList).focus()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id == "buoys-table" and event.row_key.value is not None:

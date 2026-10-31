@@ -216,6 +216,12 @@ class FakeSource:
         self._call("satellite")
         return ()
 
+    async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
+        return None
+
+    async def image(self, url: str) -> bytes:
+        raise FetchError(url, "no images in this fake")
+
     async def outlook(self) -> Outlook:
         self._call("outlook")
         return Outlook()
