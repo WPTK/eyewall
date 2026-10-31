@@ -232,7 +232,8 @@ StormDetailScreen DataTable {
 }
 
 #outlook-scroll {
-    height: 1fr;
+    height: auto;
+    max-height: 70%;
     padding: 0 1;
 }
 
@@ -244,7 +245,8 @@ StormDetailScreen DataTable {
 }
 
 #watchlist {
-    height: 7;
+    height: 1fr;
+    min-height: 5;
 }
 
 #outlook-map {
@@ -345,7 +347,7 @@ BuoyDetailScreen.narrow.show-info #buoy-charts {
     display: none;
 }
 
-#buoy-status, #watch-status {
+#buoy-status, #watch-status, #alert-status {
     dock: bottom;
     height: 1;
     background: $panel;
@@ -362,7 +364,12 @@ BuoyDetailScreen.narrow.show-info #buoy-charts {
     background: $panel;
 }
 
-#watch-buoys, #watch-tides {
+#watch-buoys {
+    height: auto;
+    max-height: 60%;
+}
+
+#watch-tides {
     height: 1fr;
 }
 
@@ -432,8 +439,11 @@ SearchScreen, SettingsScreen {
 }
 
 #settings-note {
-    height: 1;
+    height: auto;
     padding: 0 1;
+    color: $error;
+    text-style: bold;
+    border-top: solid $error 50%;
 }
 
 /* ---- graphics gallery ---- */

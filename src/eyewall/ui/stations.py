@@ -182,13 +182,11 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
     name = clean_name(station.name) or MISSING  # the table cuts it to the room it has
     pin = "*" if entry.watchlisted else " "
     ident = Text(f"{pin}{station.id}", style="bold")
-    if state in ("silent", "dark"):
-        dim = [name, distance, bearing, *[MISSING] * 6, NOT_REPORTING, closest_text(entry, preset)]
-        return (Text(ident.plain, style=f"bold {DIM}"), *[Text(c, style=DIM) for c in dim])
     obs = newest_observation(store, station.id)
-    if state == "waiting" or obs is None:
-        cells = [ident, Text(name), Text(distance), Text(bearing)] + [Text(MISSING, style=DIM)] * 6
-        return (*cells, Text(WAITING, style=DIM), Text(closest_text(entry, preset)))
+    if state in ("silent", "dark", "waiting") or obs is None:
+        note = NOT_REPORTING if state in ("silent", "dark") else WAITING
+        dim = [name, distance, bearing, *[MISSING] * 6, note, closest_text(entry, preset)]
+        return (Text(ident.plain, style=f"bold {DIM}"), *[Text(c, style=DIM) for c in dim])
     series = store.series.get(station.id.upper())
     if series is not None and series.latest is not None:
         age = observation_age(series, now) or timedelta(0)
