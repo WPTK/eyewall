@@ -88,7 +88,7 @@ def parse_bdeck(data: bytes | str) -> BestTrack:
     number = 0
     skipped = 0
     order: list[datetime] = []
-    firsts: dict[datetime, list[str]] = {}
+    firsts: dict[datetime, tuple[list[str], float, float]] = {}
     radii: dict[datetime, dict[int, QuadrantRadii]] = {}
     for line in text.splitlines():
         if not line.strip():
@@ -106,7 +106,7 @@ def parse_bdeck(data: bytes | str) -> BestTrack:
         if not basin_code:
             basin_code, number = fields[0].upper(), int(fields[1])
         if when not in firsts:
-            firsts[when] = fields
+            firsts[when] = (fields, lat, lon)
             radii[when] = {}
             order.append(when)
         threshold = _int(fields, 11)
@@ -119,10 +119,7 @@ def parse_bdeck(data: bytes | str) -> BestTrack:
 
     fixes: list[BestTrackFix] = []
     for when in order:
-        fields = firsts[when]
-        lat = _coordinate(fields[6])
-        lon = _coordinate(fields[7])
-        assert lat is not None and lon is not None
+        fields, lat, lon = firsts[when]
         found = radii[when]
         fixes.append(
             BestTrackFix(
