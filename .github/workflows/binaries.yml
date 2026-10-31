@@ -54,7 +54,7 @@ jobs:
             asset: eyewall-windows-x86_64.exe
             ext: .exe
           # python:3.12-bullseye, pinned by digest (multi-arch index, checked 2026-10-31). Bullseye is past Debian's LTS
-          # window, kept on purpose for the glibc 2.31 floor; move the pin deliberately, and update smoke-test.md with it.
+          # window, kept on purpose for the glibc 2.31 floor; move the pin deliberately, and update the glibc note in docs/development.md with it.
           - name: linux-x86_64
             asset: eyewall-linux-x86_64.tar.gz
             os: ubuntu-latest

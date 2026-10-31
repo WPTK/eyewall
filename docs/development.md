@@ -13,7 +13,7 @@ On macOS and Linux use `.venv/bin/python` and quote the extra, `".[dev]"`. The e
 effect without reinstalling; `__version__` is read from `src/eyewall/__init__.py` when the package is installed, so
 reinstall after bumping it if you want `pip` metadata to agree.
 
-Each git worktree needs its own `.venv`. Create it before anything else when a milestone session starts in a new worktree.
+Each git worktree needs its own `.venv`; create it before anything else.
 
 ## Checks
 
@@ -66,10 +66,53 @@ Windows Terminal, iTerm2, Kitty and most modern terminals render the braille map
 console (conhost) does not, so use `--glyphs ascii` there. Inline images need a terminal that supports Sixel or the Kitty
 graphics protocol; everywhere else eyewall falls back to a drawn approximation.
 
+## Working on NOAA data
+
+- Never guess a feed format. NOAA feeds are loosely typed and change without notice. Parse by field or column name,
+  tolerate missing and extra fields, and test against saved real payloads. If a feed disagrees with `data-sources.md`,
+  fix that file in the same pull request.
+- Be polite to NOAA. Requests go through `eyewall/net.py`, which sends the User-Agent from `eyewall.net` and uses
+  conditional requests. Never poll faster than the cadence in `data-sources.md`, and fetch zips and images only when a
+  storm's advisory number changes.
+- Timestamps are timezone-aware UTC. Units stay as NOAA reported them until display.
+- Fixtures: `tests/fixtures/**` is marked `-text` in `.gitattributes`, so line-ending normalisation must never touch a
+  saved payload. `.ps1` files are CRLF; everything else is LF.
+- Things that have bitten before:
+  - The CurrentStorms feed gives `intensity` and `pressure` as strings and `movementSpeed` in mph. Key storms by `id`,
+    not by `binNumber`, which is reused and changes when a storm crosses 140 degrees west.
+  - NDBC marks missing data `MM` in current files but `99.0`, `999` or `9999` in historical files. A listed buoy may be
+    dark; a 404 for its file is normal.
+  - `tgftp` and the NHC `.shtml` pages keep a finished storm's last advisory. Check `advNum` against the feed before
+    trusting text.
+
+## Pull requests
+
+One branch per change and a pull request to `main`; merge when CI is green on the exact head, with `main` merged in.
+Do not force-push. Commit subjects use Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ci:`,
+`chore:`) in the imperative mood. `ci.yml` ignores `**.md`, `docs/**` and `LICENSE`, so documentation-only pull
+requests run no CI.
+
+## Versions and the changelog
+
+The version is ZeroVer, `0.y.z`: a feature or breaking change bumps `y`, a fix bumps `z`, and it never reaches 1.0. It
+lives in `src/eyewall/__init__.py`. The tag is `v` plus that version, and `release.yml` rejects a mismatch.
+
+`CHANGELOG.md` follows [Common Changelog](https://common-changelog.org/):
+
+- `# Changelog`, then releases newest first, each headed `## [0.1.0] - 2026-11-15` with a reference-style link to the
+  GitHub release at the bottom of the file. There is no Unreleased section; the entry is written in the release pull
+  request.
+- Groups, in this order and only these: `### Changed`, `### Added`, `### Removed`, `### Fixed`. Each is one bullet list,
+  breaking changes first (prefixed `**Breaking:**`), then by importance.
+- One line per entry, starting with an imperative present-tense verb (Add, Fix, Bump), followed by links to the commit
+  and pull request in parentheses. Each entry must make sense without its group heading.
+- Leave out dotfile changes, dev-only dependency bumps, style and formatting. Keep refactors, runtime changes and new
+  documentation.
+
 ## Releases
 
-Each milestone ends in a release. The pull request bumps the version and adds the changelog entry (see `CLAUDE.md`).
-After it merges, the owner tags the merge commit:
+A release pull request bumps the version and adds the changelog entry. After it merges, the maintainer tags the merge
+commit:
 
 ```bash
 git tag v0.1.0
@@ -77,9 +120,21 @@ git push origin v0.1.0
 ```
 
 `release.yml` then checks that the tag, `__version__` and the changelog heading agree, builds the wheel and source
-distribution and the five standalone binaries (`binaries.yml`, which also runs on pull requests that touch the build and can
-be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog section
-as its notes. The Linux and macOS binaries ship as `.tar.gz` archives so they keep the executable bit. The binaries are built
-with the pins in `scripts/binary-constraints.txt`; refresh them with `python scripts/update_constraints.py` (`--check` shows drift)
-before a release. `canary.yml` is a scheduled workflow, which GitHub disables after 60 days without repository activity; run it by
-hand to re-enable it. `scripts/build_exe.ps1` builds the Windows binary locally; `docs/smoke-test.md` is the manual checklist.
+distribution and the five standalone binaries (`binaries.yml`, which also runs on pull requests that touch the build and
+can be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog
+section as its notes. The Linux and macOS binaries are built to ship as `.tar.gz` archives so they keep the executable
+bit. The binaries are built with the pins in `scripts/binary-constraints.txt`; refresh them with
+`python scripts/update_constraints.py` (`--check` shows drift) before a release. The Linux x86_64 binary is built inside
+`python:3.12-bullseye` so it runs on glibc 2.31 or newer. `canary.yml` is a scheduled workflow, which GitHub disables
+after 60 days without repository activity; run it by hand to re-enable it. `scripts/build_exe.ps1` builds the Windows
+binary locally.
+
+Before announcing a release, run the binary for each platform on a machine with no Python and check:
+
+1. `eyewall --version` prints the release number and `eyewall --selftest` prints `selftest ok`.
+2. `eyewall --demo --headless --until +1h` prints three events and `3 event(s)`.
+3. `eyewall --demo` opens in a terminal at least 100 columns wide: the map draws, Space pauses, `Enter` opens the storm
+   detail, a buoy's charts draw, `?` shows help and `q` restores the terminal.
+4. Live, `eyewall` starts and either lists the active storms or says `No tropical cyclones`; out of season that is
+   correct. Offline it still opens and marks the feeds as waiting.
+5. The binaries are not signed, so expect the SmartScreen and Gatekeeper prompts described in `install.md`.
