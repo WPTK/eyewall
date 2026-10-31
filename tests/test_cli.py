@@ -107,3 +107,17 @@ def test_the_app_is_told_what_the_file_said_apart_from_the_flags_and_whether_it_
     bad.write_text("[poll\n", encoding="utf-8")
     assert main(["--config", str(bad), "--demo"]) == 0
     assert launched[1][1]["config_file_broken"] is True
+
+
+def test_selftest_passes_on_the_bundled_recording(capsys):
+    assert main(["--selftest"]) == 0
+    assert "selftest ok" in capsys.readouterr().out
+
+
+def test_selftest_reports_a_missing_recording(monkeypatch, capsys):
+    def missing():
+        raise RuntimeError("no demo")
+
+    monkeypatch.setattr("eyewall.sources.bundle.demo_bundle_path", missing)
+    assert main(["--selftest"]) == 1
+    assert "selftest failed" in capsys.readouterr().err

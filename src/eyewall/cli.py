@@ -34,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     source.add_argument("--demo", action="store_true", help="shorthand for --replay demo")
 
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="replay the bundled storm for an hour and draw one map frame; exit 0 if the installation works",
+    )
     parser.add_argument("--headless", action="store_true", help="run the poller with no interface and print the events")
     parser.add_argument(
         "--until",
@@ -66,6 +71,27 @@ def resolve_config(args: argparse.Namespace) -> tuple[Config, tuple[str, ...]]:
 
 def _load(args: argparse.Namespace) -> LoadResult:
     return load_config(args.config, use_file=not args.no_config)
+
+
+def _selftest() -> int:
+    """Parse the bundled recording through the whole poller and draw one map frame; 0 if it all worked."""
+    try:
+        from eyewall.config import Config
+        from eyewall.headless import run_replay
+        from eyewall.render.basemap import basemap_canvas
+        from eyewall.render.projection import Viewport
+        from eyewall.sources.bundle import demo_bundle_path
+        from eyewall.sources.replay import ReplaySource
+
+        result = asyncio.run(run_replay(ReplaySource(demo_bundle_path()), Config(), None, "+1h"))
+        frame = basemap_canvas(Viewport(25.0, -75.0, 0.05, 80, 24)).to_text()
+        if not result.events or not frame.strip():
+            raise RuntimeError(f"{len(result.events)} event(s), frame {'blank' if not frame.strip() else 'drawn'}")
+    except Exception as exc:  # any failure of a frozen build is the answer
+        print(f"eyewall: selftest failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    print(f"eyewall {__version__}: selftest ok ({len(result.events)} events, {result.polls} polls, 1 frame)")
+    return 0
 
 
 def _headless(args: argparse.Namespace, config: Config) -> int:
@@ -144,6 +170,8 @@ def _run_app(args: argparse.Namespace, config: Config, loaded: LoadResult | None
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.selftest:
+        return _selftest()
     loaded = _load(args)
     config = apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs)
     warnings = loaded.warnings

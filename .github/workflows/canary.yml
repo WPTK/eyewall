@@ -1,0 +1,71 @@
+name: Feed canary
+
+# Weekly check that the live NOAA feeds still parse. Catches silent format drift before users do. Each spot check
+# fetches every endpoint eyewall uses once, with the eyewall User-Agent and a pause between requests, and exits 1 when
+# a fetch or a parser fails. A failure opens one issue, or adds a comment to the one already open.
+
+on:
+  schedule:
+    - cron: "41 12 * * 1" # Mondays 12:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e .
+
+      # Both checks always run, so one report names every drifted feed.
+      - name: NHC, CPHC and NWS endpoints
+        id: nhc
+        continue-on-error: true
+        run: python scripts/spot_check_nhc.py 2>&1 | tee "$RUNNER_TEMP/canary-nhc.txt"; exit "${PIPESTATUS[0]}"
+      - name: NDBC and CO-OPS endpoints
+        id: obs
+        continue-on-error: true
+        run: python scripts/spot_check_obs.py 2>&1 | tee "$RUNNER_TEMP/canary-obs.txt"; exit "${PIPESTATUS[0]}"
+
+      - name: Open or update the drift issue
+        if: steps.nhc.outcome == 'failure' || steps.obs.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NHC: ${{ steps.nhc.outcome }}
+          OBS: ${{ steps.obs.outcome }}
+        run: |
+          {
+            echo "Failing checks: $([ "$NHC" = failure ] && echo 'scripts/spot_check_nhc.py ')$([ "$OBS" = failure ] && echo 'scripts/spot_check_obs.py')"
+            echo
+            for file in "$RUNNER_TEMP/canary-nhc.txt" "$RUNNER_TEMP/canary-obs.txt"; do
+              [ -f "$file" ] || continue
+              if grep -qE '^FAIL|Traceback' "$file"; then
+                echo "From $(basename "$file") (matching lines):"
+                echo '```'
+                grep -E '^FAIL|Traceback' "$file" | tail -n 40
+                echo '```'
+              fi
+            done
+            echo "Run: $RUN_URL"
+          } > "$RUNNER_TEMP/body.md"
+          gh label create feed-drift --color D93F0B --description "NOAA feed drift" 2>/dev/null || true
+          number="$(gh issue list --label feed-drift --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --label feed-drift --title "Feed canary failed" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Fail the run when a check failed
+        if: steps.nhc.outcome == 'failure' || steps.obs.outcome == 'failure'
+        run: exit 1
