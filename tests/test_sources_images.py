@@ -124,7 +124,7 @@ async def test_panels_and_storms_asking_together_share_one_listing_request(tmp_p
         await source.aclose()
 
 
-async def test_a_failed_listing_is_not_kept_and_a_cancelled_asker_does_not_cancel_the_others(tmp_path):
+async def test_a_failed_listing_is_not_kept(tmp_path):
     class Flaky(Listings):
         fail = True
 
@@ -142,12 +142,33 @@ async def test_a_failed_listing_is_not_kept_and_a_cancelled_asker_does_not_cance
         transport.fail = False
         await source.satellite_product(_storm("al012026"), "GEOCOLOR")
         assert "/FLOATER/data/AL012026/GEOCOLOR/" in transport.paths  # the failure was not kept; the listing came again
-        first = asyncio.ensure_future(source.satellite_product(_storm("al022026"), "AirMass"))
-        second = asyncio.ensure_future(source.satellite_product(_storm("al032026"), "AirMass"))
-        await asyncio.sleep(0)
+    finally:
+        await source.aclose()
+
+
+async def test_a_cancelled_asker_does_not_cancel_the_request_another_one_is_waiting_for(tmp_path):
+    class Gated(Listings):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gate = asyncio.Event()
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/FLOATER/data/"):
+                await self.gate.wait()
+            return await super().handle_async_request(request)
+
+    transport = Gated()
+    source = LiveSource(cache_dir=tmp_path, transport=transport, clock=VirtualClock(NOW))
+    try:
+        first = asyncio.ensure_future(source.satellite_product(_storm("al012026"), "GEOCOLOR"))
+        second = asyncio.ensure_future(source.satellite_product(_storm("al012026"), "GEOCOLOR"))
+        for _ in range(30):  # both askers are now waiting on the one listing request, which waits on the gate
+            await asyncio.sleep(0)
         first.cancel()
-        await second
+        transport.gate.set()
+        await second  # without the shield the cancel would reach the shared request and raise CancelledError here
         assert first.cancelled()
+        assert transport.paths.count("/FLOATER/data/") == 1
     finally:
         await source.aclose()
 

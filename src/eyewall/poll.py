@@ -16,8 +16,8 @@ succeeding or stop happening, or when the source had to answer from its disk cac
 - `error`: the last attempt failed. The store keeps the last good data.
 
 **Intervals.** Away mode triples every interval; coming back from it makes the feeds due a few seconds apart. After a
-failed poll the delay doubles per consecutive failure up to `backoff_max`
-and never drops below the normal interval. `refresh()` wakes the loop and makes every feed due.
+failed poll the delay doubles per consecutive failure up to `backoff_max` and never drops below the normal
+interval. `refresh()` wakes the loop and makes every feed due.
 
 **What is refetched.** `CurrentStorms` is polled on the storms interval; a storm's advisory text, GIS zips, best track
 and graphics are fetched only when its advisory number or last-update time changes. The api.weather.gov copy of the

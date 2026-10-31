@@ -18,6 +18,10 @@ PROJECT_URL = "https://github.com/WPTK/eyewall"
 CONNECT_TIMEOUT = 10.0
 READ_TIMEOUT = 30.0
 MAX_RETRY_AFTER = 30.0
+ERROR_BODY_LIMIT = 64 * 1024  # an error page is read to the end (so the connection is reused) only if it is this small
+MAX_BYTES_EXTENSION = (
+    "eyewall_max_bytes"  # request extension: the caller's body limit, so the cache can skip a body it would reject
+)
 
 
 def user_agent() -> str:
@@ -124,13 +128,20 @@ async def fetch_bytes(
     attempt = 0
     while True:
         try:
-            async with client.stream("GET", url, params=params, headers=request_headers) as response:
+            async with client.stream(
+                "GET",
+                url,
+                params=params,
+                headers=request_headers,
+                extensions={} if max_bytes is None else {MAX_BYTES_EXTENSION: max_bytes},
+            ) as response:
                 status = response.status_code
                 if 200 <= status < 300 or status == 304:
                     body = await _read_body(response, url, max_bytes) if status != 304 else b""
                     return Fetched(
                         url, status, body, response.headers.get("ETag"), response.headers.get("Last-Modified")
                     )
+                await _drain(response)
                 if status == 404 and allow_404:
                     return Fetched(url, 404)
                 retry_after = _retry_after(response)
@@ -148,6 +159,18 @@ async def fetch_bytes(
             attempt += 1
             continue
         raise HttpError(url, status)
+
+
+async def _drain(response: httpx.Response) -> None:
+    """Read a small error body to its end so the keep-alive connection goes back to the pool; a big one is dropped."""
+    size = 0
+    try:
+        async for chunk in response.aiter_bytes():
+            size += len(chunk)
+            if size > ERROR_BODY_LIMIT:
+                return
+    except httpx.TransportError:
+        return  # the status is already known; a broken body is not worth a retry
 
 
 async def _read_body(response: httpx.Response, url: str, max_bytes: int | None) -> bytes:

@@ -117,7 +117,7 @@ async def test_an_answer_served_from_the_disk_cache_marks_the_feed_stale():
 # ---- away mode and refresh ----------------------------------------------------------------------------------------
 
 
-async def test_away_mode_triples_every_interval_and_coming_back_polls_at_once():
+async def test_away_mode_triples_every_interval_and_coming_back_polls_storms_first():
     poller, source, _, clock, _ = build()
     await poller.tick()
     poller.set_away(True)

@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from eyewall.clock import VirtualClock
-from eyewall.net import FetchError
+from eyewall.net import FetchError, TooLarge, fetch_bytes
 from eyewall.sources import bundle, protocol
 from eyewall.sources.bundle import BundleError, resolve_bundle
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
@@ -390,3 +390,37 @@ async def test_a_body_over_the_cache_cap_passes_through_whole_and_uncached(tmp_p
         async with client:
             assert len((await client.get(url)).content) == size
         assert (cache.load(url) is not None) is cached
+
+
+async def test_a_declared_length_over_the_callers_limit_is_neither_cached_nor_read(tmp_path):
+    cache = Cache(tmp_path)
+    client = httpx.AsyncClient(transport=CachingTransport(cache, Big(2 * 1024 * 1024)))
+    async with client:
+        with pytest.raises(TooLarge):
+            await fetch_bytes(client, "https://example.test/loop.gif", max_bytes=1024 * 1024)
+        assert cache.load("https://example.test/loop.gif") is None
+        # without a caller limit the same body is cached, and a cached copy still carries its length
+        again = await fetch_bytes(client, "https://example.test/loop.gif")
+        assert len(again.body) == 2 * 1024 * 1024
+        assert cache.load("https://example.test/loop.gif") is not None
+        with pytest.raises(TooLarge):
+            await fetch_bytes(client, "https://example.test/loop.gif", max_bytes=1024 * 1024)
+
+
+async def test_a_streamed_body_over_the_cap_with_no_declared_length_passes_through(tmp_path, monkeypatch):
+    monkeypatch.setattr("eyewall.sources.cache.MAX_BODY_BYTES", 1000)
+
+    class Pieces(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for _ in range(5):
+                yield b"z" * 600
+
+    class Chunked(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, stream=Pieces(), request=request)
+
+    cache = Cache(tmp_path)
+    client = httpx.AsyncClient(transport=CachingTransport(cache, Chunked()))
+    async with client:
+        assert len((await client.get("https://example.test/c")).content) == 3000
+    assert cache.load("https://example.test/c") is None

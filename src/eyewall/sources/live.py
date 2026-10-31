@@ -108,7 +108,8 @@ class LiveSource:
 
     async def _shared_call[T](self, key: str, call: Callable[[], Awaitable[T]], reuse: float = 0.0) -> T:
         """One request for every caller that asks for `key` while it is in flight, and for `reuse` seconds after it
-        succeeded. A failure is never kept. Callers are shielded, so a cancelled one does not cancel the others."""
+        started if it succeeded. A failure is never kept. Callers are shielded, so a cancelled one does not cancel the
+        others."""
         now = self._clock.monotonic()
         kept = self._shared.get(key)
         if kept is not None:
