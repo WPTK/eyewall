@@ -272,7 +272,7 @@ def probabilities_note(state: StormState) -> str:
     return "Cumulative chance (percent) of winds of at least 34, 50 and 64 kt by hour; <1 is under one percent."
 
 
-def watches_warnings(store: Store, state: StormState, g: UiGlyphs) -> Text:
+def watches_warnings(store: Store, state: StormState, g: UiGlyphs, now: datetime | None = None) -> Text:
     out = Text()
     public = state.advisories.public
     if public is not None:
@@ -298,9 +298,10 @@ def watches_warnings(store: Store, state: StormState, g: UiGlyphs) -> Text:
         out.append(
             "\nCoast segments on the map: " + ", ".join(f"{k} x{n}" for k, n in sorted(kinds.items())) + "\n", style=DIM
         )
-    if store.alerts.alerts:
+    alerts = store.alerts.alerts if now is None else store.active_alerts(now)
+    if alerts:
         out.append("\nNWS alerts\n", style="bold #8fd3ff")
-        for alert in store.alerts.alerts:
+        for alert in alerts:
             out.append(f"{alert.event}", style="bold")
             out.append(f"  {collapse(alert.area_desc)}\n")
             if alert.headline:

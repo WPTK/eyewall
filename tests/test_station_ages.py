@@ -142,6 +142,32 @@ def test_stations_without_weather_data_do_not_take_nearby_slots() -> None:
     assert ids == {"41010", "NOFLAG", "GONE", "PINNED"}
 
 
+def _alert(alert_id: str, area: str, ends: datetime | None) -> WatchWarningAlert:
+    return WatchWarningAlert(
+        id=alert_id,
+        event="Hurricane Warning",
+        kind=None,
+        headline=None,
+        area_desc=area,
+        severity=None,
+        urgency=None,
+        certainty=None,
+        status=None,
+        message_type=None,
+        sender_name=None,
+        sent=None,
+        effective=None,
+        onset=None,
+        expires=None,
+        ends=ends,
+        description=None,
+        instruction=None,
+        zones=(),
+        same_codes=(),
+        rings=(),
+    )
+
+
 # ---- the dashboard panels -------------------------------------------------------------------------------------
 
 
@@ -168,35 +194,40 @@ def test_the_buoy_strip_shows_the_pressure_change_in_the_preset_unit() -> None:
 
 
 def test_expired_alerts_are_left_out_of_the_panel() -> None:
-    def alert(alert_id: str, area: str, ends: datetime | None) -> WatchWarningAlert:
-        return WatchWarningAlert(
-            id=alert_id,
-            event="Hurricane Warning",
-            kind=None,
-            headline=None,
-            area_desc=area,
-            severity=None,
-            urgency=None,
-            certainty=None,
-            status=None,
-            message_type=None,
-            sender_name=None,
-            sent=None,
-            effective=None,
-            onset=None,
-            expires=None,
-            ends=ends,
-            description=None,
-            instruction=None,
-            zones=(),
-            same_codes=(),
-            rings=(),
-        )
-
     store = Store(Config())
     store.alerts = AlertsResult(
-        (alert("a", "Old County", NOW - timedelta(hours=1)), alert("b", "Live County", NOW + timedelta(hours=1)))
+        (_alert("a", "Old County", NOW - timedelta(hours=1)), _alert("b", "Live County", NOW + timedelta(hours=1)))
     )
     assert [a.id for a in store.active_alerts(NOW)] == ["b"]
     text = fmt.ww_panel(store, None, G, NOW).plain
     assert "Live County" in text and "Old County" not in text
+
+
+async def test_the_dashboard_and_detail_screens_pass_now_to_the_age_aware_readers() -> None:
+    from eyewall.ui.screens.dashboard import DashboardScreen
+    from eyewall.ui.widgets.panels import Panel
+    from tests.ui_support import into_the_storm, press, replay_app, running
+
+    app = replay_app()
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        now = app.now()
+        app.store.alerts = AlertsResult(
+            (
+                _alert("old", "Old County", now - timedelta(hours=1)),
+                _alert("new", "Live County", now + timedelta(hours=1)),
+            )
+        )
+        screen = app.screen
+        assert isinstance(screen, DashboardScreen)
+        screen.refresh_selection()
+        ww = next(p for p in screen.query(Panel) if p.kind == "ww")
+        text = str(ww.body.render())
+        assert "Live County" in text and "Old County" not in text
+
+        seen: list[datetime | None] = []
+        original = app.store.nearby_buoys
+        app.store.nearby_buoys = lambda storm_id, at=None: (seen.append(at), original(storm_id, at))[1]  # type: ignore[method-assign]
+        await press(pilot, "enter")  # the storm detail screen
+        app.screen._refresh_stations()  # type: ignore[attr-defined]
+        assert seen and all(at is not None for at in seen)
