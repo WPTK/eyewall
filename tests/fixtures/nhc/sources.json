@@ -246,9 +246,10 @@
     "recorded": "2026-10-31T08:28:34Z",
     "sha256": "25c930e45451427087c9a6865a3502eb852b678e7e30691735b5dd5db9a57577"
   },
-  "nhc/two/at_special_20261031.txt": {
-    "source": "hand-built",
-    "note": "the routine at_20261031.txt with only the heading changed to 'Special Tropical Weather Outlook'. NHC issues specials under the same product header into the same tgftp file; none was available to record."
+  "nhc/two/at_special_20261021.txt": {
+    "source": "https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=TWOAT&sdate=2026-10-21T19:30Z&edate=2026-10-21T19:45Z&limit=1&fmt=text",
+    "recorded": "2026-10-31T19:40:00Z",
+    "sha256": "b0c087a83f83c2c2d475e54119a28c23dc8acd753760d80c8837fd4377fc96a2"
   },
   "nhc/two/cp_20260910.txt": {
     "source": "https://www.nhc.noaa.gov/archive/xgtwo/gtwo_archive.php?basin=atl&fdays=7&current_issuance=202609100600",

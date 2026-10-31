@@ -59,6 +59,35 @@ async def test_only_the_product_answered_from_the_disk_cache_is_asked_for_again(
     assert source.count("radii_gis") == source.count("track") == source.count("graphics") == 1
 
 
+class PerGauge(FakeSource):
+    """Each gauge answers with its own HTTP status."""
+
+    statuses: dict[str, int] = {}
+
+    async def coops_series(self, station, datum):
+        raise HttpError("fake://coops", self.statuses[station.id])
+
+
+@pytest.mark.parametrize(
+    ("statuses", "down"),
+    [
+        ({"8000001": 400, "8000002": 503}, True),  # a mix of a permanent answer and an outage is an outage
+        ({"8000001": 403, "8000002": 403}, True),  # NOAA blocking us is not a station's answer
+        ({"8000001": 401, "8000002": 408}, True),
+        ({"8000001": 400, "8000002": 404}, False),  # every gauge answered for good
+        ({"8000001": 410, "8000002": 400}, False),
+    ],
+)
+async def test_which_http_failures_make_the_tide_feed_down(statuses, down):
+    PerGauge.statuses = statuses
+    poller, source, *_ = build(PerGauge(VirtualClock(T0)))
+    source.tide_stations = (gauge("8000001", 25.5, -75.5), gauge("8000002", 25.6, -75.6))
+    source.set_storm("1")
+    await poller.poll_feed(protocol.STORMS)
+    result = await poller.poll_feed(protocol.TIDES)
+    assert result.ok is not down
+
+
 class AllSeriesFail(FakeSource):
     async def ndbc_series(self, station_id):
         raise FetchError("fake://ndbc", "network down")
@@ -333,18 +362,101 @@ async def test_one_basin_text_that_cannot_be_parsed_keeps_its_last_outlook_and_r
         await source.aclose()
 
 
-async def test_an_outlook_failure_reaches_the_poller_as_an_error_with_the_data_applied(tmp_path):
+async def test_an_outlook_part_that_never_succeeded_is_unknown_not_empty(tmp_path):
+    """The first poll with a failing basin applies nothing, so the screen keeps waiting and no later poll reads the
+    basin's recovery as a new outlook; the next good poll is the baseline."""
     bad = {"ep": True}
     source = live(lambda r: outlook_handler(bad["ep"])(r), tmp_path)
     store = Store(Config())
     poller = Poller(source, store, AlertEngine(), Config().poll, clock=VirtualClock(T0), sleep=no_sleep)
     try:
         result = await poller.poll_feed(protocol.OUTLOOK)
+        assert not result.ok
+        assert poller.freshness(protocol.OUTLOOK).failures == 1
+        assert store.outlook is None  # unknown, not "no outlook for the enabled basins"
+        bad["ep"] = False
+        result = await poller.poll_feed(protocol.OUTLOOK)
     finally:
         await source.aclose()
-    assert not result.ok
-    assert poller.freshness(protocol.OUTLOOK).failures == 1
-    assert len(store.outlook.texts) == 2  # the basins that did parse were applied
+    assert result.ok
+    assert store.outlook is not None and len(store.outlook.texts) == 3
+    assert not [e for e in result.events if e.kind.name == "NEW_INVEST"]
+
+
+def gis_429_handler(retry_after):
+    base = outlook_handler()
+
+    def handler(request):
+        if "gtwo_shapefiles" in str(request.url):
+            return httpx.Response(429, headers={"Retry-After": retry_after})
+        return base(request)
+
+    return handler
+
+
+async def test_a_429_from_an_outlook_part_keeps_its_retry_after(tmp_path):
+    source = live(gis_429_handler("3600"), tmp_path)
+    source.nhc._sleep = no_sleep  # the request's own retries wait for real
+    try:
+        source.start_poll(protocol.OUTLOOK)
+        with pytest.raises(RateLimited):
+            await source.outlook()
+        held = source.throttle(protocol.OUTLOOK)
+    finally:
+        await source.aclose()
+    assert held is not None
+    assert isinstance(held[0], RateLimited)
+    assert held[1] == 3600
+
+
+async def test_a_cached_answer_retry_after_survives_another_part_failing(tmp_path):
+    mode = {"cp": "ok", "ep": "ok"}
+    base = outlook_handler()
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("acpn50.phfo.two.cp.txt") and mode["cp"] == "429":
+            return httpx.Response(429, headers={"Retry-After": "3600"})
+        if url.endswith("abpz20.knhc.two.ep.txt") and mode["ep"] == "junk":
+            return httpx.Response(200, content=b"<html>not an outlook</html>")
+        return base(request)
+
+    source = live(handler, tmp_path)
+    try:
+        source.start_poll(protocol.OUTLOOK)
+        await source.outlook()
+        mode.update(cp="429", ep="junk")
+        source.start_poll(protocol.OUTLOOK)
+        outlook = await source.outlook()
+        held = source.throttle(protocol.OUTLOOK)
+    finally:
+        await source.aclose()
+    assert (
+        len(outlook.texts) == 3
+    )  # the East Pacific text is the last good one, the Central Pacific came from the cache
+    assert held is not None
+    assert held[1] == 3600  # the other part's failure did not replace the cached answer's wait
+
+
+async def test_a_kept_outlook_part_expires_after_two_days(tmp_path):
+    bad = {"ep": False}
+    clock = VirtualClock(NOW)
+    source = LiveSource(
+        cache_dir=tmp_path, transport=httpx.MockTransport(lambda r: outlook_handler(bad["ep"])(r)), clock=clock
+    )
+    try:
+        source.start_poll(protocol.OUTLOOK)
+        await source.outlook()
+        bad["ep"] = True
+        clock.advance(47 * 3600)
+        source.start_poll(protocol.OUTLOOK)
+        assert len((await source.outlook()).texts) == 3  # still within the cap
+        clock.advance(2 * 3600)
+        source.start_poll(protocol.OUTLOOK)
+        with pytest.raises(ParseError):
+            await source.outlook()  # kept for too long: unknown again
+    finally:
+        await source.aclose()
 
 
 class WrongDatum(FakeSource):

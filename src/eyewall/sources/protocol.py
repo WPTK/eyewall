@@ -55,16 +55,6 @@ class ThrottleReporting(Protocol):
         ...
 
 
-@runtime_checkable
-class CacheCounting(Protocol):
-    """A source that counts, per feed, the requests the disk cache answered because the server or network failed, so
-    the poller can tell which product of a poll it was and ask for just that one again."""
-
-    def cache_answers(self, feed: str) -> int:
-        """Requests of this feed answered from the cache since its last `start_poll`."""
-        ...
-
-
 class DataSource(Protocol):
     name: str
 
@@ -74,6 +64,12 @@ class DataSource(Protocol):
 
     def stale(self, feed: str) -> bool:
         """True when the last fetch of this feed was answered from the disk cache because the network failed."""
+        ...
+
+    def cache_answers(self, feed: str) -> int:
+        """Requests of this feed answered from the disk cache because the server or network failed, since its last
+        `start_poll`. The poller uses it to tell which product of a poll came from the cache and ask for just that one
+        again. A source with no cache returns 0."""
         ...
 
     def start_poll(self, feed: str) -> None:

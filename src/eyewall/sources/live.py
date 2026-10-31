@@ -46,6 +46,7 @@ from eyewall.sources.cache import Cache, CachingTransport, watch_stale
 
 CACHE_MAX_AGE = timedelta(days=7)
 INVEST_MAX_AGE = timedelta(hours=48)
+OUTLOOK_KEEP = timedelta(hours=48)  # how long a part of the outlook that now fails is shown from its last good answer
 MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
 FLOATER_LISTING_TTL = 60.0  # seconds a NESDIS listing of storms is reused, so one satellite poll asks for it once
@@ -93,7 +94,9 @@ class LiveSource:
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
         self._answers: dict[str, int] = {}
-        self._outlook_kept: dict[str, Any] = {}  # the last good part of the outlook, by part, for a part that fails
+        self._outlook_kept: dict[
+            str, tuple[Any, datetime]
+        ] = {}  # the last good part of the outlook, by part, for a part that fails
         self._throttled: dict[str, tuple[FetchError, float | None]] = {}
         self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
         self._shared: dict[str, tuple[asyncio.Task[Any], float]] = {}  # request key -> (its task, when it started)
@@ -225,34 +228,60 @@ class LiveSource:
     # ---- outlook and alerts -----------------------------------------------------------------------------------
 
     async def outlook(self) -> Outlook:
-        """The outlook text of each basin, the areas and the invests. A part that fails keeps its last good answer and
-        the failure is reported to the poller (which backs off and shows it), so one bad basin text does not stop the
-        other parts from updating, and nothing is swallowed."""
+        """The outlook text of each basin, the areas and the invests. A part that fails keeps its last good answer (for
+        at most OUTLOOK_KEEP, and invests only while their newest fix is within INVEST_MAX_AGE) and the failure is
+        reported to the poller, which backs off and shows it. A part that has never succeeded has no answer, and
+        "unknown" must not pass for "none": the failure is raised and the store keeps what it had (nothing, on the first
+        poll, so the screen keeps waiting and the first real answer is the event baseline)."""
         failures: list[Exception] = []
+        unknown: list[Exception] = []
 
         async def part[T](name: str, call: Callable[[], Awaitable[T]], default: T) -> T:
             try:
                 value = await call()
             except (FetchError, ParseError) as exc:
                 failures.append(exc)
-                return self._outlook_kept.get(name, default)
-            self._outlook_kept[name] = value
+                kept = self._outlook_kept.get(name)
+                if kept is None or self.now() - kept[1] > OUTLOOK_KEEP:
+                    self._outlook_kept.pop(name, None)
+                    unknown.append(exc)
+                    return default
+                return kept[0]
+            self._outlook_kept[name] = (value, self.now())
             return value
 
-        async with self._feed(protocol.OUTLOOK):
-            texts = [
-                text
-                for basin in (Basin.AL, Basin.EP, Basin.CP)
-                if (text := await part(basin.value, lambda b=basin: self.nhc.outlook_basin(b), None)) is not None  # type: ignore[misc]
-            ]
-            gis = await part("gis", self.nhc.outlook_gis, OutlookGis(None))
-            no_invests: tuple[BestTrack, ...] = ()
-            invests = await part("invests", self._invests, no_invests)
+        try:
+            async with self._feed(protocol.OUTLOOK):
+                texts = [
+                    text
+                    for basin in (Basin.AL, Basin.EP, Basin.CP)
+                    if (text := await part(basin.value, lambda b=basin: self.nhc.outlook_basin(b), None)) is not None  # type: ignore[misc]
+                ]
+                gis = await part("gis", self.nhc.outlook_gis, OutlookGis(None))
+                no_invests: tuple[BestTrack, ...] = ()
+                invests = await part("invests", self._invests, no_invests)
+                if unknown:
+                    raise unknown[0]
+                now = self.now()
+                invests = tuple(t for t in invests if t.latest is not None and now - t.latest.time <= INVEST_MAX_AGE)
+                return Outlook(tuple(texts), gis, invests)
+        finally:
             if failures:
-                self._throttled.setdefault(
-                    protocol.OUTLOOK, (FetchError("outlook", f"{type(failures[0]).__name__}: {failures[0]}"), None)
-                )
-            return Outlook(tuple(texts), gis, invests)
+                self._note_failures(protocol.OUTLOOK, failures)
+
+    def _note_failures(self, feed: str, failures: list[Exception]) -> None:
+        """Report the failures of the parts of a feed to the poller: the first as the error (a 429 over the rest), and
+        the longest Retry-After of any of them, whether it came from a part's own answer or from a cached copy."""
+        waits = [f.retry_after for f in failures if isinstance(f, RateLimited) and f.retry_after is not None]
+        held = self._throttled.get(feed)
+        if held is not None and held[1] is not None:
+            waits.append(held[1])
+        if held is not None:
+            error = held[0]
+        else:
+            first = next((f for f in failures if isinstance(f, RateLimited)), failures[0])
+            error = first if isinstance(first, FetchError) else FetchError(feed, f"{type(first).__name__}: {first}")
+        self._throttled[feed] = (error, max(waits, default=None))
 
     async def _invests(self) -> tuple[BestTrack, ...]:
         """Invest b-decks touched in the last two days whose newest fix is just as recent."""

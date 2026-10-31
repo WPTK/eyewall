@@ -199,6 +199,9 @@ class ReplaySource:
     def stale(self, feed: str) -> bool:
         return False
 
+    def cache_answers(self, feed: str) -> int:
+        return 0
+
     def start_poll(self, feed: str) -> None:
         return None
 

@@ -48,9 +48,10 @@ _BR = re.compile(r"<br\s*/?>", re.IGNORECASE)
 class Recipe:
     """One fixture: where it lands (relative to tests/fixtures), where it comes from, and how to turn it into a file.
 
-    transform: `raw` keeps the bytes; `pre` takes the product text out of an NHC archive page; `two:AT|EP|CP` takes one
-    English outlook out of a graphical outlook archive page; `api-product` fetches the newest product named in an
-    api.weather.gov product list and writes that to `path` (the list itself goes to `list_path`).
+    transform: `raw` keeps the bytes; `pre` takes the product text out of an NHC archive page; `afos` takes one
+    product out of an IEM AFOS archive reply; `two:AT|EP|CP` takes one English outlook out of a graphical outlook
+    archive page; `api-product` fetches the newest product named in an api.weather.gov product list and writes that
+    to `path` (the list itself goes to `list_path`).
     """
 
     path: str
@@ -67,6 +68,16 @@ def _pre_text(page: bytes) -> bytes:
         raise ValueError("no <pre> block in the page")
     text = html.unescape(_TAG.sub("", _BR.sub("\n", blocks[0])))
     return (text.strip("\n").replace("\r\n", "\n") + "\n").encode("utf-8")
+
+
+def _afos_text(page: bytes) -> bytes:
+    """One product from the Iowa Environmental Mesonet AFOS archive: the text NWS sent, minus its SOH/ETX framing
+    and the byte-count line IEM puts in front of the WMO header."""
+    text = page.decode("utf-8", errors="replace").replace("\r\n", "\n").strip("\x01\x03\n ")
+    lines = text.split("\n")
+    if len(lines) < 2 or not re.fullmatch(r"\d+\s*", lines[0]):
+        raise ValueError("not a single AFOS product")
+    return ("\n".join(lines[1:]).rstrip("\n") + "\n").encode("utf-8")
 
 
 def _two_text(page: bytes, code: str) -> bytes:
@@ -135,6 +146,15 @@ def committed_recipes() -> list[Recipe]:
         Recipe("nhc/two/at_20261031.txt", ids.outlook_url(ids.Basin.AL), "live"),
         Recipe("nhc/two/ep_20261031.txt", ids.outlook_url(ids.Basin.EP), "live"),
         Recipe("nhc/two/cp_20261031.txt", ids.outlook_url(ids.Basin.CP), "live"),
+        # A Special Tropical Weather Outlook (two areas, issued 340 PM EDT) from the IEM AFOS archive: tgftp keeps only
+        # the latest product, so a past special can only be had from an archive.
+        Recipe(
+            "nhc/two/at_special_20261021.txt",
+            "https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=TWOAT&sdate=2026-10-21T19:30Z"
+            "&edate=2026-10-21T19:45Z&limit=1&fmt=text",
+            "live",
+            "afos",
+        ),
         Recipe("nhc/atcf/bal062026.dat", ids.bdeck_url("al062026"), "live"),
         Recipe("nhc/atcf/bcp032026.dat", ids.bdeck_url("cp032026"), "live"),
         Recipe("nhc/atcf/bep222026.dat", ids.bdeck_url("ep222026"), "live"),
@@ -186,10 +206,6 @@ def committed_recipes() -> list[Recipe]:
 
 # Hand-built fixtures: files that are not recordings, with the reason. They are written into the manifest too.
 HAND_BUILT: dict[str, str] = {
-    "nhc/two/at_special_20261031.txt": (
-        "the routine at_20261031.txt with only the heading changed to 'Special Tropical Weather Outlook'. NHC issues "
-        "specials under the same product header into the same tgftp file; none was available to record."
-    ),
     "nhc/current/populated.json": (
         "hand-built from NHC_JSON_Sample.json and edited to the live shape: lowercase ids, string intensity and "
         "pressure, latitudeNumeric/longitudeNumeric, mph movement. Holds Erin (AT5), a potential tropical cyclone, "
@@ -248,6 +264,8 @@ async def _run(recipes: list[Recipe], force: bool) -> int:
                 body = pages[recipe.url]
                 if recipe.transform == "pre":
                     body = _pre_text(body)
+                elif recipe.transform == "afos":
+                    body = _afos_text(body)
                 elif recipe.transform.startswith("two:"):
                     body = _two_text(body, recipe.transform.split(":", 1)[1])
                 elif recipe.transform == "api-product":

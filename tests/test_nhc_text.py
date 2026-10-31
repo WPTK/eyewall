@@ -402,8 +402,12 @@ def test_outlook_without_a_heading_raises():
         parse_two("Hello")
 
 
-def test_a_special_outlook_parses_like_the_routine_one():
-    """NHC issues a Special Tropical Weather Outlook under the same product header, into the same tgftp file."""
-    special = parse_two(nhc_bytes("two/at_special_20261031.txt"))
-    routine = parse_two(nhc_bytes("two/at_20261031.txt"))
-    assert special == routine
+def test_a_recorded_special_outlook_parses_its_areas_and_summary():
+    """A real Special Tropical Weather Outlook (21 Oct 2026, 340 PM EDT) sits under the same product header as a routine one."""
+    special = parse_two(nhc_bytes("two/at_special_20261021.txt"))
+    assert special.office == "NWS National Hurricane Center Miami FL"
+    assert special.issued_text is not None and "340 PM EDT" in special.issued_text
+    assert special.summary.startswith("Special Outlook issued to raise formation probabilities for AL93")
+    assert [a.invest_id for a in special.areas] == ["AL93", None]
+    assert special.areas[0].chance_48h is not None and special.areas[0].chance_48h.percent == 70
+    assert special.areas[1].chance_7d is not None and special.areas[1].chance_7d.percent == 10
