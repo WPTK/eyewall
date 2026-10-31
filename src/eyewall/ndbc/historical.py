@@ -24,10 +24,16 @@ _GZIP_MAGIC = b"\x1f\x8b"
 
 
 def decompress(data: bytes) -> str:
-    """The text of a historical file, gunzipping it when it is gzip and refusing anything absurdly large."""
+    """The text of a historical file, gunzipping it when it is gzip.
+
+    Raises ValueError for a corrupt or truncated gzip stream and for anything absurdly large.
+    """
     if data[:2] == _GZIP_MAGIC:
-        with gzip.GzipFile(fileobj=io.BytesIO(data)) as handle:
-            data = handle.read(MAX_UNCOMPRESSED_BYTES + 1)
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(data)) as handle:
+                data = handle.read(MAX_UNCOMPRESSED_BYTES + 1)
+        except (OSError, EOFError) as exc:
+            raise ValueError(f"historical file is not valid gzip ({exc})") from exc
         if len(data) > MAX_UNCOMPRESSED_BYTES:
             raise ValueError("historical file is larger than expected")
     return data.decode("utf-8", errors="replace")
@@ -35,7 +41,11 @@ def decompress(data: bytes) -> str:
 
 def parse_historical(data: bytes, station_id: str) -> ObservationSeries:
     """Parse a yearly or monthly file, gzipped or not, into a series sorted newest first."""
-    return parse_stdmet(decompress(data), station_id)
+    try:
+        text = decompress(data)
+    except ValueError as exc:
+        return ObservationSeries(station_id.upper(), message=str(exc))
+    return parse_stdmet(text, station_id)
 
 
 def select_period(series: ObservationSeries, start: datetime, end: datetime) -> ObservationSeries:

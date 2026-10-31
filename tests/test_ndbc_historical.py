@@ -59,3 +59,29 @@ def test_oversized_decompressed_data_is_refused(monkeypatch):
 
 def test_undecodable_bytes_are_replaced_not_fatal():
     assert decompress(b"abc\xff") == "abc�"
+
+
+def test_a_truncated_gzip_is_refused_by_decompress_and_empty_from_parse_historical():
+    packed = gzip.compress(b"x" * 5000)[:-20]
+    with pytest.raises(ValueError, match="not valid gzip"):
+        decompress(packed)
+    series = parse_historical(packed, "41001")
+    assert not series.reporting
+    assert series.station_id == "41001"
+    assert "not valid gzip" in (series.message or "")
+
+
+def test_junk_after_the_gzip_magic_is_an_empty_series_with_a_message():
+    junk = b"\x1f\x8b" + b"not really gzip data at all"
+    with pytest.raises(ValueError, match="not valid gzip"):
+        decompress(junk)
+    series = parse_historical(junk, "41001")
+    assert not series.reporting
+    assert series.message
+
+
+def test_an_oversized_file_is_an_empty_series_with_a_message(monkeypatch):
+    monkeypatch.setattr(historical, "MAX_UNCOMPRESSED_BYTES", 100)
+    series = parse_historical(gzip.compress(b"x" * 500), "41001")
+    assert not series.reporting
+    assert "larger than expected" in (series.message or "")

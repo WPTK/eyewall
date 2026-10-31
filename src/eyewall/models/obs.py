@@ -88,6 +88,7 @@ class ObservationSeries:
     station_id: str
     observations: tuple[Observation, ...] = ()
     skipped: int = 0
+    message: str | None = None
 
     @property
     def latest(self) -> Observation | None:

@@ -25,6 +25,7 @@ from eyewall.coops.data import (
 )
 from eyewall.coops.stations import LISTING_TYPES, MET, WATER_LEVEL, merge_tide_stations, parse_tide_stations
 from eyewall.models.obs import Parsed, Prediction, TidePressure, TideStation, TideWind, WaterLevelReading
+from eyewall.ndbc.client import Response
 from eyewall.net import fetch_bytes
 
 STATIONS_URL = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
@@ -36,16 +37,26 @@ class CoopsClient:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
 
-    async def stations(self, product: str = WATER_LEVEL) -> Parsed[TideStation]:
-        """One station listing: "water_level" for the tide gauges or "met" for wind and pressure stations."""
+    async def stations(
+        self, product: str = WATER_LEVEL, *, etag: str | None = None, last_modified: str | None = None
+    ) -> Response[Parsed[TideStation]]:
+        """One station listing: "water_level" for the tide gauges or "met" for wind and pressure stations.
+
+        Pass the validators from an earlier response to make the request conditional; a 304 has no value.
+        """
         if product not in LISTING_TYPES:
             raise ValueError(f"unknown station listing {product!r}; use one of {sorted(LISTING_TYPES)}")
-        fetched = await fetch_bytes(self._client, STATIONS_URL, params={"type": LISTING_TYPES[product]})
-        return parse_tide_stations(fetched.body, product)
+        fetched = await fetch_bytes(
+            self._client, STATIONS_URL, params={"type": LISTING_TYPES[product]}, etag=etag, last_modified=last_modified
+        )
+        if fetched.not_modified:
+            return Response(304, None, fetched.etag or etag, fetched.last_modified or last_modified)
+        return Response(fetched.status, parse_tide_stations(fetched.body, product), fetched.etag, fetched.last_modified)
 
     async def all_stations(self) -> tuple[TideStation, ...]:
         """Both listings merged: each station once, with every product it offers. Two requests; cache for a day."""
-        return merge_tide_stations([await self.stations(WATER_LEVEL), await self.stations(MET)])
+        listings = [await self.stations(WATER_LEVEL), await self.stations(MET)]
+        return merge_tide_stations([r.value for r in listings if r.value is not None])
 
     async def _get(self, params: dict[str, str]) -> bytes:
         return (await fetch_bytes(self._client, DATAGETTER_URL, params=params)).body

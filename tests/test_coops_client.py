@@ -130,8 +130,8 @@ async def test_station_listings_ask_for_their_type_and_tag_the_stations():
     ]
     async with new_client() as http:
         client = CoopsClient(http)
-        gauges = await client.stations()
-        met = await client.stations("met")
+        gauges = (await client.stations()).value
+        met = (await client.stations("met")).value
     assert [call.request.url.params["type"] for call in route.calls] == ["waterlevels", "met"]
     assert all(s.products == {"water_level"} for s in gauges.items)
     assert all(s.products == {"met"} for s in met.items)
@@ -162,3 +162,26 @@ async def test_a_bad_station_id_is_refused_before_any_request():
     async with new_client() as http:
         with pytest.raises(ValueError, match="not a CO-OPS station id"):
             await CoopsClient(http).wind("8721604&x=1")
+
+
+@respx.mock
+async def test_a_conditional_station_listing_that_comes_back_304_has_no_value_and_keeps_the_validators():
+    route = respx.get(STATIONS_URL).respond(304)
+    async with new_client() as http:
+        response = await CoopsClient(http).stations(etag='"abc"', last_modified="Sat, 31 Oct 2026")
+    assert response.not_modified
+    assert response.value is None
+    assert (response.etag, response.last_modified) == ('"abc"', "Sat, 31 Oct 2026")
+    sent = route.calls.last.request.headers
+    assert (sent["If-None-Match"], sent["If-Modified-Since"]) == ('"abc"', "Sat, 31 Oct 2026")
+
+
+@respx.mock
+async def test_a_station_listing_returns_the_validators_it_was_sent():
+    respx.get(STATIONS_URL).respond(
+        200, content=raw("stations_waterlevels.json"), headers={"ETag": '"v2"', "Last-Modified": "Sun, 01 Nov 2026"}
+    )
+    async with new_client() as http:
+        response = await CoopsClient(http).stations()
+    assert response.value is not None and response.value.items
+    assert (response.etag, response.last_modified) == ('"v2"', "Sun, 01 Nov 2026")
