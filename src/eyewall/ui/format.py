@@ -303,7 +303,14 @@ def _selected_area(store: Store, selected: str | None) -> OutlookArea | None:
     return None
 
 
-def ww_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
+def _cut(text: str, limit: int) -> str:
+    """Text cut at a word boundary within `limit` characters, with an ellipsis where it was cut."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def ww_panel(store: Store, selected: str | None, g: UiGlyphs, now: datetime | None = None) -> Text:
     """Watches and warnings in effect, each with a color chip, then the NWS zone alerts."""
     out = Text()
     state = store.storms.get(selected or "")
@@ -319,13 +326,13 @@ def ww_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
             out.append("No coastal watches or warnings in effect.\n", style=DIM)
         for change in blocks.changes:
             out.append(f"{g.sep} {collapse(change)}\n", style=DIM)
-    alerts = store.alerts.alerts
+    alerts = store.alerts.alerts if now is None else store.active_alerts(now)
     if alerts:
         out.append("\nNWS alerts\n", style="bold #8fd3ff")
         for alert in alerts[:MAX_PANEL_ALERTS]:
             out.append(f"{g.chip} ", style=_alert_color(alert))
             out.append(f"{alert.event}: ", style="bold")
-            out.append(collapse(alert.area_desc)[:90] + "\n")
+            out.append(_cut(collapse(alert.area_desc), 90) + "\n")
         if len(alerts) > MAX_PANEL_ALERTS:
             out.append(f"+{len(alerts) - MAX_PANEL_ALERTS} more\n", style=DIM)
     return out
@@ -365,13 +372,13 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
         return out
     storm = state.storm
     tcm = state.advisories.forecast
-    wind = tcm.max_wind_kt if tcm and tcm.max_wind_kt is not None else storm.intensity_kt
+    wind = storm.intensity_kt if storm.intensity_kt is not None else tcm.max_wind_kt if tcm else None
     _kv(out, "Max wind", preset.fmt_wind(wind), style=f"bold {category_color(wind)}")
     if tcm is not None and tcm.gust_kt is not None:
         out.append("  ")
         _kv(out, "gusts", preset.fmt_wind(tcm.gust_kt))
     out.append("\n")
-    pressure = tcm.pressure_mb if tcm and tcm.pressure_mb is not None else storm.pressure_mb
+    pressure = storm.pressure_mb if storm.pressure_mb is not None else tcm.pressure_mb if tcm else None
     _kv(out, "Pressure", preset.fmt_pressure(pressure))
     if tcm is not None and tcm.eye_diameter_nm is not None:
         out.append("  ")
@@ -404,7 +411,7 @@ def surge_panel(store: Store, selected: str | None) -> Text:
     for title, body in public.hazards:
         if "SURGE" in title.upper():
             out.append(f"{collapse(title).title()}\n", style="bold #8fd3ff")
-            out.append(collapse(body)[:600])
+            out.append(_cut(collapse(body), 600))
             break
     return out
 
@@ -414,16 +421,12 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
     out = Text()
     if selected not in store.storms:
         return out
-    entries = store.nearby_buoys(selected)[:MAX_STRIP_BUOYS]
+    entries = store.nearby_buoys(selected, now)[:MAX_STRIP_BUOYS]
     if not entries:
         out.append("No buoys near this storm yet.", style=DIM)
         return out
     for entry in entries:
-        series = store.series.get(entry.station.id.upper())
-        obs = series.latest if series else None
-        latest = store.latest.get(entry.station.id.upper())
-        if obs is None and latest is not None:
-            obs = latest.observation
+        obs = st.newest_observation(store, entry.station.id)
         out.append(entry.station.id.ljust(6), style="bold")
         out.append(f"{entry.distance_nm:>4.0f}nm {compass_point(entry.bearing_deg):<3} ", style=DIM)
         if st.buoy_state(store, entry.station.id, now) in ("silent", "dark"):
@@ -434,11 +437,8 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
         pressure = None if obs is None else obs.pressure_hpa
         out.append(" " + preset.fmt_pressure(pressure, "hpa").rjust(8))
         tendency = store.tendency(entry.station.id, now)
-        if tendency is None:
-            out.append("  --", style=DIM)
-        else:
-            arrow = g.falling if tendency.delta_hpa < -0.05 else g.rising if tendency.delta_hpa > 0.05 else g.steady
-            out.append(f" {arrow}{abs(tendency.delta_hpa):.1f}", style="#ffa63d" if tendency.delta_hpa <= -1.0 else "")
+        out.append(" ")
+        out.append_text(st.delta_text(None if tendency is None else tendency.delta_hpa, preset, g))
         out.append("\n")
     return out
 

@@ -20,7 +20,7 @@ from eyewall.models.obs import LatestObservation, ObservationSeries, Station, Ti
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
-from eyewall.models.watches import AlertsResult
+from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.models.wind import WindRadiiGis
 from eyewall.state import events as ev
 from eyewall.state.alerts import tropical_alerts
@@ -202,31 +202,47 @@ class Store:
     def apply_tide_error(self, station_id: str, message: str) -> None:
         self.tide_errors[station_id] = message
 
-    def nearby_buoys(self, storm_id: str) -> list[NearbyStation[Station]]:
-        return self._nearby(storm_id, self.stations.values(), self.config.watchlist.ndbc)
+    def nearby_buoys(self, storm_id: str, now: datetime | None = None) -> list[NearbyStation[Station]]:
+        """The buoys near a storm. A station the catalog says has no weather data (DART, currents, a retired buoy) is
+        left out unless it is watchlisted or we hold data for it, so it cannot displace a working buoy."""
+        wanted = {w.strip().upper() for w in self.config.watchlist.ndbc}
+        stations = [
+            s
+            for s in self.stations.values()
+            if s.met is not False
+            or s.id.upper() in wanted
+            or s.id.upper() in self.series
+            or s.id.upper() in self.latest
+        ]
+        return self._nearby(storm_id, stations, self.config.watchlist.ndbc, now)
 
-    def nearby_tides(self, storm_id: str) -> list[NearbyStation[TideStation]]:
-        return self._nearby(storm_id, self.tide_stations, self.config.watchlist.coops)
+    def nearby_tides(self, storm_id: str, now: datetime | None = None) -> list[NearbyStation[TideStation]]:
+        return self._nearby(storm_id, self.tide_stations, self.config.watchlist.coops, now)
 
     def _nearby[S: (Station, TideStation)](
-        self, storm_id: str, stations: object, watchlist: tuple[str, ...]
+        self, storm_id: str, stations: object, watchlist: tuple[str, ...], now: datetime | None
     ) -> list[NearbyStation[S]]:
         state = self.storms.get(storm_id)
         if state is None or state.storm.lat is None or state.storm.lon is None:
             return []
         return nearby_stations(
             (state.storm.lat, state.storm.lon),
-            track_fixes(state),
+            track_fixes(state, now),
             stations,  # type: ignore[arg-type]
             config=self.config.nearby,
             watchlist=watchlist,
         )
 
+    def active_alerts(self, now: datetime) -> tuple[WatchWarningAlert, ...]:
+        """The NWS alerts not yet over: an alert past its end (or expiry) is dropped, as the store may hold the last
+        answer from a failed poll or a cached copy for hours."""
+        return tuple(a for a in self.alerts.alerts if (end := a.ends or a.expires) is None or end > now)
+
     def buoy_events(self, now: datetime) -> list[Event]:
         """Threshold crossings and silences at each storm's nearby buoys, from the series fetched so far."""
         events: list[Event] = []
         for storm_id, state in self.storms.items():
-            for entry in self.nearby_buoys(storm_id):
+            for entry in self.nearby_buoys(storm_id, now):
                 series = self.series.get(entry.station.id.upper())
                 if series is not None:
                     events += ev.buoy_events(state.storm, entry.station.id, series, now)
@@ -280,24 +296,29 @@ def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:
     )
 
 
-def track_fixes(state: StormState) -> list[TrackFix]:
+def track_fixes(state: StormState, now: datetime | None = None) -> list[TrackFix]:
     """The forecast positions as `TrackFix`es with hours counted from the storm's current center.
 
     The TCM counts hours from the synoptic time, three hours before the advisory, while the center is the position at
     the advisory time, so each fix is placed by its valid time instead. The GIS points are the fallback.
+
+    With `now`, hours count from now and fixes already past are dropped, so the hours to a station's closest approach
+    shrink between advisories. Without it they count from the advisory (enough to ask whether any fix lies ahead).
     """
     storm = state.storm
     tcm = state.advisories.forecast
     if tcm is not None:
+        origin = now or tcm.issued
         return [
-            TrackFix((fix.valid - tcm.issued).total_seconds() / 3600.0, fix.lat, fix.lon)
+            TrackFix((fix.valid - origin).total_seconds() / 3600.0, fix.lat, fix.lon)
             for fix in tcm.fixes
-            if fix.lat is not None and fix.lon is not None and fix.valid > tcm.issued
+            if fix.lat is not None and fix.lon is not None and fix.valid > origin
         ]
     if state.forecast_gis is not None and storm.last_update is not None:
+        origin = now or storm.last_update
         return [
-            TrackFix((p.valid - storm.last_update).total_seconds() / 3600.0, p.lat, p.lon)
+            TrackFix((p.valid - origin).total_seconds() / 3600.0, p.lat, p.lon)
             for p in state.forecast_gis.points
-            if p.valid is not None and p.valid > storm.last_update
+            if p.valid is not None and p.valid > origin
         ]
     return []

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
@@ -180,3 +182,18 @@ async def test_station_table_with_more_rows_than_height_still_fits(size) -> None
         assert table.show_vertical_scrollbar
         if size[0] >= 100:
             assert not table.show_horizontal_scrollbar, f"{table.size} {table.virtual_size}"
+
+
+async def test_buoy_detail_asks_for_the_supplemental_file_again_once_it_expires() -> None:
+    async with running(replay_app(), (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "b", "enter")
+        screen = pilot.app.screen
+        assert isinstance(screen, BuoyDetailScreen)
+        asked: list[float] = []
+        screen._load_supplemental = lambda: asked.append(screen._supl_asked) or asyncio.sleep(0)  # type: ignore[method-assign]
+        screen.refresh_data()  # a poll result right away: the app still holds the file
+        assert asked == []
+        screen._supl_asked -= 601.0  # SUPL_TTL has passed
+        screen.refresh_data()
+        assert len(asked) == 1

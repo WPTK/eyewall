@@ -16,7 +16,7 @@ from eyewall.models.wind import QuadrantRadii
 from eyewall.render import layers as L
 from eyewall.state.store import Store, StormState
 from eyewall.state.tides import observation_age as tide_age
-from eyewall.state.trends import observation_age
+from eyewall.ui.stations import newest_observation, tide_wind
 from eyewall.units import convert
 
 # Where each basin sits, as two opposite corners (lat, lon), for the view when no storm is selected.
@@ -119,17 +119,10 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
 
 def _wind_kt_of(store: Store, station_id: str, now: datetime) -> tuple[float | None, bool]:
     """The newest wind at a station in knots, and whether the reading is too old to trust."""
-    series = store.series.get(station_id.upper())
-    if series is not None and series.latest is not None:
-        obs = series.latest
-        age = observation_age(series, now)
-        stale = age is None or age.total_seconds() > STATION_STALE_AFTER_H * 3600
-    else:
-        latest = store.latest.get(station_id.upper())
-        if latest is None:
-            return None, True
-        obs = latest.observation
-        stale = False
+    obs = newest_observation(store, station_id)
+    if obs is None:
+        return None, True
+    stale = (now - obs.time).total_seconds() > STATION_STALE_AFTER_H * 3600
     if obs.wind_speed_mps is None:
         return None, stale
     return convert(obs.wind_speed_mps, "mps", "kt"), stale
@@ -142,8 +135,8 @@ def _tide_mark(store: Store, gauge: TideStation, now: datetime) -> L.StationMark
         return L.StationMark(gauge.lat, gauge.lon, None, False, gauge.id)
     age = tide_age(series, now)
     stale = age is None or age.total_seconds() > STATION_STALE_AFTER_H * 3600
-    wind = next((w.speed_kt for w in series.wind.items if w.speed_kt is not None), None)
-    return L.StationMark(gauge.lat, gauge.lon, wind, stale, gauge.id)
+    wind = tide_wind(series, now)
+    return L.StationMark(gauge.lat, gauge.lon, None if wind is None else wind.speed_kt, stale, gauge.id)
 
 
 def _buoy_mark(store: Store, station: Station, now: datetime) -> L.StationMark:

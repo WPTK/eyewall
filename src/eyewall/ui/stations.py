@@ -14,7 +14,15 @@ from rich.text import Text
 
 from eyewall.clock import format_age, format_when, format_zulu
 from eyewall.geo import compass_point
-from eyewall.models.obs import Observation, Station, SupplementalReading, TideStation
+from eyewall.models.obs import (
+    Observation,
+    Station,
+    SupplementalReading,
+    TidePressure,
+    TideSeries,
+    TideStation,
+    TideWind,
+)
 from eyewall.palette import wind_band_color
 from eyewall.render.chart import ChartSeries, Tick
 from eyewall.state.nearby import Located, NearbyStation
@@ -22,7 +30,7 @@ from eyewall.state.store import Store
 from eyewall.state.tides import is_silent as tide_is_silent
 from eyewall.state.tides import latest_residual
 from eyewall.state.tides import observation_age as tide_age
-from eyewall.state.trends import Extremes, interval_extremes, is_silent, observation_age
+from eyewall.state.trends import SILENT_AFTER, Extremes, interval_extremes
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.ui.theme import DIM
 from eyewall.units import MISSING, Preset, convert, format_value
@@ -90,25 +98,22 @@ def watchlist_gauges(store: Store) -> list[Entry[TideStation]]:
 
 
 def newest_observation(store: Store, station_id: str) -> Observation | None:
-    """The newest row for a buoy: the polled series, else its row in latest_obs.txt."""
+    """The newest row for a buoy: the polled series or its row in latest_obs.txt, whichever is newer. A series stops
+    refreshing once nothing asks for the buoy, while latest_obs is read on every poll."""
     series = store.series.get(station_id.upper())
-    if series is not None and series.latest is not None:
-        return series.latest
     latest = store.latest.get(station_id.upper())
-    return None if latest is None else latest.observation
+    rows = [o for o in (None if series is None else series.latest, None if latest is None else latest.observation) if o]
+    return max(rows, key=lambda o: o.time, default=None)
 
 
 def buoy_state(store: Store, station_id: str, now: datetime) -> str:
     """ "ok", "silent" (it stopped), "dark" (nothing to read) or "waiting" (not asked yet)."""
     key = station_id.upper()
-    series = store.series.get(key)
-    if series is not None:
-        if not series.reporting:
-            return "dark"
-        return "silent" if is_silent(series, now) else "ok"
-    latest = store.latest.get(key)
-    if latest is not None:
-        return "silent" if now - latest.observation.time > timedelta(hours=2) else "ok"
+    obs = newest_observation(store, station_id)
+    if obs is not None:
+        return "silent" if now - obs.time > SILENT_AFTER else "ok"
+    if key in store.series:
+        return "dark"
     station = store.stations.get(key)
     if station is not None and (station.met is False or store.latest):
         return "dark"  # latest_obs is read and does not list it: no report in the last hours
@@ -181,11 +186,7 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
         note = NOT_REPORTING if state in ("silent", "dark") else WAITING
         dim = [name, distance, bearing, *[MISSING] * 6, note, closest_text(entry, preset)]
         return (Text(ident.plain, style=f"bold {DIM}"), *[Text(c, style=DIM) for c in dim])
-    series = store.series.get(station.id.upper())
-    if series is not None and series.latest is not None:
-        age = observation_age(series, now) or timedelta(0)
-    else:
-        age = max(timedelta(0), now - obs.time)  # latest_obs only; a clock a little behind must not give a negative age
+    age = max(timedelta(0), now - obs.time)  # a clock a little behind must not give a negative age
     tendency = store.tendency(station.id, now)
     wind, gust = wind_kt(obs), gust_kt(obs)
     return (
@@ -220,6 +221,16 @@ def residual_color(residual_ft: float) -> str:
     return NEGATIVE_RESIDUAL if residual_ft <= -1.0 else ""
 
 
+def tide_wind(series: TideSeries, now: datetime) -> TideWind | None:
+    """The newest wind a gauge reported in the last SILENT_AFTER, else None: a dead anemometer on a gauge whose water
+    level still reports must not show its last reading from earlier in the 3 day series as current."""
+    return next((w for w in series.wind.items if w.speed_kt is not None and now - w.time <= SILENT_AFTER), None)
+
+
+def tide_pressure(series: TideSeries, now: datetime) -> TidePressure | None:
+    return next((p for p in series.pressure.items if p.pressure_mb is not None and now - p.time <= SILENT_AFTER), None)
+
+
 def _not_in_catalog(store: Store, gauge_id: str) -> bool:
     """True once the CO-OPS catalog is loaded and does not list this gauge (a typo, or a station that was retired)."""
     wanted = gauge_id.upper()
@@ -243,8 +254,7 @@ def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Pre
     assert latest is not None  # checked above
     residual = latest_residual(series)
     decimals = 1 if preset.length == "ft" else 2
-    wind = next((w for w in series.wind.items if w.speed_kt is not None), None)
-    pressure = next((p for p in series.pressure.items if p.pressure_mb is not None), None)
+    wind, pressure = tide_wind(series, now), tide_pressure(series, now)
     wind_text = MISSING if wind is None else preset.fmt_wind(wind.speed_kt)
     if wind is not None and wind.direction_text:
         wind_text = f"{wind.direction_text} {wind_text}"
