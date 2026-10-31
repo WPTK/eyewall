@@ -5,11 +5,11 @@
 ### Fixed
 
 - Fit the dashboard's right column to a 140x45 terminal by sizing the panels to their text ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
-- Hide the Storm surge panel and its tab when there is no surge text ([`7830924`](https://github.com/WPTK/eyewall/commit/7830924), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Hide the Storm surge panel and its tab when there is no surge text ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Redraw the map at once when `M` changes its width ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Fit the ten detail tabs in 80 columns by shortening three tab names ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Keep the storm list's "Pacific: none" line on one row at 80 columns ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
-- Wrap long alert log messages instead of clipping them ([`7830924`](https://github.com/WPTK/eyewall/commit/7830924), [#23](https://github.com/WPTK/eyewall/pull/23))
+- Wrap long alert log messages instead of clipping them ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Make scrollbars one column wide ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Make unchecked map layers readable ([`179a386`](https://github.com/WPTK/eyewall/commit/179a386), [#23](https://github.com/WPTK/eyewall/pull/23))
 - Show each outlook area once on a quiet day, keeping every outlook's header ([`7830924`](https://github.com/WPTK/eyewall/commit/7830924), [#23](https://github.com/WPTK/eyewall/pull/23))
