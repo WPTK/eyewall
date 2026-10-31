@@ -1,8 +1,18 @@
 """Build the vendored basemap in src/eyewall/mapdata/ from Natural Earth.
 
-Downloads the GeoJSON files from the nvkelso mirror (pinned to one commit, checked against SHA-256), clips them to the
-tropical-cyclone basins' bounding box, simplifies with Douglas-Peucker and packs the result as int16 hundredths of a
-degree. The output is deterministic: the same inputs always give the same bytes.
+Downloads the 1:10 million GeoJSON files from the nvkelso mirror (pinned to one commit, checked against SHA-256), clips
+them to the tropical-cyclone basins' bounding box plus a margin, simplifies with Douglas-Peucker and packs the result
+as int32 ten-thousandths of a degree (about 11 m). The output is deterministic: the same inputs always give the same
+bytes.
+
+Two detail tiers come from the same 10 m sources. The full tier ("coast", "land", "lakes") is simplified to 0.002
+degrees (about 220 m) and is what every zoomed-in view draws. The `_lo` tier is simplified to 0.03 degrees and exists
+only so a whole-basin view, where one terminal dot spans about a degree, does not project a million vertices. Both keep
+every island: simplification never reduces a ring below three points.
+
+Long lines are cut into pieces of at most MAX_LINE_POINTS points, and filled land is cut along a 5 degree grid, so a
+viewport only touches the pieces it can see. The cuts in land fill are invisible (neighbouring pieces meet exactly);
+coastline pieces overlap by one vertex.
 
     python scripts/build_mapdata.py             # download if needed, write src/eyewall/mapdata/*.bin + ATTRIBUTION.md
     python scripts/build_mapdata.py --check     # rebuild in memory and fail if the committed files differ
@@ -10,8 +20,8 @@ degree. The output is deterministic: the same inputs always give the same bytes.
 
 Binary format, little-endian, read by eyewall.mapdata.loader:
 
-    header  "EWMD"  u8 version (1)  u8 flags (bit 0: closed rings)  u16 reserved  u32 path count
-    path    u8 kind  u16 point count  then point count * (i16 longitude, i16 latitude) in hundredths of a degree
+    header  "EWMD"  u8 version (2)  u8 flags (bit 0: closed rings)  u16 reserved  u32 units per degree  u32 path count
+    path    u8 kind  u32 point count  then point count * (i32 longitude, i32 latitude) in 1/units-per-degree degrees
 
 Ring paths are closed implicitly: the first point is not repeated at the end.
 """
@@ -42,20 +52,27 @@ MIRROR_REF = "f1890d9f152c896d250a77557a5751a93d494776"
 MIRROR_URL = f"https://raw.githubusercontent.com/nvkelso/natural-earth-vector/{MIRROR_REF}/geojson/"
 
 SOURCE_SHA256 = {
-    "ne_50m_coastline": "271f1c4c1908312bac6b29d158ea1356544beafc129f260005300913aa5ea283",
-    "ne_50m_land": "e874b27a51d146452be360cafb3cc50c86001074a67d534113e6534682f9826b",
-    "ne_50m_admin_0_boundary_lines_land": "2faac4f6b34386f3d21b6e018cf151f241f00e5c936d44dd17d7d9bfb147fa48",
-    "ne_50m_admin_1_states_provinces_lines": "72cca93c850d412628a5da4bc5ebfe21ba4d376eb34611bde6b623ee73f0fdcf",
-    "ne_110m_coastline": "851f581ff5ffb844deed8ae1a9ce22e3c4bb3d74fa342cadb5d8e39b41ae7c3c",
-    "ne_110m_land": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+    "ne_10m_coastline": "6f75ae0e0de157b14946e2255eb1f5486d9a13819032e26d4610852d296788f6",
+    "ne_10m_minor_islands_coastline": "d51fadaffc954e9e85671b0a2ecaba78b883dda1714640a173c151932fd1f2fb",
+    "ne_10m_land": "1ac90796408bc6ad6911d69448485d3c4dbf2190370080368a09976e1c9f7416",
+    "ne_10m_lakes": "2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9",
+    "ne_10m_admin_0_boundary_lines_land": "74d9c16229c095fde65943a9919e337682f044bcebccb120764f38edf3b70f4a",
+    "ne_10m_admin_1_states_provinces_lines": "1a1f30ccaaf4cc9c4bde34266f0b8cbb955d3a4cf254b756912255f2ec7c75b6",
 }
 
-# About 100 E eastward across the Pacific to 10 W, 5 S to 60 N. The box wraps the antimeridian, so it is two boxes.
-SOUTH, NORTH = -5.0, 60.0
-BOXES: tuple[Box, ...] = ((100.0, SOUTH, 180.0, NORTH), (-180.0, SOUTH, -10.0, NORTH))
+# The basins run from about 100 E eastward across the Pacific to 10 W, 5 S to 60 N. The data reaches MARGIN degrees
+# beyond that so the flat cut where the fill stops is outside any view a basin storm needs. The box wraps the
+# antimeridian, so it is two boxes.
+MARGIN = 5.0
+SOUTH, NORTH = -5.0 - MARGIN, 60.0 + MARGIN
+BOXES: tuple[Box, ...] = ((100.0 - MARGIN, SOUTH, 180.0, NORTH), (-180.0, SOUTH, -10.0 + MARGIN, NORTH))
+
+TILE = 5.0  # degrees; filled rings larger than this are cut along a grid of this size
+MAX_LINE_POINTS = 400  # longest stored polyline; longer ones are split, overlapping by one vertex
+UNITS = 10_000  # stored units per degree
 
 MAGIC = b"EWMD"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 FLAG_RINGS = 1
 KIND_COUNTRY, KIND_STATE = 0, 1
 
@@ -67,20 +84,30 @@ class LayerSpec:
     rings: bool  # polygons (filled) rather than lines
     tolerance: float  # Douglas-Peucker tolerance in degrees
     what: str
+    tile: bool = True  # cut filled rings along the grid; lakes stay whole because they are also outlined
 
+
+FULL_TOLERANCE = 0.002  # about 220 m; linecast simplifies to about 1 km
+LO_TOLERANCE = 0.03  # a third of a dot in a whole-basin view
+
+_COAST = (("ne_10m_coastline", 0), ("ne_10m_minor_islands_coastline", 0))
+_LAND = (("ne_10m_land", 0),)
+_LAKES = (("ne_10m_lakes", 0),)
 
 LAYERS = (
-    LayerSpec("coast50", (("ne_50m_coastline", 0),), False, 0.01, "50 m coastline"),
-    LayerSpec("coast110", (("ne_110m_coastline", 0),), False, 0.05, "110 m coastline"),
-    LayerSpec("land50", (("ne_50m_land", 0),), True, 0.01, "50 m land polygons"),
-    LayerSpec("land110", (("ne_110m_land", 0),), True, 0.05, "110 m land polygons"),
+    LayerSpec("coast", _COAST, False, FULL_TOLERANCE, "10 m coastline with minor islands"),
+    LayerSpec("land", _LAND, True, FULL_TOLERANCE, "10 m land polygons"),
+    LayerSpec("lakes", _LAKES, True, FULL_TOLERANCE, "10 m lakes", tile=False),
     LayerSpec(
         "borders",
-        (("ne_50m_admin_0_boundary_lines_land", KIND_COUNTRY), ("ne_50m_admin_1_states_provinces_lines", KIND_STATE)),
+        (("ne_10m_admin_0_boundary_lines_land", KIND_COUNTRY), ("ne_10m_admin_1_states_provinces_lines", KIND_STATE)),
         False,
-        0.02,
-        "50 m country boundaries and state or province lines",
+        0.003,
+        "10 m country boundaries and state or province lines",
     ),
+    LayerSpec("coast_lo", _COAST, False, LO_TOLERANCE, "coarse coastline for whole-basin views"),
+    LayerSpec("land_lo", _LAND, True, LO_TOLERANCE, "coarse land polygons for whole-basin views"),
+    LayerSpec("lakes_lo", _LAKES, True, LO_TOLERANCE, "coarse lakes for whole-basin views", tile=False),
 )
 
 
@@ -194,7 +221,9 @@ def simplify(points: Sequence[Point], tolerance: float) -> list[Point]:
 
 
 def simplify_ring(ring: Sequence[Point], tolerance: float) -> list[Point]:
-    """Douglas-Peucker for a closed ring, split at the vertex farthest from the first so the ring keeps its shape."""
+    """Douglas-Peucker for a closed ring, split at the vertex farthest from the first so the ring keeps its shape.
+    A ring smaller than the tolerance comes back as a triangle. A ring with no area (all points collinear) comes back
+    as a degenerate three-point path that fills nothing; rings of fewer than three points are dropped by the caller."""
     points = list(ring)
     if len(points) > 1 and points[0] == points[-1]:
         points.pop()
@@ -204,17 +233,54 @@ def simplify_ring(ring: Sequence[Point], tolerance: float) -> list[Point]:
     far = max(range(1, len(points)), key=lambda k: (points[k][0] - first[0]) ** 2 + (points[k][1] - first[1]) ** 2)
     one = simplify(points[: far + 1], tolerance)
     two = simplify([*points[far:], first], tolerance)
-    return one[:-1] + two[:-1]
+    result = one[:-1] + two[:-1]
+    if len(result) < 3:  # an islet smaller than the tolerance stays, as a triangle, rather than vanishing
+        third = max(points, key=lambda q: _segment_distance_squared(q, first, points[far]))
+        result = [first, *sorted({points[far], third}, key=points.index)]
+    return result
 
 
 def quantize(points: Iterable[Point]) -> list[tuple[int, int]]:
-    """Round to hundredths of a degree and drop consecutive duplicates."""
+    """Round to the stored unit (UNITS per degree) and drop consecutive duplicates."""
     out: list[tuple[int, int]] = []
     for lon, lat in points:
-        q = (math.floor(lon * 100 + 0.5), math.floor(lat * 100 + 0.5))
+        q = (math.floor(lon * UNITS + 0.5), math.floor(lat * UNITS + 0.5))
         if not out or out[-1] != q:
             out.append(q)
     return out
+
+
+def tile_ring(ring: list[Point], box: Box) -> list[list[Point]]:
+    """Cut a ring along a TILE-degree grid by halving the box, so a viewport can skip the pieces it cannot see.
+    Neighbouring pieces are clipped on the same line, so together they cover exactly what the ring covered."""
+    xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+    west, south, east, north = box
+    if max(xs) - min(xs) <= TILE and max(ys) - min(ys) <= TILE:
+        return [ring]
+    if east - west >= north - south:
+        mid = west + math.ceil((east - west) / TILE / 2) * TILE
+        if mid >= east:
+            return [ring]
+        halves = ((west, south, mid, north), (mid, south, east, north))
+    else:
+        mid = south + math.ceil((north - south) / TILE / 2) * TILE
+        if mid >= north:
+            return [ring]
+        halves = ((west, south, east, mid), (west, mid, east, north))
+    pieces: list[list[Point]] = []
+    for half in halves:
+        part = clip_ring(ring, half)
+        if len(part) >= 3:
+            pieces.extend(tile_ring(part, half))
+    return pieces
+
+
+def split_line(points: Sequence[tuple[int, int]]) -> list[Sequence[tuple[int, int]]]:
+    """Pieces of at most MAX_LINE_POINTS points, each starting on the last point of the one before."""
+    if len(points) <= MAX_LINE_POINTS:
+        return [points]
+    step = MAX_LINE_POINTS - 1
+    return [points[i : i + MAX_LINE_POINTS] for i in range(0, len(points) - 1, step)]
 
 
 # ------------------------------------------------------------------------------------------------------------- data
@@ -238,9 +304,9 @@ def _rings(geometry: dict) -> Iterator[list[Point]]:
 
 
 def convert(
-    geometries: Iterable[tuple[dict, int]], *, rings: bool, tolerance: float
+    geometries: Iterable[tuple[dict, int]], *, rings: bool, tolerance: float, tile: bool = True
 ) -> list[tuple[int, list[tuple[int, int]]]]:
-    """Clip, simplify and quantize GeoJSON geometries into (kind, points) paths."""
+    """Clip, simplify, cut and quantize GeoJSON geometries into (kind, points) paths."""
     paths: list[tuple[int, list[tuple[int, int]]]] = []
     for geometry, kind in geometries:
         if rings:
@@ -249,42 +315,52 @@ def convert(
                     clipped = clip_ring(ring[:-1] if ring and ring[0] == ring[-1] else ring, box)
                     if len(clipped) < 3:
                         continue
-                    points = quantize(simplify_ring(clipped, tolerance))
-                    if len(points) > 1 and points[0] == points[-1]:
-                        points.pop()
-                    if len(points) >= 3:
-                        paths.append((kind, points))
+                    simple = simplify_ring(clipped, tolerance)
+                    for piece in tile_ring(simple, box) if tile and len(simple) > 3 else [simple]:
+                        points = quantize(piece)
+                        if len(points) > 1 and points[0] == points[-1]:
+                            points.pop()
+                        if len(points) >= 3:
+                            paths.append((kind, points))
         else:
             for line in _lines(geometry):
                 for box in BOXES:
                     for piece in clip_polyline(line, box):
-                        points = quantize(simplify(piece, tolerance))
+                        if len(piece) > 3 and piece[0] == piece[-1]:  # an island's shoreline: keep it a closed loop
+                            simple = [*simplify_ring(piece, tolerance), piece[0]]
+                        else:
+                            simple = simplify(piece, tolerance)
+                        points = quantize(simple)
                         if len(points) >= 2:
-                            paths.append((kind, points))
+                            paths.extend((kind, list(part)) for part in split_line(points))
     return paths
+
+
+_HEADER = struct.Struct("<4sBBHII")
+_PATH_HEADER = struct.Struct("<BI")
 
 
 def pack(paths: Sequence[tuple[int, Sequence[tuple[int, int]]]], *, rings: bool) -> bytes:
     """The .bin encoding described in the module docstring."""
-    out = bytearray(struct.pack("<4sBBHI", MAGIC, FORMAT_VERSION, FLAG_RINGS if rings else 0, 0, len(paths)))
+    out = bytearray(_HEADER.pack(MAGIC, FORMAT_VERSION, FLAG_RINGS if rings else 0, 0, UNITS, len(paths)))
     for kind, points in paths:
-        out += struct.pack("<BH", kind, len(points))
-        out += struct.pack(f"<{2 * len(points)}h", *(v for point in points for v in point))
+        out += _PATH_HEADER.pack(kind, len(points))
+        out += struct.pack(f"<{2 * len(points)}i", *(v for point in points for v in point))
     return bytes(out)
 
 
 def unpack(data: bytes) -> tuple[bool, list[tuple[int, list[tuple[int, int]]]]]:
     """Inverse of pack, for tests and for --check diagnostics."""
-    magic, version, flags, _, count = struct.unpack_from("<4sBBHI", data)
-    if magic != MAGIC or version != FORMAT_VERSION:
+    magic, version, flags, _, units, count = _HEADER.unpack_from(data)
+    if magic != MAGIC or version != FORMAT_VERSION or units != UNITS:
         raise ValueError("not an eyewall map data file")
-    offset = struct.calcsize("<4sBBHI")
+    offset = _HEADER.size
     paths = []
     for _ in range(count):
-        kind, n = struct.unpack_from("<BH", data, offset)
-        offset += 3
-        flat = struct.unpack_from(f"<{2 * n}h", data, offset)
-        offset += 4 * n
+        kind, n = _PATH_HEADER.unpack_from(data, offset)
+        offset += _PATH_HEADER.size
+        flat = struct.unpack_from(f"<{2 * n}i", data, offset)
+        offset += 8 * n
         paths.append((kind, list(zip(flat[0::2], flat[1::2], strict=True))))
     return bool(flags & FLAG_RINGS), paths
 
@@ -323,7 +399,7 @@ def build(cache: Path, *, refresh: bool = False) -> dict[str, bytes]:
             collection = json.loads(fetch(name, cache, refresh=refresh))
             geometries.extend((feature["geometry"], kind) for feature in collection["features"] if feature["geometry"])
         outputs[f"{spec.stem}.bin"] = pack(
-            convert(geometries, rings=spec.rings, tolerance=spec.tolerance), rings=spec.rings
+            convert(geometries, rings=spec.rings, tolerance=spec.tolerance, tile=spec.tile), rings=spec.rings
         )
     outputs["ATTRIBUTION.md"] = attribution(outputs).encode()
     return outputs
@@ -344,8 +420,9 @@ which is in the public domain ("Made with Natural Earth. Free vector and raster 
 No permission or credit is required; it is given here anyway.
 
 The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror at
-commit `{MIRROR_REF}` (tag v5.1.2), clipped to longitude 100 E eastward across the Pacific to 10 W and latitude 5 S to
-60 N, simplified with Douglas-Peucker and stored as 16-bit integers in hundredths of a degree.
+commit `{MIRROR_REF}` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
+Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
+the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
 
 | File | Content | Natural Earth source | Bytes |
 |---|---|---|---|

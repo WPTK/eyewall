@@ -15,13 +15,7 @@ and move an item into a milestone brief when it is scheduled.
 
 ## Found along the way
 
-- M3: Natural Earth 50 m has state lines only for nine countries, none for Mexico or the Caribbean; the 10 m admin-1
-  lines would add them at some cost in size.
-- M3: lakes are filled as land and have no shoreline (the Great Lakes, Lake Okeechobee); the Natural Earth
-  lakes layer would hollow them out.
 - M3: `Mode.HALF` (half-block glyphs) has no config value yet; `glyph_set` only offers unicode and ascii.
-- M3: basemap `DETAIL_SWITCH=0.3` drops most Central Pacific atolls in whole-basin Pacific views, which use the 110 m data.
-- M3: the map-data clip boxes cut land fill flat at 10W, 100E, 5S and 60N.
 - M3: the best-track line and the dashed forecast can leave a gap when `storm.center` is newer than the last best-track point (`render/layers.py` `_draw_tracks`).
 - M2: the October to December names of NDBC's monthly files are unknown until a month closes, so
   `ndbc.client.monthly_url` refuses them; check the real names and lift the limit.
