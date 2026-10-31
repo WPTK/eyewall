@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.resources
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -83,6 +84,8 @@ def _selftest() -> int:
         from eyewall.sources.bundle import demo_bundle_path
         from eyewall.sources.replay import ReplaySource
 
+        if not (Path(str(importlib.resources.files("eyewall"))) / "ui" / "app.tcss").is_file():
+            raise RuntimeError("the packaged stylesheet ui/app.tcss is missing")
         result = asyncio.run(run_replay(ReplaySource(demo_bundle_path()), Config(), None, "+1h"))
         frame = basemap_canvas(Viewport(25.0, -75.0, 0.05, 80, 24)).to_text()
         if not result.events or not frame.strip():

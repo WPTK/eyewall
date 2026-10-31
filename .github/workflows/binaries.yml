@@ -18,8 +18,8 @@ on:
       - eyewall.spec
       - scripts/build_exe.ps1
       - pyproject.toml
-      - src/eyewall/cli.py
-      - src/eyewall/__main__.py
+      - src/eyewall/**
+      - tests/fixtures/replay/erin2025/**
       - .github/workflows/binaries.yml
 
 permissions:
@@ -31,7 +31,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  PYINSTALLER_VERSION: "6.22.3"
 
 jobs:
   binary:
@@ -47,12 +46,14 @@ jobs:
           - name: windows-x86_64
             os: windows-latest
             ext: .exe
+          # python:3.12-bullseye, pinned by digest (multi-arch index, checked 2026-10-31). Bullseye is past Debian's LTS
+          # window, kept on purpose for the glibc 2.31 floor; move the pin deliberately, and update smoke-test.md with it.
           - name: linux-x86_64
             os: ubuntu-latest
-            container: python:3.12-bullseye
+            container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
           - name: linux-arm64
             os: ubuntu-24.04-arm
-            container: python:3.12-bullseye
+            container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
           - name: macos-arm64
             os: macos-latest
           - name: macos-x86_64
@@ -74,7 +75,7 @@ jobs:
       # files, so every binary bundles its own.
       - name: Install
         shell: bash
-        run: python -m pip install -e . tzdata "pyinstaller==$PYINSTALLER_VERSION"
+        run: python -m pip install -e . tzdata textual-image "pyinstaller==$(cat scripts/pyinstaller-version.txt)"
 
       - name: Build
         shell: bash

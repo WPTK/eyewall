@@ -15,12 +15,13 @@ datas = [
 datas += collect_data_files("textual")
 hiddenimports = collect_submodules("textual.widgets")
 
-# Libraries that are optional or Windows-only dependencies of the package: bundle them when they are installed, so
-# the binary also works on a system with no zone files and in the graphics screen.
+# tzdata is a Windows-only dependency of the package, and a binary may land on a system with no zone files; textual_image
+# is imported lazily by the graphics code. Both must be installed to build: a missing one fails here, not in the field.
 for name in ("tzdata", "textual_image"):
-    if importlib.util.find_spec(name) is not None:
-        datas += collect_data_files(name)
-        hiddenimports += collect_submodules(name)
+    if importlib.util.find_spec(name) is None:
+        raise SystemExit(f"eyewall.spec: {name} is not installed; the binary would ship without it")
+    datas += collect_data_files(name)
+    hiddenimports += collect_submodules(name)
 
 a = Analysis(
     ["src/eyewall/__main__.py"],

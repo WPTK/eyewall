@@ -53,3 +53,6 @@ and move an item into a milestone brief when it is scheduled.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
 - M6: Ctrl+P in the search modal collides with Textual's command palette binding; pick another key for pinning.
 - M6: a watchlisted gauge that is missing from the CO-OPS catalog shows "waiting" forever; say it is unknown.
+- M8: CI binary builds install runtime dependencies unpinned (no lock file); lock them when a lock file exists.
+- M8: binaries pass between jobs as artifacts, which drop the executable bit; the release uploads the files as built, so users `chmod +x`. Ship tar.gz archives if that bites.
+- M8: the canary issue lists only `FAIL` lines; print the last 40 lines of a traceback too. GitHub disables scheduled workflows after 60 days without repository activity, so a quiet repo needs a manual dispatch now and then.

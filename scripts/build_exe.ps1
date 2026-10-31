@@ -4,7 +4,8 @@
 
 .DESCRIPTION
     Run from anywhere inside the repository, with the project virtual environment in .venv. Installs PyInstaller into
-    it when missing. The same eyewall.spec builds on Linux and macOS (see .github/workflows/release.yml).
+    it at the version in scripts\pyinstaller-version.txt, the one CI uses. The same eyewall.spec builds on Linux and macOS
+    in .github/workflows/binaries.yml, which also runs for pull requests that touch the build.
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -13,7 +14,8 @@ Set-Location $root
 $python = Join-Path $root '.venv\Scripts\python.exe'
 if (-not (Test-Path $python)) { throw 'No .venv here: python -m venv .venv; .venv\Scripts\python -m pip install -e ".[dev]"' }
 
-& $python -m pip install --quiet pyinstaller
+$pin = (Get-Content (Join-Path $PSScriptRoot 'pyinstaller-version.txt') -Raw).Trim()
+& $python -m pip install --quiet tzdata textual-image "pyinstaller==$pin"
 if ($LASTEXITCODE -ne 0) { throw 'pip install pyinstaller failed' }
 
 & $python -m PyInstaller --noconfirm --clean --workpath .pyi-build eyewall.spec
