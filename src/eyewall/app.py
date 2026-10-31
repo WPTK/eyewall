@@ -187,7 +187,9 @@ class EyewallApp(App[None]):
             g=self.glyphs,
         )
         if width >= 70:
-            text.append("  ? help", style="#7d8a99")
+            hint = "  ? help"
+            text.truncate(width - len(hint), overflow="ellipsis")  # the hint keeps its place; the rest gives way
+            text.append(hint, style="#7d8a99")
         return text
 
     def _idle_seconds(self) -> float:
