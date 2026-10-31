@@ -37,7 +37,7 @@ and move an item into a milestone brief when it is scheduled.
 - M5: the map widget invalidates and redraws the whole canvas on every scene change; cache the layers that did not change.
 - M6: a tide gauge has no detail screen; Enter on a gauge row does nothing and `p` pins it. Observed against predicted
   would want its own chart.
-- M6: the replay bundle has no `.supl` files, so the buoy detail shows "the recording has no supplemental file" and the
+- M6: the replay bundle has no `.supl` files, so the buoy detail shows "The recording has no supplemental file." and the
   extremes come from the regular rows; record the `.supl` files with `scripts/record_storm.py`.
 - M6: the buoy charts cover 24, 48 and 72 hours from the 5 day NDBC file; longer ranges (the 45 day file) are not wired.
 - M6: the settings screen edits poll intervals, units, glyph set, basins, nearby radii and alert rules; the map layers,
@@ -62,3 +62,6 @@ and move an item into a milestone brief when it is scheduled.
 - Poller: when a new advisory arrives the old cone and wind radii are dropped (they carry their advisory number); the graphics links are not, because a graphics page lists intermediate advisories under their own numbers. They are refetched with the cone and retried like it.
 - Cache: parsing a large body (the 1 MB NESDIS listing, the zips) still happens on the UI loop; only the disk reads, writes and the startup prune moved to a thread.
 - `fetch_image` follows redirects itself; give `fetch_bytes` a per-hop URL check so the two can be one.
+- #43: the Forecast, Probs and History tables are fixed-width `DataTable`s, so at 200x50 and 280x70 they fill about a fifth of the width. The Buoys and Tides tables now give spare room to their Name column (up to 48 cells); the other tables have no free-text column to grow, and spreading fixed numeric columns across the width would only add gaps. Parked.
+- #43: the picture in the graphics tab is drawn in half blocks (a 1 by 2 pixel grid per cell), so a cone at 120x30 is coarse. Braille would give four times the pixels but loses colour (see `image_mode`); not changed.
+- #43: at 80x24 and below the buoy table's twelve columns need about 100 cells, so the right-hand columns scroll sideways by mouse only (Left and Right switch tabs). A narrower layout would mean dropping or merging columns.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rich.console import RenderableType
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -104,7 +105,7 @@ class StormDetailScreen(Screen[None]):
             widget.move_cursor(row=min(row, len(rows) - 1))
         self.query_one(f"#{tab_id}-note", Static).update(Text(note, style=DIM))
 
-    def _set_text(self, tab_id: str, text: Text) -> None:
+    def _set_text(self, tab_id: str, text: RenderableType) -> None:
         self.query_one(f"#{tab_id}-text", Static).update(text)
 
     def refresh_data(self) -> None:

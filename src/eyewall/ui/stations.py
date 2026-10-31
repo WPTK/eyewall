@@ -155,8 +155,12 @@ def _position(entry: Entry[Station] | Entry[TideStation], preset: Preset) -> tup
     return preset.fmt_distance(entry.distance_nm), compass_point(entry.bearing_deg)
 
 
+def clean_name(name: str) -> str:
+    return " ".join(name.split())
+
+
 def short_name(name: str, width: int = NAME_WIDTH) -> str:
-    name = " ".join(name.split())
+    name = clean_name(name)
     return name if len(name) <= width else name[: width - 1] + "…"
 
 
@@ -175,7 +179,7 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
     station = entry.station
     state = buoy_state(store, station.id, now)
     distance, bearing = _position(entry, preset)
-    name = short_name(station.name) or MISSING
+    name = clean_name(station.name) or MISSING  # the table cuts it to the room it has
     pin = "*" if entry.watchlisted else " "
     ident = Text(f"{pin}{station.id}", style="bold")
     if state in ("silent", "dark"):
@@ -235,7 +239,7 @@ def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Pre
     series = store.tide_series.get(gauge.id)
     distance, bearing = _position(entry, preset)
     ident = Text(f"{'*' if entry.watchlisted else ' '}{gauge.id}", style="bold")
-    name = short_name(gauge.name) or MISSING
+    name = clean_name(gauge.name) or MISSING
     if series is None or series.latest_level is None or tide_is_silent(series, now):
         failed = gauge.id in store.tide_errors or (series is not None and series.latest_level is None)
         note = NOT_REPORTING if failed or series is not None else WAITING
@@ -347,6 +351,20 @@ def _kv(out: Text, label: str, value: str, *, style: str = "") -> None:
     out.append(value + "\n", style=style)
 
 
+WAVE_LOOKBACK = timedelta(hours=3)
+
+
+def latest_waves(store: Store, station_id: str, obs: Observation, now: datetime) -> Observation:
+    """The row to read the waves from: the newest one, or when it has none the last row with a wave height in the past
+    few hours (NDBC reports waves on some rows only), so the panel agrees with the wave chart."""
+    if obs.wave_height_m is not None:
+        return obs
+    series = store.series.get(station_id.upper())
+    rows = [] if series is None else [o for o in series.observations if o.wave_height_m is not None]
+    recent = [o for o in rows if now - WAVE_LOOKBACK <= o.time <= now]
+    return max(recent, key=lambda o: o.time, default=obs)
+
+
 def latest_observation_text(
     obs: Observation | None, store: Store, station_id: str, now: datetime, preset: Preset, g: UiGlyphs
 ) -> Text:
@@ -366,9 +384,13 @@ def latest_observation_text(
     out.append(f"{'Change 3h':<12}", style=DIM)
     out.append_text(change)
     out.append("\n")
-    _kv(out, "Wave height", preset.fmt_length(obs.wave_height_m, "m"))
-    if obs.wave_height_m is not None or obs.dominant_period_s is not None:
-        period = MISSING if obs.dominant_period_s is None else f"{obs.dominant_period_s:.0f} s"
+    waves = latest_waves(store, station_id, obs, now)
+    height = preset.fmt_length(waves.wave_height_m, "m")
+    if waves.wave_height_m is not None and waves.time != obs.time:  # the newest row has none: say how old this is
+        height += f"  ({format_age((now - waves.time).total_seconds())} ago)"
+    _kv(out, "Wave height", height)
+    if waves.wave_height_m is not None or waves.dominant_period_s is not None:
+        period = MISSING if waves.dominant_period_s is None else f"{waves.dominant_period_s:.0f} s"
         _kv(out, "Wave period", period)
     _kv(out, "Water temp", preset.fmt_temperature(obs.water_temp_c, "c"))
     _kv(out, "Air temp", preset.fmt_temperature(obs.air_temp_c, "c"))

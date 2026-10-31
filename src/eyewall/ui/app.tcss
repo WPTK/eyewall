@@ -206,7 +206,8 @@ DashboardScreen.full-map #map-pane {
 }
 
 .note {
-    height: 1;
+    height: auto;
+    min-height: 1;
     padding: 0 1;
 }
 
@@ -282,6 +283,19 @@ HelpScreen, LayerMenu {
 /* Ten tabs fit in 80 columns: one space between labels. */
 StormDetailScreen Tab {
     padding: 0 1 0 0;
+}
+
+/* One style for the selected tab on every tab bar, focused or not: bold and underlined (the bar below it also marks
+   it), never a filled block, so the selection does not rely on colour. */
+Tabs .-active,
+Tabs:focus .-active {
+    color: $foreground;
+    background: transparent;
+    text-style: bold underline;
+}
+
+Tabs:focus .underline--bar {
+    background: $foreground 10%;
 }
 
 /* Unchecked layers stay readable: the box is muted, not the same dark as the dialog. */
@@ -370,6 +384,8 @@ SearchScreen, SettingsScreen {
 #search-results {
     height: 1fr;
     background: $panel;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
 }
 
 #search-note {
@@ -450,6 +466,7 @@ GalleryPanel {
 #gal-view, #gal-inline {
     height: 1fr;
     width: 1fr;
+    margin-bottom: 1;  /* the picture stops a row above the footer */
 }
 
 #graphics-title {
