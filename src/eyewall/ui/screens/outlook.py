@@ -86,7 +86,7 @@ def watchlist_rows(eye: EyewallApp) -> list[tuple[str, tuple[Text, ...]]]:
         station_id = entry.id
         state = st.buoy_state(eye.store, station_id, now)
         obs = st.newest_observation(eye.store, station_id)
-        name = st.short_name(entry.station.name) or MISSING
+        name = st.clean_name(entry.station.name) or MISSING
         if state in ("silent", "dark") or obs is None:
             note = st.NOT_REPORTING if state in ("silent", "dark") else st.WAITING
             cells = (station_id, name, MISSING, MISSING, note)

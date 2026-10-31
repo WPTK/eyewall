@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 from rich.cells import cell_len
+from rich.text import Text
 from textual.widgets import DataTable, Tabs
 
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.detail import StormDetailScreen
-from eyewall.ui.stations import RANGES_H
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.ui.widgets.gallery import GalleryPanel, ImageView
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, settle, wait_until
@@ -59,6 +59,10 @@ async def test_summary_labels_and_values_are_two_columns(size) -> None:
         # a wrapped value lines up under the value, never under its label
         if lines[at + 1].strip() and "Forecaster" not in lines[at + 1]:
             assert lines[at + 1][:value_column].strip() == "", lines[at + 1]
+        for label in ("Advisory", "Updated", "Position", "Max wind", "Pressure", "Movement", "Forecaster"):
+            row = next(ln for ln in lines if ln.lstrip().startswith(label))
+            assert row.index(label) + 0 == 1 and row[value_column - 2 : value_column].strip() == "", row
+            assert row[value_column] != " ", row  # every value starts in the same column
 
 
 @pytest.mark.parametrize("size", SIZES, ids=IDS)
@@ -113,7 +117,6 @@ async def test_buoy_charts_share_one_plot_edge(size) -> None:
             axis = next(row for row in reversed(rows) if "─" in row or "━" in row)
             edges.add(min(axis.index(c) for c in "─━" if c in axis))
         assert len(edges) == 1, f"the plots start in different columns: {edges}"
-        assert RANGES_H[0] > 0
 
 
 async def test_buoy_panel_wave_height_agrees_with_the_wave_chart() -> None:
@@ -139,3 +142,41 @@ async def test_search_result_is_one_row(size) -> None:
         lines = screen_text(pilot.app).splitlines()
         at = next(i for i, ln in enumerate(lines) if "41002" in ln and "buoy" in ln)
         assert "NDBC" not in lines[at + 1] and "buoy" not in lines[at + 1], lines[at : at + 2]
+
+
+@pytest.mark.parametrize(
+    "size", [(60, 10), (100, 50), (120, 30), (120, 12)], ids=["60x10", "100x50", "120x30", "120x12"]
+)
+async def test_station_table_with_more_rows_than_height_still_fits(size) -> None:
+    from textual.app import App
+
+    from eyewall.ui.stations import BUOY_COLUMNS
+    from eyewall.ui.widgets.station_table import StationTable
+
+    cells = (
+        "41000",
+        "A fairly long buoy name for testing the fit",
+        "10 nm",
+        "N",
+        "5 kt",
+        "6 kt",
+        "1000 mb",
+        "--",
+        "--",
+        "80 F",
+        "0s",
+        "10 nm 1h",
+    )
+    rows = [(str(i), tuple(Text(c) for c in cells)) for i in range(70)]
+
+    class Host(App[None]):
+        def compose(self):
+            yield StationTable(id="t")
+
+    async with Host().run_test(size=size) as pilot:
+        table = pilot.app.query_one("#t", StationTable)
+        table.set_rows(BUOY_COLUMNS, rows)
+        await settle(pilot)
+        assert table.show_vertical_scrollbar
+        if size[0] >= 100:
+            assert not table.show_horizontal_scrollbar, f"{table.size} {table.virtual_size}"

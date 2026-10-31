@@ -70,6 +70,11 @@ class StationTable(DataTable[Text]):
             self._name_width = width
             self._build()
 
+    def _room(self) -> int:
+        """The width the columns may use: the table's, less the vertical scrollbar when the rows will not fit."""
+        overflow = len(self._rows) + 1 > self.size.height  # the header takes a row
+        return self.size.width - (self.styles.scrollbar_size_vertical if overflow else 0)
+
     def _fit(self) -> int | None:
         """The Name column's width: what is left of the table's width after the other columns, within its limits."""
         if NAME not in self._columns or self.size.width < 1:
@@ -81,7 +86,7 @@ class StationTable(DataTable[Text]):
                 cells = (cell_len(cells[index].plain) for _, cells in self._rows)
                 others += max(cell_len(label), *cells, 0) + PADDING
         longest = max((cell_len(cells[at].plain) for _, cells in self._rows), default=0)
-        room = self.size.width - others - PADDING
+        room = self._room() - others - PADDING
         return min(max(longest, len(NAME)), max(NAME_MIN, min(room, NAME_MAX)))  # never wider than the longest name
 
     def _build(self) -> None:

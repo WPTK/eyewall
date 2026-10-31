@@ -39,7 +39,6 @@ PRESSURE_COLOR = "#4aa3ff"
 WIND_COLOR = "#3ddc84"
 GUST_COLOR = "#ffa63d"
 WAVE_COLOR = "#8fd3ff"
-NAME_WIDTH = 20
 
 BUOY_COLUMNS = ("ID", "Name", "Dist", "Brg", "Wind", "Gust", "Pres", "dP 3h", "Wave", "WTMP", "Age", "Closest")
 TIDE_COLUMNS = ("ID", "Name", "Dist", "Brg", "Observed", "Predicted", "Residual", "Wind", "Pres", "Age", "Closest")
@@ -159,11 +158,6 @@ def clean_name(name: str) -> str:
     return " ".join(name.split())
 
 
-def short_name(name: str, width: int = NAME_WIDTH) -> str:
-    name = clean_name(name)
-    return name if len(name) <= width else name[: width - 1] + "…"
-
-
 def _signed(value: float, unit: str, decimals: int) -> str:
     if round(value, decimals) == 0:
         value = 0.0  # a residual of -0.02 ft reads +0.0, never -0.0
@@ -203,7 +197,7 @@ def buoy_row(store: Store, entry: Entry[Station], now: datetime, preset: Preset,
         banded(preset.fmt_wind(gust), gust),
         Text(preset.fmt_pressure(obs.pressure_hpa, "hpa")),
         delta_text(None if tendency is None else tendency.delta_hpa, preset, g),
-        Text(preset.fmt_length(obs.wave_height_m, "m")),
+        Text(preset.fmt_length(last_reading(store, station.id, obs, now, "wave_height_m").wave_height_m, "m")),
         Text(preset.fmt_temperature(obs.water_temp_c, "c")),
         Text(format_age(age.total_seconds())),
         Text(closest_text(entry, preset)),
@@ -352,13 +346,13 @@ def _kv(out: Text, label: str, value: str, *, style: str = "") -> None:
 WAVE_LOOKBACK = timedelta(hours=3)
 
 
-def latest_waves(store: Store, station_id: str, obs: Observation, now: datetime) -> Observation:
-    """The row to read the waves from: the newest one, or when it has none the last row with a wave height in the past
-    few hours (NDBC reports waves on some rows only), so the panel agrees with the wave chart."""
-    if obs.wave_height_m is not None:
+def last_reading(store: Store, station_id: str, obs: Observation, now: datetime, field: str) -> Observation:
+    """The row to read a wave field from: the newest one, or when it lacks the field the newest row in the past few
+    hours that has it (NDBC reports waves on some rows only). The table, the panel and the chart then agree."""
+    if getattr(obs, field) is not None:
         return obs
     series = store.series.get(station_id.upper())
-    rows = [] if series is None else [o for o in series.observations if o.wave_height_m is not None]
+    rows = [] if series is None else [o for o in series.observations if getattr(o, field) is not None]
     recent = [o for o in rows if now - WAVE_LOOKBACK <= o.time <= now]
     return max(recent, key=lambda o: o.time, default=obs)
 
@@ -382,13 +376,14 @@ def latest_observation_text(
     out.append(f"{'Change 3h':<12}", style=DIM)
     out.append_text(change)
     out.append("\n")
-    waves = latest_waves(store, station_id, obs, now)
+    waves = last_reading(store, station_id, obs, now, "wave_height_m")
     height = preset.fmt_length(waves.wave_height_m, "m")
     if waves.wave_height_m is not None and waves.time != obs.time:  # the newest row has none: say how old this is
         height += f"  ({format_age((now - waves.time).total_seconds())} ago)"
     _kv(out, "Wave height", height)
-    if waves.wave_height_m is not None or waves.dominant_period_s is not None:
-        period = MISSING if waves.dominant_period_s is None else f"{waves.dominant_period_s:.0f} s"
+    swell = last_reading(store, station_id, obs, now, "dominant_period_s")
+    if waves.wave_height_m is not None or swell.dominant_period_s is not None:
+        period = MISSING if swell.dominant_period_s is None else f"{swell.dominant_period_s:.0f} s"
         _kv(out, "Wave period", period)
     _kv(out, "Water temp", preset.fmt_temperature(obs.water_temp_c, "c"))
     _kv(out, "Air temp", preset.fmt_temperature(obs.air_temp_c, "c"))
