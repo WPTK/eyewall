@@ -82,7 +82,7 @@ class StationTable(DataTable[Text]):
                 others += max(cell_len(label), *cells, 0) + PADDING
         longest = max((cell_len(cells[at].plain) for _, cells in self._rows), default=0)
         room = self.size.width - others - PADDING
-        return max(NAME_MIN, min(room, NAME_MAX, max(longest, len(NAME))))
+        return min(max(longest, len(NAME)), max(NAME_MIN, min(room, NAME_MAX)))  # never wider than the longest name
 
     def _build(self) -> None:
         keep = self.current_key()
