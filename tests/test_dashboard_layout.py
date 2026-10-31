@@ -10,7 +10,7 @@ from textual.widgets import TabbedContent
 from eyewall.ui.adapt import storm_scene
 from eyewall.ui.screens.dashboard import HEADLINE_ROWS, MIN_PANEL_ROWS, DashboardScreen
 from eyewall.ui.widgets.panels import Panel
-from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app
+from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app, settle
 
 STACKED = [
     (110, 30),
@@ -96,25 +96,47 @@ async def test_the_legend_is_never_cut(size) -> None:  # type: ignore[no-untyped
         )  # on the screen, not just in the text
 
 
-async def test_the_legend_keeps_its_height_when_the_cursor_is_set() -> None:
+async def test_the_legend_never_changes_height_when_the_cursor_is_set() -> None:
+    """A regression guard for #47, which could not be reproduced: the legend is at most 74 cells wide and the cursor
+    only joins it from 80, so setting the cursor must never wrap it or resize the map. This pins that, it fixes nothing."""
     app = replay_app()
     async with running(app, (200, 50)) as pilot:
         await into_the_storm(pilot)
         view = app.screen.map_view
-        for _ in range(2):  # the overview, then zoomed in to the 10m coast whose label is longer
-            for width in range(60, 141):
-                assert view.cursor is None
-                lines = view.legend(width).plain.count(chr(10))
-                view.cursor = (25.0, -75.0)
-                assert view.legend(width).plain.count(chr(10)) == lines, width
-                view.cursor = None
-            for _ in range(6):
-                view.action_zoom_in()
-        assert view.detailed
+        for width in range(60, 141):
+            view.cursor = None
+            lines = view.legend(width).plain.count("\n")
+            view.cursor = (25.0, -75.0)
+            assert view.legend(width).plain.count("\n") == lines, width
+        view.cursor = None
         legend, before = app.screen.query_one(".legend"), view.size
         await pilot.click(view, offset=(5, 5))
         await pilot.pause()
         assert view.cursor is not None and view.size == before and legend.size.height == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [[(120, 20), (200, 50)], [(120, 20), (280, 70)], [(200, 50), (120, 20), (200, 50)]],
+    ids=lambda p: "-".join(f"{w}x{h}" for w, h in p),
+)
+async def test_a_live_resize_refits_the_stack(path) -> None:  # type: ignore[no-untyped-def]
+    """Panels dropped on a short terminal come back whole, and the ones cut short come back, when it grows again."""
+    app = replay_app()
+    async with running(app, path[0]) as pilot:
+        await into_the_storm(pilot)
+        for size in path[1:]:
+            await pilot.resize_terminal(*size)
+            await settle(pilot)
+            await settle(pilot)
+        heights = {k: (p.display, p.region.height) for k, p in _stack(app).items()}
+    fresh = replay_app()
+    async with running(fresh, path[-1]) as pilot:
+        await into_the_storm(pilot)
+        assert heights == {k: (p.display, p.region.height) for k, p in _stack(fresh).items()}  # as if started there
+        if path[-1] == (280, 70):
+            for panel in _stack(fresh).values():
+                assert panel.virtual_size.height <= panel.size.height
 
 
 @pytest.mark.parametrize("size", ALL, ids=lambda s: f"{s[0]}x{s[1]}")

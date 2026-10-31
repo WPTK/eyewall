@@ -107,36 +107,38 @@ class DashboardScreen(Screen[None]):
         all of its text, rows still free go to the panels cut short by their cap. A panel whose text is longer than
         its rows scrolls inside itself."""
         stack = self.query_one("#side-stack")
-        filled = [p for p in stack.query(Panel) if p.filled]
-        if not stack.display or not filled or stack.size.height < 1:
+        headline = next(p for p in stack.query(Panel) if p.kind == "headline")  # it always has text
+        filled = [p for p in stack.query(Panel) if p.filled and p is not headline]
+        if not stack.display or stack.size.height < 1:
             return
-        headline = next((p for p in filled if p.kind == "headline"), None)
-        others = [p for p in filled if p is not headline]
-        reserved = HEADLINE_ROWS if headline is not None else 0
-        while others and reserved + MIN_PANEL_ROWS * len(others) > stack.size.height:
-            others.pop().display = False
-        panels = ([headline] if headline is not None else []) + others
+        room = (stack.size.height - HEADLINE_ROWS) // MIN_PANEL_ROWS
+        others = filled[: max(room, 0)]
+        for panel in filled:
+            dropped = panel not in others
+            panel.dropped = dropped
+            panel.display = not dropped
+        panels = [headline, *others]
+        text_width = stack.size.width - 4  # the border and the padding; a panel that scrolls is cut short anyway
         full: dict[Panel, int] = {}
         wants: dict[Panel, int] = {}
         for panel in panels:
-            panel.display = True
-            full[panel] = max(panel.body.outer_size.height + 2, MIN_PANEL_ROWS)  # the text and the border
+            text_rows = panel.body.get_content_height(stack.size, stack.size, text_width)  # no layout needed
+            full[panel] = max(text_rows + 2, MIN_PANEL_ROWS)  # the text and the border
             cap = panel.styles.base.max_height  # the stylesheet's cap, not the lifted one set below
             capped = int(cap.value) if cap is not None and cap.unit == Unit.CELLS else full[panel]
             wants[panel] = max(min(full[panel], capped), MIN_PANEL_ROWS)
         rows = dict.fromkeys(panels, 0)
-        left = stack.size.height - reserved
+        left = stack.size.height - HEADLINE_ROWS
         for index, panel in enumerate(sorted(others, key=lambda p: wants[p])):
             rows[panel] = min(wants[panel], max(left, 0) // (len(others) - index))
             left -= rows[panel]
-        if headline is not None:
-            rows[headline] = min(wants[headline], stack.size.height - sum(rows.values()))
-            spare = stack.size.height - sum(rows.values())
-            if rows[headline] >= wants[headline]:  # the headline is whole: the cut-short panels may grow
-                for panel in others:
-                    grow = min(spare, full[panel] - rows[panel])
-                    rows[panel] += grow
-                    spare -= grow
+        rows[headline] = min(wants[headline], stack.size.height - sum(rows.values()))
+        spare = stack.size.height - sum(rows.values())
+        if rows[headline] >= wants[headline]:  # the headline is whole: the cut-short panels may grow
+            for panel in others:
+                grow = min(spare, full[panel] - rows[panel])
+                rows[panel] += grow
+                spare -= grow
         for panel, height in rows.items():
             panel.styles.height = panel.styles.max_height = max(height, MIN_PANEL_ROWS)  # lifts the cap when it grew
 
