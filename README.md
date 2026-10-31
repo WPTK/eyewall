@@ -30,7 +30,8 @@ eyewall --demo
 ## Install
 
 Download a standalone binary for Windows, Linux or macOS from the
-[releases page](https://github.com/WPTK/eyewall/releases), or install with `pipx` or `uv` (Python 3.12 or newer).
+[releases page](https://github.com/WPTK/eyewall/releases) once a release is published, or install from the repository
+with `pipx install git+https://github.com/WPTK/eyewall` (Python 3.12 or newer).
 `docs/install.md` has the details, and `docs/smoke-test.md` is the checklist used before each release.
 
 From a clone:

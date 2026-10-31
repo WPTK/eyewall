@@ -91,8 +91,8 @@ def format_zulu(moment: datetime, *, day: bool = False) -> str:
 def format_when(moment: datetime, tz: tzinfo | None = None, *, day: bool = False) -> str:
     """Format as 21:00Z (17:00 EDT), or Wed 21:00Z (Wed 17:00 EDT) with day=True; just the Zulu part without a zone."""
     stamp = format_zulu(moment, day=day)
-    if tz is None:
+    local = ensure_utc(moment).astimezone(tz) if tz is not None else None
+    if local is None or local.utcoffset() == timedelta(0):
         return stamp
-    local = ensure_utc(moment).astimezone(tz)
     clock = f"{local:%a %H:%M}" if day else f"{local:%H:%M}"
     return f"{stamp} ({clock} {local.tzname() or ''})".replace(" )", ")")

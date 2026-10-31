@@ -288,3 +288,13 @@ async def test_the_first_live_run_names_the_settings_file(tmp_path) -> None:
     app = EyewallApp(Config(), ScriptedSource(), local_tz=EDT, config_path=path)
     async with running(app):
         assert any(str(path) in note.message for note in app._notifications)
+
+
+async def test_the_summary_tab_does_not_repeat_the_header_strip() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter")
+        text = screen_text(app)
+        assert text.count("ERIN") == 2  # the header strip, and the headline under the summary
+        assert "ERIN  H2  HU" not in text

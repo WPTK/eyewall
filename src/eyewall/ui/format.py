@@ -505,7 +505,7 @@ def status_bar(
                 out.append(f" {format_age(item.freshness.age)}", style=color)
     elif any(f.freshness.state is FreshnessState.LOADING for f in active):
         out.append(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])
-    else:
+    elif active:
         out.append(f" {g.fresh} sources ok", style=FRESHNESS_COLORS[FreshnessState.FRESH])
     if any(f.freshness.from_cache and f.active for f in feeds):
         out.append("  OFFLINE: cached data", style="bold #ffe94a")

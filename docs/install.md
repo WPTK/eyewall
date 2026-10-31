@@ -6,7 +6,7 @@ the National Hurricane Center and your local National Weather Service office.
 
 ## A standalone binary
 
-Download the file for your platform from the [releases page](https://github.com/WPTK/eyewall/releases) and run it. No
+Once a release is published, download the file for your platform from the [releases page](https://github.com/WPTK/eyewall/releases) and run it. No
 Python is needed.
 
 | Platform | File |
@@ -28,10 +28,8 @@ eyewall                # live data
 ## With Python 3.12 or newer
 
 ```
-pipx install eyewall         # or: uv tool install eyewall, or: pip install eyewall
+pipx install git+https://github.com/WPTK/eyewall
 ```
-
-(Once the project is published to PyPI; until then, `pipx install git+https://github.com/WPTK/eyewall`.)
 
 ## Checking an installation
 
