@@ -29,6 +29,7 @@ from eyewall.units import MISSING, Preset, convert, format_value
 
 NOT_REPORTING = "not reporting"
 WAITING = "waiting"
+UNKNOWN = "unknown"
 FALL_WARN_HPA = -1.0  # a three hour fall of this much is flagged, and of FALL_RAPID_HPA in red
 FALL_RAPID_HPA = -3.0
 RESIDUAL_COLORS = ((4.0, "#ff4d4d"), (2.0, "#ffa63d"), (1.0, "#ffe94a"))  # feet, largest first
@@ -223,6 +224,12 @@ def residual_color(residual_ft: float) -> str:
     return NEGATIVE_RESIDUAL if residual_ft <= -1.0 else ""
 
 
+def _not_in_catalog(store: Store, gauge_id: str) -> bool:
+    """True once the CO-OPS catalog is loaded and does not list this gauge (a typo, or a station that was retired)."""
+    wanted = gauge_id.upper()
+    return bool(store.tide_stations) and all(g.id.upper() != wanted for g in store.tide_stations)
+
+
 def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Preset) -> tuple[Text, ...]:
     gauge = entry.station
     series = store.tide_series.get(gauge.id)
@@ -232,6 +239,8 @@ def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Pre
     if series is None or series.latest_level is None or tide_is_silent(series, now):
         failed = gauge.id in store.tide_errors or (series is not None and series.latest_level is None)
         note = NOT_REPORTING if failed or series is not None else WAITING
+        if series is None and _not_in_catalog(store, gauge.id):
+            note = UNKNOWN
         dim = [name, distance, bearing, *[MISSING] * 5, note, closest_text(entry, preset)]
         return (Text(ident.plain, style=f"bold {DIM}"), *[Text(c, style=DIM) for c in dim])
     latest = series.latest_level
