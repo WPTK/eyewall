@@ -9,6 +9,7 @@ from textual import events
 from textual.widgets import DataTable, TabbedContent, Tabs
 
 from eyewall.app import EyewallApp
+from eyewall.config import Config
 from eyewall.state.store import storm_key
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
@@ -18,6 +19,7 @@ from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.widgets.map_view import MapView
 from tests.ui_support import (
+    EDT,
     ScriptedSource,
     into_the_storm,
     press,
@@ -181,7 +183,7 @@ async def test_quiet_source_shows_outlook_areas_and_opens_the_outlook() -> None:
     app = scripted_app()
     async with running(app) as pilot:
         text = screen_text(app)
-        assert "No tropical cyclones" in text
+        assert "Atlantic, East Pacific: none" in text
         assert "Area 1" in text
         await press(pilot, "O")
         assert isinstance(app.screen, OutlookScreen)
@@ -271,3 +273,28 @@ async def test_every_mouse_event_counts_as_presence() -> None:
         app._last_input = 0.0
         await app.on_event(events.MouseScrollDown(None, 1, 1, 0, 1, 0, False, False, False))
         assert app._idle_seconds() < 5
+
+
+async def test_no_network_and_no_cache_says_so_on_the_storm_list() -> None:
+    source = ScriptedSource()
+    source.fail = True
+    app = scripted_app(source)
+    async with running(app) as pilot:
+        await wait_until(pilot, lambda: "no connection" in screen_text(app), 15)
+
+
+async def test_the_first_live_run_names_the_settings_file(tmp_path) -> None:
+    path = tmp_path / "config.toml"
+    app = EyewallApp(Config(), ScriptedSource(), local_tz=EDT, config_path=path)
+    async with running(app):
+        assert any(str(path) in note.message for note in app._notifications)
+
+
+async def test_the_summary_tab_does_not_repeat_the_header_strip() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter")
+        text = screen_text(app)
+        assert text.count("ERIN") == 2  # the header strip, and the headline under the summary
+        assert "ERIN  H2  HU" not in text

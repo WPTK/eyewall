@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.0] - 2026-10-31
+
+### Changed
+
+- Collapse the status bar's six freshness dots into one indicator that names a source with its age only when it is stale or failing ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Show a basin in the storm list only when it has storms or invests, and list the quiet ones on one dim line ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Show the storm surge watch or warning in the warnings panel only, and give the headline panel the freed rows ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Shorten the help screen to fit a 24 row terminal and drop the line that repeated the header strip from the Summary tab ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Format times in the Summary and buoy extremes the same way, as `21:00Z (17:00 EDT)` ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Colour scrollbars from the theme instead of black ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Publish releases from a draft with the wheel, source distribution, five binaries and `SHA256SUMS`, safe to re-run ([`a1dc7ff`](https://github.com/WPTK/eyewall/commit/a1dc7ff), [#15](https://github.com/WPTK/eyewall/pull/15))
+
+### Added
+
+- Add standalone one-file binaries for Windows x86_64, Linux x86_64 and arm64, and macOS arm64 and x86_64, built from `eyewall.spec` and checked with `--selftest` ([`3e7e4e6`](https://github.com/WPTK/eyewall/commit/3e7e4e6), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Add `--selftest`, which replays an hour of the bundled storm and draws one map frame to check an installation ([`3e7e4e6`](https://github.com/WPTK/eyewall/commit/3e7e4e6), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Add a weekly canary workflow that fetches every live NOAA endpoint once and opens one issue when a feed stops parsing ([`3e7e4e6`](https://github.com/WPTK/eyewall/commit/3e7e4e6), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Add a friendly "no connection" line to the storm list when no feed has ever answered, and a toast naming the settings file on a first live run ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+- Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
+
+[0.8.0]: https://github.com/WPTK/eyewall/releases/tag/v0.8.0
+
 ## [0.7.0] - 2026-10-31
 
 ### Changed

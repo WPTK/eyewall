@@ -61,3 +61,25 @@ def test_format_age():
 def test_format_zulu():
     assert format_zulu(START) == "06:00Z"
     assert format_zulu(START, day=True) == "Fri 06:00Z"
+
+
+def test_format_when():
+    from eyewall.clock import format_when
+
+    moment = datetime(2025, 8, 20, 21, 0, tzinfo=UTC)
+    edt = timezone(timedelta(hours=-4), "EDT")
+    assert format_when(moment) == "21:00Z"
+    assert format_when(moment, edt) == "21:00Z (17:00 EDT)"
+    assert format_when(moment, edt, day=True) == "Wed 21:00Z (Wed 17:00 EDT)"
+
+
+def test_format_when_follows_the_zone_and_the_date():
+    from zoneinfo import ZoneInfo
+
+    from eyewall.clock import format_when
+
+    ny = ZoneInfo("America/New_York")
+    assert format_when(datetime(2026, 1, 15, 21, 0, tzinfo=UTC), ny) == "21:00Z (16:00 EST)"
+    late = datetime(2026, 1, 15, 2, 30, tzinfo=UTC)  # still the 14th in New York
+    assert format_when(late, ny, day=True) == "Thu 02:30Z (Wed 21:30 EST)"
+    assert format_when(late, UTC) == "02:30Z"

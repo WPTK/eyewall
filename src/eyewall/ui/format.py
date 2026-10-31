@@ -21,7 +21,6 @@ from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import (
     NEUTRAL,
     WATCH_WARNING_COLORS,
-    WatchWarning,
     category_color,
     category_for_knots,
     risk_color,
@@ -205,23 +204,39 @@ def _invest_row(row_id: str, area: OutlookArea, basin: str, index: int) -> Row:
     return Row("invest", row_id, Text("\n").join([head, detail]), basin)
 
 
-def build_rows(store: Store, basins: tuple[str, ...], now: datetime, preset: Preset, g: UiGlyphs) -> list[Row]:
-    """The storm list: per basin a header, its cyclones and PTCs, its invests, and a quiet row if none."""
+def _names(codes: list[str]) -> str:
+    if codes == ["EP", "CP"]:
+        return "East and Central Pacific"
+    return ", ".join(BASIN_NAMES[c] for c in codes)
+
+
+def build_rows(
+    store: Store, basins: tuple[str, ...], now: datetime, preset: Preset, g: UiGlyphs, *, unreachable: bool = False
+) -> list[Row]:
+    """The storm list: a header and the storms and invests of each basin that has any, then a dim line."""
     by_basin = outlook_areas_by_basin(store.outlook)
     rows: list[Row] = []
+    empty: list[str] = []
     for code in basins:
         states = [s for s in store.storms.values() if s.storm.basin is not None and s.storm.basin.value == code]
         states.sort(key=lambda s: (s.storm.classification is Classification.PTC, -(s.storm.intensity_kt or 0)))
+        invests = by_basin.get(code, [])
+        if not states and not invests:
+            empty.append(code)
+            continue
         header = Text(f" {BASIN_NAMES[code].upper()}", style="bold #8fd3ff", no_wrap=True)
         rows.append(Row("header", f"header:{code}", header, code))
         rows.extend(_storm_row(state, now, preset, g) for state in states)
-        if not states:
-            if store.storms_loaded:
-                rows.append(Row("quiet", f"quiet:{code}", Text(f"   {QUIET_TEXT}", style=DIM, no_wrap=True), code))
-            else:
-                rows.append(Row("quiet", f"quiet:{code}", Text("   loading...", style=DIM, no_wrap=True), code))
-        for index, (row_id, area) in enumerate(by_basin.get(code, []), start=1):
+        for index, (row_id, area) in enumerate(invests, start=1):
             rows.append(_invest_row(row_id, area, code, index))
+    if empty:
+        if not store.storms_loaded:
+            line = "no connection" if unreachable else "loading..."
+        elif len(empty) == len(basins):
+            line = QUIET_TEXT
+        else:
+            line = f"{_names(empty)}: none"
+        rows.append(Row("quiet", "quiet", Text(f" {line}", style=DIM, no_wrap=True), empty[0]))
     return rows
 
 
@@ -379,27 +394,16 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
     return out
 
 
-def surge_panel(store: Store, selected: str | None, g: UiGlyphs) -> Text:
-    """Surge watches and warnings in effect, and the peak surge text from the public advisory."""
+def surge_panel(store: Store, selected: str | None) -> Text:
+    """The peak surge text from the public advisory; the surge watches and warnings are in the warnings panel."""
     out = Text()
     state = store.storms.get(selected or "")
     public = state.advisories.public if state else None
     if public is None:
-        out.append("Select a storm for its surge outlook.", style=DIM)
         return out
-    surge = [
-        a for a in public.watches_warnings.in_effect if a.kind in (WatchWarning.SURGE_WATCH, WatchWarning.SURGE_WARNING)
-    ]
-    for area in surge:
-        color = WATCH_WARNING_COLORS[area.kind] if area.kind else NEUTRAL
-        out.append(f"{g.chip} ", style=color)
-        out.append(f"{collapse(area.label)}\n", style=f"bold {color}")
-        out.append("   " + ", ".join(collapse(a) for a in area.areas) + "\n")
-    if not surge:
-        out.append("No storm surge watch or warning in effect.\n", style=DIM)
     for title, body in public.hazards:
         if "SURGE" in title.upper():
-            out.append(f"\n{collapse(title).title()}\n", style="bold #8fd3ff")
+            out.append(f"{collapse(title).title()}\n", style="bold #8fd3ff")
             out.append(collapse(body)[:600])
             break
     return out
@@ -487,20 +491,22 @@ def status_bar(
     width: int,
     g: UiGlyphs,
 ) -> Text:
-    """Per-feed freshness, the next poll, offline marker, the alert count and the replay transport on one line."""
-    full = width >= 130
-    show_age = width >= 100
+    """One freshness indicator (a feed is named only when stale or failing), the next poll, the offline marker, the
+    alert count and the replay transport on one line."""
     out = Text(no_wrap=True, overflow="ellipsis")
-    for item in feeds:
-        name = FEED_LABELS[item.feed][0 if full else 1]
-        if not item.active:
-            out.append(f" {name} {g.idle}", style=DIM)
-            continue
-        color = FRESHNESS_COLORS[item.freshness.state]
-        out.append(f" {name} ", style=DIM)
-        out.append(feed_glyph(item.freshness, g), style=color)
-        if show_age and item.freshness.age is not None:
-            out.append(format_age(item.freshness.age), style=color)
+    active = [f for f in feeds if f.active]
+    trouble = [f for f in active if f.freshness.state in (FreshnessState.STALE, FreshnessState.ERROR)]
+    if trouble:
+        for item in trouble:
+            color = FRESHNESS_COLORS[item.freshness.state]
+            out.append(f" {feed_glyph(item.freshness, g)} ", style=color)
+            out.append(FEED_LABELS[item.feed][0 if width >= 100 else 1], style=color)
+            if item.freshness.age is not None:
+                out.append(f" {format_age(item.freshness.age)}", style=color)
+    elif any(f.freshness.state is FreshnessState.LOADING for f in active):
+        out.append(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])
+    elif active:
+        out.append(f" {g.fresh} sources ok", style=FRESHNESS_COLORS[FreshnessState.FRESH])
     if any(f.freshness.from_cache and f.active for f in feeds):
         out.append("  OFFLINE: cached data", style="bold #ffe94a")
     if next_poll is not None and width >= 90:

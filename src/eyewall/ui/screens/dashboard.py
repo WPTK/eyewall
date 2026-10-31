@@ -16,6 +16,8 @@ from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import OptionList, TabbedContent, TabPane
 
+from eyewall.poll import FreshnessState
+from eyewall.sources import protocol
 from eyewall.ui import adapt
 from eyewall.ui import format as fmt
 from eyewall.ui.widgets.map_view import MapPane, MapView
@@ -99,7 +101,8 @@ class DashboardScreen(Screen[None]):
     def refresh_data(self) -> None:
         """Rebuild the list and everything that follows the selection."""
         eye = self.eye
-        rows = fmt.build_rows(eye.store, eye.basin_view, eye.now(), eye.preset, eye.glyphs)
+        unreachable = eye.poller.freshness(protocol.STORMS).state is FreshnessState.ERROR
+        rows = fmt.build_rows(eye.store, eye.basin_view, eye.now(), eye.preset, eye.glyphs, unreachable=unreachable)
         eye.selected = self.query_one("#storms", StormList).set_rows(rows, eye.selected)
         self.refresh_selection()
 
@@ -111,7 +114,7 @@ class DashboardScreen(Screen[None]):
             "headline": fmt.headline_panel(store, selected, eye.basin_view),
             "ww": fmt.ww_panel(store, selected, eye.glyphs),
             "wind": fmt.wind_panel(store, selected, eye.preset),
-            "surge": fmt.surge_panel(store, selected, eye.glyphs),
+            "surge": fmt.surge_panel(store, selected),
             "buoys": fmt.buoy_strip(store, selected, now, eye.preset, eye.glyphs),
         }
         for panel in self.query(Panel):

@@ -14,3 +14,71 @@ def test_coordinates_carry_hemisphere_letters():
 def test_basin_points_fit_one_basin_or_all():
     assert len(basin_points(("AL",))) == 2
     assert len(basin_points(())) == len(basin_points(("AL", "EP", "CP")))
+
+
+def test_status_bar_names_a_source_only_when_it_is_stale_or_failing():
+    from eyewall.poll import Freshness, FreshnessState
+    from eyewall.sources import protocol
+    from eyewall.ui.format import FeedStatus, status_bar
+    from eyewall.ui.glyphs import UNICODE
+
+    def bar(*states: tuple[str, FreshnessState]) -> str:
+        feeds = [FeedStatus(feed, Freshness(state, age=125.0)) for feed, state in states]
+        return status_bar(feeds, next_poll=None, alert_count=0, replay=None, away=False, width=140, g=UNICODE).plain
+
+    fresh = FreshnessState.FRESH
+    assert bar((protocol.STORMS, fresh), (protocol.BUOYS, fresh)).strip() == "● sources ok"
+    stale = bar(
+        (protocol.STORMS, fresh), (protocol.BUOYS, FreshnessState.STALE), (protocol.TIDES, FreshnessState.ERROR)
+    )
+    assert "buoys 2m05s" in stale and "tides 2m05s" in stale and "storms" not in stale and "sources ok" not in stale
+    assert "◐" in stale and "✕" in stale
+
+
+def test_storm_list_shows_a_header_only_for_a_basin_with_storms():
+    from datetime import UTC, datetime
+
+    from eyewall.state.store import Store
+    from eyewall.ui.format import build_rows
+    from eyewall.ui.glyphs import UNICODE
+    from eyewall.units import PRESETS
+
+    store = Store()
+    store.storms_loaded = True
+    rows = build_rows(store, ("AL", "EP", "CP"), datetime(2026, 1, 1, tzinfo=UTC), PRESETS["nautical"], UNICODE)
+    assert [r.kind for r in rows] == ["quiet"]
+    assert rows[0].text.plain.strip() == "No tropical cyclones"
+
+
+def test_status_bar_with_no_active_feeds_says_nothing_green():
+    from eyewall.poll import Freshness, FreshnessState
+    from eyewall.sources import protocol
+    from eyewall.ui.format import FeedStatus, status_bar
+    from eyewall.ui.glyphs import UNICODE
+
+    feeds = [FeedStatus(protocol.ALERTS, Freshness(FreshnessState.FRESH), active=False)]
+    bar = status_bar(feeds, next_poll=None, alert_count=0, replay=None, away=False, width=140, g=UNICODE)
+    assert "sources ok" not in bar.plain
+
+
+def test_no_connection_needs_storms_never_loaded_and_the_storms_feed_failing():
+    from datetime import UTC, datetime
+
+    from eyewall.state.store import Store
+    from eyewall.ui.format import build_rows
+    from eyewall.ui.glyphs import UNICODE
+    from eyewall.units import PRESETS
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+
+    def line(*, loaded: bool, unreachable: bool) -> str:
+        store = Store()
+        store.storms_loaded = loaded
+        rows = build_rows(store, ("AL",), now, PRESETS["nautical"], UNICODE, unreachable=unreachable)
+        return rows[0].text.plain.strip()
+
+    assert line(loaded=False, unreachable=True) == "no connection"
+    assert line(loaded=False, unreachable=False) == "loading..."
+    assert (
+        line(loaded=True, unreachable=True) == "No tropical cyclones"
+    )  # storms answered once; the outage is elsewhere
