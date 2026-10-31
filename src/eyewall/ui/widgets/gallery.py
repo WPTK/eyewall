@@ -42,6 +42,7 @@ from eyewall.render.images import (
 )
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
 from eyewall.ui.theme import DIM
+from eyewall.ui.widgets.strips import blank, centered
 from eyewall.urls import is_noaa_url
 
 if TYPE_CHECKING:
@@ -90,10 +91,8 @@ class ImageView(Widget):
         top = max(0, (self.size.height - len(self._lines)) // 2)
         index = y - top
         if not 0 <= index < len(self._lines):
-            return Strip.blank(width)
-        line = self._lines[index]
-        pad = max(0, (width - line.cell_length) // 2)
-        return Strip([Segment(" " * pad), *line]).adjust_cell_length(width)
+            return blank(width)
+        return centered(self._lines[index], width)
 
 
 class GalleryPanel(Vertical):

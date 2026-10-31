@@ -9,8 +9,9 @@ from textual.widgets import TabbedContent
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.ui import format as fmt
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
+from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import TABS
-from tests.ui_support import into_the_storm, replay_app, running, screen_text
+from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, settle
 
 SIZES = [(80, 24), (140, 45)]
 
@@ -244,7 +245,6 @@ async def test_help_survives_a_crowded_status_at_every_width(width: int) -> None
         app.poller.freshness = lambda feed: Freshness(FreshnessState.STALE, age=7500.0)  # type: ignore[method-assign]
         app.poller.active = lambda feed: True  # type: ignore[method-assign]
         app.alert_log = [object()] * 12  # type: ignore[list-item]
-        app.screen.refresh_status()  # type: ignore[attr-defined]
         await pilot.pause()
         one_row(app, width)
 
@@ -268,3 +268,19 @@ async def test_the_forecast_table_fits_without_scrolling_sideways(size: tuple[in
         await show_tab(pilot, "forecast")
         table = app.screen.query_one("#forecast-table", DataTable)
         assert table.row_count > 5 and table.virtual_size.width <= table.size.width
+
+
+@pytest.mark.parametrize("screen_key", ["g", "enter", "b"])
+async def test_every_screen_rebuilds_its_footer_after_the_too_small_screen(screen_key: str) -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, screen_key)
+        assert not isinstance(app.screen, DashboardScreen)
+        await pilot.resize_terminal(59, 24)
+        await settle(pilot)
+        await pilot.resize_terminal(60, 16)
+        await settle(pilot)
+        await pilot.resize_terminal(120, 30)
+        await settle(pilot)
+        assert one_row(app, 120).endswith("? help")
