@@ -38,7 +38,7 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
 | NDBC historical | a past year: `data/historical/stdmet/{id}h{yyyy}.txt.gz` (lowercase id, oldest row first, no PTDY, `99.0`/`999`/`9999.0` fills); a finished month of the current year: `data/stdmet/{Mon}/{id}{M}{yyyy}.txt.gz` (seen: `Jul/4101072026.txt.gz`, `Aug/4101082026.txt.gz`); the latest finished month: plain `data/stdmet/{Mon}/{id}.txt` (`Sep/41010.txt`) | replay bundles only | dev script |
 | CO-OPS stations | `https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels` (302; `?type=met` 314); longitude field is `lng` | tide gauge catalog | 24 h, cached |
 | CO-OPS data | `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product={water_level\|predictions\|air_pressure\|wind}&station=…&datum=MLLW&units=english&time_zone=gmt&format=json&application=eyewall` with `date=latest\|recent` or `begin_date`/`range` | observed vs predicted water level (surge residual), wind, pressure near the storm | 6 min |
-| Basemap | Natural Earth GeoJSON (nvkelso mirror): 50 m coastline 1.6 MB, 50 m admin-1 state lines 0.9 MB, admin-0 boundaries 0.7 MB, 110 m coastline 137 KB, 110 m land for dim fill | vendored, pre-simplified, no runtime download | dev script |
+| Basemap | Natural Earth GeoJSON (nvkelso mirror): 50 m coastline 1.6 MB, 50 m admin-1 state lines 0.9 MB, admin-0 boundaries 0.7 MB, 110 m coastline 137 KB, 50 m and 110 m land (1.6 MB and 138 KB) for the dim fill | vendored, pre-simplified, no runtime download | dev script |
 
 ## Facts that shape the code (observed, not assumed)
 
