@@ -33,9 +33,9 @@ NARROW_BELOW = 110
 
 class BuoyDetailScreen(Screen[None]):
     BINDINGS = [
-        Binding("escape,backspace", "back", "Back"),
         Binding("h", "range", "24/48/72 h"),
-        Binding("p", "pin", "Pin"),
+        Binding("p", "pin", "pin"),
+        Binding("escape,backspace", "back", "back"),
         Binding("i", "toggle_info", "Info", show=False),
     ]
 
@@ -102,7 +102,7 @@ class BuoyDetailScreen(Screen[None]):
     # ---- data -------------------------------------------------------------------------------------------------
 
     def refresh_status(self) -> None:
-        self.query_one("#buoy-status", Static).update(self.eye.status_text(self.size.width))
+        self.query_one("#buoy-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
         eye = self.eye

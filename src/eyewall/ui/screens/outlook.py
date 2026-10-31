@@ -110,7 +110,7 @@ def watchlist_rows(eye: EyewallApp) -> list[tuple[str, tuple[Text, ...]]]:
 
 class OutlookScreen(Screen[None]):
     BINDINGS = [
-        Binding("escape,O", "back", "Back"),
+        Binding("escape,O", "back", "back"),
         Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
         Binding("minus", "zoom_out", "Zoom out", show=False),
         Binding("f", "fit", "Fit", show=False),
@@ -138,7 +138,7 @@ class OutlookScreen(Screen[None]):
         self.refresh_status()
 
     def refresh_status(self) -> None:
-        self.query_one("#outlook-status", Static).update(self.eye.status_text(self.size.width))
+        self.query_one("#outlook-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
         eye = self.eye

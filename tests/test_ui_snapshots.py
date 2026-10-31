@@ -22,7 +22,7 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
             await into_the_storm(pilot)
             pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
         # Feed ages and the poll countdown follow the wall clock; pin the bar so the picture is repeatable.
-        pilot.app.status_text = lambda width: Text(" status bar pinned for the snapshot")  # type: ignore[attr-defined, method-assign]
+        pilot.app.status_text = lambda width, screen: Text(" status bar pinned for the snapshot")  # type: ignore[attr-defined, method-assign]
         pilot.app._for_screens("refresh_status")  # type: ignore[attr-defined]
         for key in keys:
             await pilot.press(key)

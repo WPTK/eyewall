@@ -526,5 +526,48 @@ def status_bar(
     return out
 
 
+KEY_NAMES = {
+    "escape": "esc",
+    "question_mark": "?",
+    "plus": "+",
+    "minus": "-",
+    "slash": "/",
+    "left_square_bracket": "[",
+    "right_square_bracket": "]",
+    "delete": "del",
+}
+
+
+def key_name(key: str) -> str:
+    """How a binding's key reads in the footer: the first of a comma list, spelled short."""
+    first = key.split(",")[0]
+    return KEY_NAMES.get(first, first)
+
+
+def footer_row(status: Text, keys: list[tuple[str, str]], width: int) -> Text:
+    """The bottom line: the status on the left, the keys valid where the focus is and `? help` on the right, in one row.
+
+    The status gives way first (as it always has), then the keys: a key is listed only whole and only when it fits, so
+    `? help` is never pushed off. Bold marks the keys and dim the labels, so nothing rests on colour."""
+
+    def pair(key: str, label: str) -> Text:
+        return Text.assemble((key, "bold"), " ", (label, "dim"))
+
+    help_ = pair("?", "help")
+    status = status.copy()
+    status.truncate(width - help_.cell_len - 2, overflow="ellipsis")
+    right = Text()
+    for key, label in keys:
+        item = pair(key, label)
+        item.append("  ")
+        if status.cell_len + right.cell_len + item.cell_len + help_.cell_len + 2 > width:
+            break
+        right.append_text(item)
+    right.append_text(help_)
+    status.append(" " * (width - status.cell_len - right.cell_len))
+    status.append_text(right)
+    return status
+
+
 def event_title(event: Event) -> str:
     return EVENT_TITLES.get(event.kind, event.kind.value)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
@@ -11,6 +12,8 @@ from eyewall.ui.format import Row
 
 class StormList(OptionList):
     """Cyclones, PTCs and invests per basin. Highlighting a row selects it; Enter on a storm opens its detail."""
+
+    BINDINGS = [Binding("enter", "select", "detail")]  # the screen opens the detail on the selection
 
     class Picked(Message):
         """The highlighted row changed to a storm, PTC or invest."""

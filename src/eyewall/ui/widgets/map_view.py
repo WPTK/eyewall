@@ -48,9 +48,12 @@ LAYER_NAMES: dict[str, str] = {
 
 
 class MapView(Widget, can_focus=True):
-    """A terminal map. Arrow keys pan while it has focus; `+`, `-`, `c` and `f` are bound by the screen."""
+    """A terminal map. Arrow keys pan while it has focus; the zoom and fit keys are also bound by the screen."""
 
     BINDINGS = [
+        Binding("plus,equals_sign", "zoom_in", "zoom", key_display="+/-"),
+        Binding("minus", "zoom_out", "zoom out", show=False),
+        Binding("f", "screen.fit", "fit"),
         Binding("left", "pan(-1, 0)", "Pan left", show=False),
         Binding("right", "pan(1, 0)", "Pan right", show=False),
         Binding("up", "pan(0, -1)", "Pan up", show=False),
