@@ -16,6 +16,8 @@ Screen {
     scrollbar-color-hover: $primary 75%;
     scrollbar-color-active: $accent;
     scrollbar-corner-color: $surface;
+    scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
 }
 
 TooSmallScreen {
@@ -98,16 +100,24 @@ MapView {
     height: auto;
 }
 
+/* The stack fits the screen: the warnings, wind, surge and buoy panels size to their text up to a cap, and the
+   headline takes whatever is left. Each panel scrolls inside itself when its text is longer. */
+#side-stack .headline {
+    height: 1fr;
+    min-height: 6;
+    max-height: 100%;
+}
+
+#side-stack .ww {
+    max-height: 9;
+}
+
 #side-stack .wind {
     max-height: 15;
 }
 
-#side-stack .headline {
-    max-height: 20;
-}
-
 #side-stack .surge {
-    max-height: 8;
+    max-height: 5;
 }
 
 #side-tabs .panel {
@@ -269,8 +279,20 @@ HelpScreen, LayerMenu {
     background: $panel;
 }
 
+/* Ten tabs fit in 80 columns: one space between labels. */
 StormDetailScreen Tab {
-    padding: 0 1;
+    padding: 0 1 0 0;
+}
+
+/* Unchecked layers stay readable: the box is muted, not the same dark as the dialog. */
+SelectionList > .selection-list--button {
+    color: $text-muted;
+    background: $surface;
+}
+
+SelectionList > .selection-list--button-selected {
+    color: $success;
+    background: $surface;
 }
 
 /* ---- buoy detail ---- */

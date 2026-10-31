@@ -205,9 +205,11 @@ def _invest_row(row_id: str, area: OutlookArea, basin: str, index: int) -> Row:
 
 
 def _names(codes: list[str]) -> str:
+    """The basins in a line of the storm list, short enough for its narrowest width (30 columns with ': none')."""
     if codes == ["EP", "CP"]:
-        return "East and Central Pacific"
-    return ", ".join(BASIN_NAMES[c] for c in codes)
+        return "Pacific"
+    names = ", ".join(BASIN_NAMES[c] for c in codes)
+    return names if len(names) <= 22 else ", ".join(codes)
 
 
 def build_rows(

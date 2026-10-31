@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 TABS: tuple[tuple[str, str], ...] = (
     ("summary", "Summary"),
     ("forecast", "Forecast"),
-    ("public", "Public Advisory"),
+    ("public", "Advisory"),
     ("discussion", "Discussion"),
-    ("probs", "Wind Probs"),
-    ("ww", "Warnings"),
+    ("probs", "Probs"),
+    ("ww", "Warn"),
     ("buoys", "Buoys"),
     ("tides", "Tides"),
     ("graphics", "Graphics"),
