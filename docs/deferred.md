@@ -15,4 +15,5 @@ and move an item into a milestone brief when it is scheduled.
 
 ## Found along the way
 
-(none yet)
+- M2: the October to December names of NDBC's monthly files are unknown until a month closes, so
+  `ndbc.client.monthly_url` refuses them; check the real names and lift the limit.
