@@ -21,12 +21,12 @@ from datetime import datetime, timedelta
 
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event, EventKind, Severity, make_key
-from eyewall.models.obs import ObservationSeries
+from eyewall.models.obs import Observation, ObservationSeries
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import AdvNum, Classification, Storm
 from eyewall.models.watches import WatchWarningArea
 from eyewall.palette import WatchWarning
-from eyewall.state.trends import SILENT_AFTER, is_silent, observation_age
+from eyewall.state.trends import SILENT_AFTER
 from eyewall.units import convert
 
 THRESHOLDS_KT = (34, 50, 64)
@@ -255,8 +255,14 @@ def buoy_events(
     now: datetime,
     *,
     thresholds: Iterable[int] = THRESHOLDS_KT,
+    newest: Observation | None = None,
 ) -> list[Event]:
-    """A nearby buoy's sustained wind crossing 34, 50 or 64 kt lately, and a buoy that has just gone silent."""
+    """A nearby buoy's sustained wind crossing 34, 50 or 64 kt lately, and a buoy that has just gone silent.
+
+    Silence is judged from `newest`, the newest report the store holds for the buoy (the series or latest_obs.txt,
+    whichever is newer), so a series that stopped refreshing does not make a reporting buoy silent. Without it the
+    series' own newest row is used.
+    """
     events: list[Event] = []
     peak_kt = 0.0
     when: dict[int, datetime] = {}
@@ -284,9 +290,9 @@ def buoy_events(
                 Severity.WARNING if threshold >= 50 else Severity.NOTICE,
             )
         )
-    age = observation_age(series, now)
-    latest = series.latest
-    if latest is not None and age is not None and is_silent(series, now) and age - SILENT_AFTER <= SILENCE_WINDOW:
+    latest = max((o for o in (series.latest, newest) if o is not None), key=lambda o: o.time, default=None)
+    age = None if latest is None else max(timedelta(0), now - latest.time)
+    if latest is not None and age is not None and age > SILENT_AFTER and age - SILENT_AFTER <= SILENCE_WINDOW:
         kind = EventKind.BUOY_SILENT
         subject = f"{station_id.upper()}:{latest.time:%Y%m%dT%H%MZ}"
         events.append(

@@ -154,3 +154,11 @@ def test_replace_is_not_needed_to_rekey():
     first = ev.buoy_events(storm, "41047", rows, T0)
     later = ev.buoy_events(replace(storm, last_update=T0), "41047", rows, T0 + timedelta(minutes=10))
     assert [e.key for e in first] == [e.key for e in later]
+
+
+def test_silence_is_judged_from_the_newest_report_the_store_holds():
+    storm = make_storm("5")
+    stalled = series("41001", obs(T0 - timedelta(hours=3), 10))
+    assert kinds(ev.buoy_events(storm, "41001", stalled, T0)) == [EventKind.BUOY_SILENT]
+    fresh = obs(T0 - timedelta(minutes=20), 10)  # latest_obs.txt still lists the buoy
+    assert ev.buoy_events(storm, "41001", stalled, T0, newest=fresh) == []

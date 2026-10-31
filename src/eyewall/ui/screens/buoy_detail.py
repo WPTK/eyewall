@@ -2,7 +2,8 @@
 observation and the interval extremes.
 
 The series comes from the poller (the 5 day file, which already covers 72 hours); the `.supl` file with the true
-lowest pressure and peak wind inside each interval is fetched once, on demand, when the screen opens.
+lowest pressure and peak wind inside each interval is fetched when the screen opens and again once the app's copy
+of it has expired, so the peak wind keeps up while the screen stays open.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ class BuoyDetailScreen(Screen[None]):
         self.supl: Parsed[SupplementalReading] | None = None
         self.supl_note: str | None = "Loading the supplemental file..."
         self._show_info = False
+        self._supl_loading = False
 
     @property
     def eye(self) -> EyewallApp:
@@ -72,9 +74,9 @@ class BuoyDetailScreen(Screen[None]):
         eye.poller.extra_buoys.add(self.station_id)
         if self.station_id not in eye.store.series:
             self.run_worker(eye.fetch_series(self.station_id), name="buoy-series", exit_on_error=False)
-        self.run_worker(self._load_supplemental(), name="buoy-supl", exit_on_error=False)
+        self._ask_supplemental()
         self._apply_layout(self.size.width)
-        self.refresh_data()
+        self._draw()
         self.refresh_status()
 
     def on_unmount(self) -> None:
@@ -88,15 +90,29 @@ class BuoyDetailScreen(Screen[None]):
         self.set_class(narrow, "narrow")
         self.set_class(narrow and self._show_info, "show-info")
 
+    def _ask_supplemental(self) -> None:
+        """Ask the app for the supplemental file unless a request is already running. The app decides whether it still
+        holds a fresh answer; the extremes fall back to the regular rows when there is none."""
+        if self._supl_loading:
+            return
+        self._supl_loading = True
+        self.run_worker(self._load_supplemental(), name="buoy-supl", group="buoy-supl", exit_on_error=False)
+
     async def _load_supplemental(self) -> None:
-        """One request, never retried: the extremes fall back to the regular rows when it fails."""
         try:
             self.supl = await self.eye.supplemental(self.station_id)
             self.supl_note = self.supl.message if not self.supl.items else None
         except (FetchError, ParseError) as exc:
-            self.supl = Parsed()
-            self.supl_note = f"No supplemental file ({type(exc).__name__}); extremes use the regular rows."
-        self.refresh_data()
+            if self.supl is not None and self.supl.items:
+                self.supl_note = (
+                    f"Refreshing the supplemental file failed ({type(exc).__name__}); the earlier one is kept."
+                )
+            else:
+                self.supl_note = f"No supplemental file ({type(exc).__name__}); extremes use the regular rows."
+                self.supl = Parsed()
+        finally:
+            self._supl_loading = False
+        self._draw()
 
     # ---- data -------------------------------------------------------------------------------------------------
 
@@ -104,6 +120,11 @@ class BuoyDetailScreen(Screen[None]):
         self.query_one("#buoy-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
+        """Called after every poll result."""
+        self._ask_supplemental()
+        self._draw()
+
+    def _draw(self) -> None:
         eye = self.eye
         store, now, preset, tz, g = eye.store, eye.now(), eye.preset, eye.local_tz, eye.glyphs
         station = store.stations.get(self.station_id)
@@ -163,7 +184,7 @@ class BuoyDetailScreen(Screen[None]):
 
     def action_range(self) -> None:
         self.range_index = (self.range_index + 1) % len(st.RANGES_H)
-        self.refresh_data()
+        self._draw()
 
     def action_toggle_info(self) -> None:
         self._show_info = not self._show_info

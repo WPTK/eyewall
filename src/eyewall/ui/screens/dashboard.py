@@ -167,7 +167,7 @@ class DashboardScreen(Screen[None]):
         store, selected, now = eye.store, eye.selected, eye.now()
         texts: dict[str, Text] = {
             "headline": fmt.headline_panel(store, selected, eye.basin_view),
-            "ww": fmt.ww_panel(store, selected, eye.glyphs),
+            "ww": fmt.ww_panel(store, selected, eye.glyphs, now),
             "wind": fmt.wind_panel(store, selected, eye.preset),
             "surge": fmt.surge_panel(store, selected),
             "buoys": fmt.buoy_strip(store, selected, now, eye.preset, eye.glyphs),

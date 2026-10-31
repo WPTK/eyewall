@@ -138,7 +138,7 @@ class StormDetailScreen(Screen[None]):
         self._set_text("public", text)
         self._set_text("discussion", products.discussion(state, g))
         self._set_table("probs", products.wind_probabilities(state), products.probabilities_note(state))
-        self._set_text("ww", products.watches_warnings(eye.store, state, g))
+        self._set_text("ww", products.watches_warnings(eye.store, state, g, now))
         self._set_table("history", products.history_table(state, preset), "Best track, newest first.")
         self._refresh_stations()
         self.query_one("#graphics-gallery", GalleryPanel).refresh_data()
@@ -146,7 +146,7 @@ class StormDetailScreen(Screen[None]):
     def _refresh_stations(self) -> None:
         eye = self.eye
         store, now, preset = eye.store, eye.now(), eye.preset
-        buoys = st.from_nearby(store.nearby_buoys(self.storm_id))
+        buoys = st.from_nearby(store.nearby_buoys(self.storm_id, now))
         self.query_one("#buoys-table", StationTable).set_rows(
             st.BUOY_COLUMNS, st.buoy_rows(store, buoys, now, preset, eye.glyphs)
         )
@@ -158,7 +158,7 @@ class StormDetailScreen(Screen[None]):
                 style=DIM,
             )
         )
-        gauges = st.from_nearby(store.nearby_tides(self.storm_id))
+        gauges = st.from_nearby(store.nearby_tides(self.storm_id, now))
         self.query_one("#tides-table", StationTable).set_rows(st.TIDE_COLUMNS, st.tide_rows(store, gauges, now, preset))
         self.query_one("#tides-note", Static).update(
             Text(
