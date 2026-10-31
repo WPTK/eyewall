@@ -15,4 +15,8 @@ and move an item into a milestone brief when it is scheduled.
 
 ## Found along the way
 
-(none yet)
+- M3: Natural Earth 50 m has state lines only for nine countries, none for Mexico or the Caribbean; the 10 m admin-1
+  lines would add them at some cost in size.
+- M3: lakes are filled as land and have no shoreline (the Great Lakes, Lake Okeechobee); the Natural Earth
+  lakes layer would hollow them out.
+- M3: `Mode.HALF` (half-block glyphs) has no config value yet; `glyph_set` only offers unicode and ascii.

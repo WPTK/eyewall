@@ -53,4 +53,56 @@ The commands in `CLAUDE.md`. Also print one golden to the terminal and look at i
 
 ## State after
 
-(to be filled in by the session)
+M3 is done. Its pull request carries the 0.3.0 version and changelog entry; nothing is tagged. 217 tests in `tests/test_render_*.py` cover it, with
+golden text renderings in `tests/golden/`.
+
+**What exists**
+
+- `render/projection.py`: `Viewport` (center, degrees per dot, size in cells, dots per cell) with `to_dot`, `to_geo`,
+  `dot_at`, `project_path`, `pan_dots`/`pan_cells`/`pan_degrees`, `zoom` (optionally about an anchor dot), `resized`,
+  `centered_on`, `fit` and `fit_points`; `Bounds` and `bounds_of` take the shortest arc, so a view of 170 E to 170 W
+  has a center of 180. Longitudes are always offsets from the view center, which is what makes the antimeridian work.
+- `render/canvas.py`: `Canvas` in three modes (`BRAILLE` 2 by 4 dots per cell, `HALF` and `ASCII` 1 by 2). Lines with a
+  dash pattern and a width of 2, polylines, arcs and circles, even-odd scanline fill with eight fixed shade patterns,
+  a clip stack, text, markers, and a color per cell from the highest `Priority`. `rows_as_runs()` returns rows of
+  `(text, Style(fg, bg, bold))`; `lines()` and `to_text()` return plain text.
+- `render/basemap.py`, `mapdata/loader.py` and five `.bin` files (165 KB in all, `scripts/build_mapdata.py` builds them
+  and `--check` proves they are current). 50 m data below 0.3 degrees per dot, 110 m above; state lines only at 50 m.
+- `render/layers.py`: the inputs (`StormScene`, `TrackPoint`, `ForecastPoint`, `WarningSegment`, `WindRadii`,
+  `OutlookArea`, `StationMark`, `MapScene`), `MapOptions`, `MapStyle`, `render_map()`, `draw_scene()` and
+  `scene_bounds()`. Nothing in `render/` or `mapdata/` imports Textual or `models/`; a test enforces it.
+- `render/chart.py`: `render_chart()` with `ChartSeries`, `Tick`, `ChartStyle`, nice ticks, a legend row, an optional grid
+  and gaps for missing values.
+
+**Deviations from the brief**
+
+- `mapdata/land50.bin` (50 m land polygons, 62 KB) is vendored next to the 110 m land the brief lists. With only 110 m
+  fill, the land stopped several dots short of or past the 50 m coastline at storm zoom levels. The total is still 165 KB.
+- `tests/render_support.py` (the golden helper and the hand-built Erin-like storm) and `tests/golden/` sit outside the
+  `tests/test_render_*.py` pattern the brief names; they exist only for these tests.
+- `docs/plan.md`, `docs/data-sources.md` and `docs/deferred.md` got small edits (land50, pinned source, the renderer
+  interface, three parked ideas).
+- `MapOptions` has more switches than the `[map]` config section (outlook, warnings, track, buoys, tide gauges,
+  labels, station labels), so the layer menu can toggle them. Only `land`, `borders`, `cone` and `radii` come from config.
+
+**What the next sessions must know**
+
+- M5 builds one `Viewport(lat, lon, deg_per_dot, cols, rows, mode.dots_x, mode.dots_y)` per widget size, calls
+  `render_map(viewport, scene, mode, options)` and turns `canvas.rows_as_runs()` into `Strip`s
+  (`Segment(text, Style(color=fg, bgcolor=bg, bold=bold))`). `[map] glyph_set = "ascii"` means `Mode.ASCII`. Mouse or
+  cursor positions go back through `viewport.to_geo(x, y)`. Zoom keys are `viewport.zoom(2.0)` and `zoom(0.5)`, arrows are
+  `pan_cells`, `c` is `centered_on` and `f` is `Viewport.fit_points(storm.extent(), ...)`.
+- Wind radii are nautical miles in the order NE, SE, SW, NW, as the TCM lists them. Cone, outlook and warning geometry is
+  `(lat, lon)`; shapefile readers return `(lon, lat)`, so swap them in the adapter.
+- `basemap_canvas()` keeps the last eight rasters and always returns a copy, so drawing on the result is safe.
+- Goldens: `EYEWALL_UPDATE_GOLDEN=1 python -m pytest tests/test_render_*.py` rewrites them; read the diff before committing.
+  Everything that feeds a golden is built to give the same dots on Windows, Linux and macOS: the longitude scale is rounded
+  to nine decimals, wind radii outlines to five, arcs to nine, and test data avoids trigonometry. If a golden ever fails on
+  one operating system only, look for a coordinate sitting exactly on a dot boundary.
+- The dot grid assumes a terminal cell about twice as tall as wide, so one degree per dot is the same in both directions.
+- M8's PyInstaller spec must bundle `eyewall/mapdata/*.bin` as data files; `loader.py` reads them with
+  `importlib.resources`.
+- Lakes are filled as land and Mexican state lines are missing (see `docs/deferred.md`).
+- The 0.3.0 changelog entry, `__version__` and the `deferred.md` list will conflict with the M1 and M2 pull requests;
+  keep the releases newest first when merging.
+

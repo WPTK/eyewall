@@ -47,7 +47,7 @@ eyewall/
     sources/    protocol.py live.py replay.py cache.py
     state/      store.py nearby.py trends.py events.py alerts.py
     render/     projection.py canvas.py basemap.py layers.py chart.py images.py text.py
-    mapdata/    coast50.bin coast110.bin land110.bin borders.bin loader.py ATTRIBUTION.md
+    mapdata/    coast50.bin coast110.bin land50.bin land110.bin borders.bin loader.py ATTRIBUTION.md
     ui/         app.tcss theme.py glyphs.py
     ui/screens/ dashboard.py storm_detail.py outlook.py buoy_detail.py graphics.py alert_log.py help.py settings.py
     ui/widgets/ storm_list.py map_view.py headline_panel.py ww_panel.py wind_panel.py surge_panel.py
@@ -110,6 +110,17 @@ red. `ui/widgets/map_view.py` renders rows via Textual's `render_line(y) -> Stri
 (about 100°E eastward across the Pacific to 10°W, 5°S–60°N), simplifies (Douglas–Peucker ≈0.01° for 50 m,
 0.05° for 110 m), packs polylines/polygons as int16 hundredths of a degree into `mapdata/*.bin` (target
 < 600 KB) with `ATTRIBUTION.md` (public domain); `loader.py` reads with `struct`. Checked in.
+The download is pinned to one commit of the mirror and verified by SHA-256, so a rebuild is byte for byte the
+same (`--check` confirms it). Land is filled from 50 m polygons when zoomed in and 110 m ones when zoomed out, so
+the fill meets the coastline at either scale; country boundaries and state lines share `borders.bin`, and state
+lines show only when zoomed in. The whole set is about 165 KB.
+
+**Renderer interface.** `render/layers.py` defines its own render-ready inputs (`StormScene` with track, forecast,
+cone rings, warning segments and wind radii in nautical miles by quadrant; `OutlookArea`; `StationMark`;
+`MapScene`), so the UI adapts models to them and the renderer never imports `models/`. `render_map(viewport, scene,
+mode, options, style)` returns a `Canvas`; `canvas.rows_as_runs()` gives rows of `(text, Style(fg, bg, bold))`
+that `ui/widgets/map_view.py` turns into `Strip`s. The canvas modes are braille (2×4 dots per cell), half-block and
+ASCII (both 1×2); the config's `glyph_set = "ascii"` selects ASCII. `render/chart.py` draws on the same canvas.
 
 **Images.** `render/images.py`: fetch PNG/GIF/JPG → Pillow; `textual-image` picks Kitty/iTerm2/Sixel when
 the terminal supports it (Windows Terminal ≥1.22 has Sixel); otherwise a readable fallback: LANCZOS
