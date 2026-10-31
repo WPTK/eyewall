@@ -1,7 +1,8 @@
 name: Release
 
 # Runs when a v* tag is pushed. The tag, __version__ and the CHANGELOG.md heading must all name the same version.
-# It builds the wheel and source distribution, the five standalone binaries (binaries.yml), hashes everything into
+# It builds the wheel and source distribution, the five standalone binaries (binaries.yml; the Linux and macOS ones as
+# tar.gz archives so they keep the executable bit), hashes everything into
 # SHA256SUMS and publishes one GitHub release carrying all of it.
 on:
   push:
@@ -97,7 +98,7 @@ jobs:
           find . -mindepth 1 -type d | grep . && { echo "unexpected directory in release/"; exit 1; }
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
-          # the wheel, the sdist and the five binaries, and nothing else
+          # the wheel, the sdist, the exe and the four tar.gz archives, and nothing else
           [ "$(wc -l < SHA256SUMS)" -eq 7 ] || { echo "expected 7 files to ship"; exit 1; }
       - name: Publish the release
         env:
