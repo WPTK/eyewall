@@ -27,6 +27,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("arrows", "pan the map once it has focus (click it, or Tab to it); on the list they move the cursor"),
             ("c  f", "center on the storm; fit the cone again"),
             ("b", "the Buoys tab of the selected storm (the watchlist when there is no storm)"),
+            ("g", "the graphics gallery of the selected storm (cone, probabilities, surge, satellite)"),
         ),
     ),
     (
@@ -38,6 +39,16 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Enter", "on the Buoys tab, open the buoy's charts"),
             ("p", "on the Buoys and Tides tabs, pin the station to the watchlist (again to unpin)"),
             ("Esc", "back to the dashboard"),
+        ),
+    ),
+    (
+        "Graphics (the tab and the screen)",
+        (
+            ("Up / Down", "pick an image; it loads when picked, never before"),
+            ("o", "open the image's address in the browser"),
+            ("y", "copy the address (the terminal must allow clipboard access)"),
+            ("[  ]", "on a loop, step one frame back or forward and pause"),
+            ("space", "on a loop, play or pause"),
         ),
     ),
     (

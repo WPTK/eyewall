@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.0] - 2026-10-31
+
+### Changed
+
+- Replace the Graphics tab placeholder with the image gallery ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+
+- Remove the sparkline strip from the buoy detail screen and give its height to the charts ([`e7dab29f6595095c923579890f4aa280b1872a1f`](https://github.com/WPTK/eyewall/commit/e7dab29f6595095c923579890f4aa280b1872a1f), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Show the buoy's wave height once, as `--`, when it reports no waves, and show the whole station name in the title ([`e7dab29f6595095c923579890f4aa280b1872a1f`](https://github.com/WPTK/eyewall/commit/e7dab29f6595095c923579890f4aa280b1872a1f), [#14](https://github.com/WPTK/eyewall/pull/14))
+
+### Added
+
+- Add the graphics gallery and the `g` screen: the cone, wind probabilities at 34, 50 and 64 kt, arrival times, surge watch and warning and peak surge, and the GEOCOLOR, air mass and infrared stills and loops, each shown with its address ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Add inline images through Sixel or the Kitty graphics protocol when the terminal supports them, probed once before the app starts ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Add a fallback that draws images in colored half blocks, braille or ASCII at the terminal's color depth, and trims the legend off NHC cone graphics ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Add satellite loops that decode one frame at a time, play at up to 10 frames per second and step with `[` and `]` ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Add `o` to open an image's address in the browser and `y` to copy it, with a message when no browser or clipboard is available ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+- Add image fetching to the data sources, size-capped and conditional, and the recorded Erin cones to the replay ([`3f6de21e01a6db66b5988ca0fc4cb1e833b1507b`](https://github.com/WPTK/eyewall/commit/3f6de21e01a6db66b5988ca0fc4cb1e833b1507b), [#14](https://github.com/WPTK/eyewall/pull/14))
+
+[0.7.0]: https://github.com/WPTK/eyewall/releases/tag/v0.7.0
+
 ## [0.6.0] - 2026-10-31
 
 ### Changed

@@ -11,6 +11,7 @@ import asyncio
 import logging
 import shutil
 import time
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
@@ -25,11 +26,13 @@ from textual.screen import ModalScreen, Screen
 
 from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
 from eyewall.models.events import Event, Severity
+from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
 from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
 from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
+from eyewall.render.images import Depth, InlineBackend, load_inline
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource
@@ -42,6 +45,7 @@ from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
@@ -61,6 +65,8 @@ REPLAY_ACTIONS = frozenset({"play_pause", "speed", "step"})
 
 
 SUPL_TTL = 600.0  # seconds a buoy's supplemental file is reused
+FLOATER_TTL = 600.0  # seconds a NESDIS product listing is reused (its stills arrive every 10 to 15 minutes)
+IMAGE_MEMORY = 48 * 1024 * 1024  # bytes of downloaded images kept in memory
 
 
 class EyewallApp(App[None]):
@@ -71,6 +77,7 @@ class EyewallApp(App[None]):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("question_mark", "help", "Help"),
+        Binding("g", "graphics", "Graphics"),
         Binding("O", "outlook", "Outlook"),
         Binding("A", "alerts", "Alerts"),
         Binding("r", "refresh", "Refresh", show=False),
@@ -97,16 +104,21 @@ class EyewallApp(App[None]):
         config_path: Path | None = None,
         file_config: Config | None = None,
         config_file_broken: bool = False,
+        inline: InlineBackend | None = None,
     ) -> None:
         """`config_path` is where settings and the watchlist are saved; None keeps changes for this run only.
         `file_config` is the config as the file had it, before command-line flags: a flag is never saved unless the
         settings screen changes that value. `config_file_broken` says the file could not be read, so it is copied to
-        a `.bak` before the first save replaces it."""
+        a `.bak` before the first save replaces it. `inline` is the terminal graphics backend
+        `render.images.load_inline` found before the app started, or None for the cell-drawn fallback."""
         super().__init__()
         self.config = config
         self.config_path = config_path
         self._launch_config = config
         self._supl: dict[str, tuple[float, Parsed[SupplementalReading]]] = {}
+        self.inline = inline
+        self._images: OrderedDict[tuple[str, str], bytes] = OrderedDict()
+        self._floaters: dict[tuple[str, str], tuple[float, FloaterProduct | None]] = {}
         self._file_config = file_config
         self._file_broken = config_file_broken
         self.source = source
@@ -305,6 +317,13 @@ class EyewallApp(App[None]):
         if storm_id is not None and not isinstance(self.screen, StormDetailScreen):
             self.push_screen(StormDetailScreen(storm_id, tab))
 
+    def open_graphics(self, storm_id: str | None) -> None:
+        screen = self.screen
+        if storm_id is None or storm_id not in self.store.storms:
+            self.notify("Select a storm first: graphics are per storm.", timeout=4)
+        elif not isinstance(screen, ModalScreen | GraphicsScreen):
+            self.push_screen(GraphicsScreen(storm_id))
+
     def open_buoy(self, station_id: str) -> None:
         screen = self.screen
         if isinstance(screen, ModalScreen) or (
@@ -323,6 +342,11 @@ class EyewallApp(App[None]):
                         view.set_options(options)
 
         self.push_screen(LayerMenu(self.map_options), apply)
+
+    def action_graphics(self) -> None:
+        screen = self.screen
+        storm_id = getattr(screen, "storm_id", None) if isinstance(screen, StormDetailScreen) else self.selected
+        self.open_graphics(storm_id)
 
     def action_help(self) -> None:
         if not self._modal_open():
@@ -477,6 +501,48 @@ class EyewallApp(App[None]):
         self._supl[station_id] = (time.monotonic(), result)
         return result
 
+    @property
+    def color_depth(self) -> Depth:
+        """How many colors the terminal shows, for the picture fallback."""
+        return Depth.from_rich(self.console.color_system)
+
+    async def load_image(self, url: str, version: str = "") -> bytes:
+        """The bytes of a graphic, kept in memory (newest 48 MB) under the address and the version that was current.
+
+        `version` is the advisory number or the satellite time: a new one fetches again (the disk cache sends the
+        validators, so an unchanged file costs a 304), the same one never touches the network.
+        """
+        key = (url, version)
+        if key in self._images:
+            self._images.move_to_end(key)
+            return self._images[key]
+        data = await self.source.image(url)
+        self._images = OrderedDict((k, v) for k, v in self._images.items() if k[0] != url)
+        self._images[key] = data
+        while len(self._images) > 1 and sum(len(v) for v in self._images.values()) > IMAGE_MEMORY:
+            self._images.popitem(last=False)
+        return data
+
+    def floaters_for(self, storm_id: str) -> dict[str, FloaterProduct | None]:
+        """The satellite products the gallery has already asked NESDIS for, by product code."""
+        return {code: found for (sid, code), (_, found) in self._floaters.items() if sid == storm_id}
+
+    async def floater(self, storm_id: str, code: str) -> bool:
+        """List one NESDIS product for a storm (remembered for 10 minutes). True when the answer changed the gallery."""
+        key = (storm_id, code)
+        kept = self._floaters.get(key)
+        if kept is not None and time.monotonic() - kept[0] < FLOATER_TTL:
+            return False
+        state = self.store.storms.get(storm_id)
+        if state is None:
+            return False
+        try:
+            found = await self.source.satellite_product(state.storm, code)
+        except (FetchError, ParseError):
+            found = kept[1] if kept is not None else None
+        self._floaters[key] = (time.monotonic(), found)
+        return found is not None and (kept is None or kept[1] != found)
+
     async def toggle_watch(self, kind: str, station_id: str) -> None:
         """Pin a station to the watchlist, or unpin it when it is there already."""
         station_id = station_id.upper()
@@ -560,9 +626,11 @@ def run_app(
     file_config: Config | None = None,
     config_file_broken: bool = False,
 ) -> None:
+    inline = None if config.map.glyph_set == "ascii" else load_inline(config.graphics.inline)
     EyewallApp(
         config,
         source,
+        inline=inline,
         state_dir=state_dir,
         closer=closer,
         config_path=config_path,

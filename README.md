@@ -12,12 +12,15 @@ storm (Hurricane Erin, 2025) so every screen can be tried in the off-season.
 
 ## Status
 
-Pre-alpha, version 0.6.0. The data layers (NHC, NDBC, CO-OPS), the terminal map renderer, the live and replay data
+Pre-alpha, version 0.7.0. The data layers (NHC, NDBC, CO-OPS), the terminal map renderer, the live and replay data
 sources, the store, the poller and the storm and observation interfaces are in: `python -m eyewall` opens the dashboard,
 and `python -m eyewall --demo` replays Hurricane Erin in it. Buoys and tide gauges have their own tabs, a charts screen
 per buoy, a watchlist you edit in the app (`w`), a station search (`/`) and a settings screen (`S`) that saves to the
-config file. The image screens come in the next milestone. `python -m eyewall --demo --headless --until +12h` replays Erin without the interface and prints the events.
-Each milestone ships as its own `0.y.0` release.
+config file. NOAA's graphics have a gallery (`g`, or the Graphics tab of a storm): the cone, wind probabilities, arrival
+times, surge, and the GEOCOLOR, air mass and infrared satellite stills and loops. They draw inline in a terminal that
+supports Sixel or the Kitty graphics protocol (Windows Terminal 1.22 or later does) and as colored cells everywhere else;
+`o` opens the address in a browser and `y` copies it. `python -m eyewall --demo --headless --until +12h` replays Erin
+without the interface and prints the events. Each milestone ships as its own `0.y.0` release.
 
 | Milestone | Release | Status |
 |---|---|---|
@@ -27,8 +30,8 @@ Each milestone ships as its own `0.y.0` release.
 | M4 Core: sources, store, poller, replay | 0.4.0 | done |
 | M5 Storm UI | 0.5.0 | done |
 | M6 Observations UI | 0.6.0 | done |
-| M7 Graphics | 0.7.0 | next |
-| M8 Polish and release | 0.8.0 | planned |
+| M7 Graphics | 0.7.0 | done |
+| M8 Polish and release | 0.8.0 | next |
 
 See `docs/plan.md` for the design and `docs/milestones/` for what each release adds. Open work is tracked in the
 [issues](https://github.com/WPTK/eyewall/issues) and [milestones](https://github.com/WPTK/eyewall/milestones).

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from textual.widgets import Input, Select, Sparkline, Static, Switch
+from textual.widgets import Input, Select, Static, Switch
 
 from eyewall.app import EyewallApp
 from eyewall.config import Config, load_config
@@ -88,8 +88,6 @@ async def test_enter_on_a_buoy_row_opens_its_charts_and_escape_returns() -> None
         assert "41002" in text and "Pressure" in text and "Wind and gust" in text and "Wave" in text
         assert "24 h" in text
         assert "41002" in app.poller.extra_buoys
-        spark = app.screen.query_one("#spark-pressure", Sparkline)
-        assert spark.data
         await press(pilot, "escape")
         assert isinstance(app.screen, StormDetailScreen)
         assert "41002" not in app.poller.extra_buoys
