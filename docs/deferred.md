@@ -25,7 +25,6 @@ and move an item into a milestone brief when it is scheduled.
 - M1: `atcf/index/{AL,EP,CP}_storms.txt.nhc` and `master_list.txt` for id and name checks in replay tooling (M4).
 - M1 nits: import wrap_lon from providers.nhc.gis in current.py (move it to geo); no size cap on zip members in gis.py; no id dedupe in parse_current_storms.
 - M4: the `GIS`-based best track (`best_track_gis`, with the observed wind field) is not fetched; the b-deck is the only best track source.
-- M4: `LiveSource.satellite` only asks for GEOCOLOR; the other NESDIS products and the loops wait for the graphics screen (M7).
 - M4: the poller fetches at most 24 buoy series and 12 tide gauges per poll, nearest first; the config has no key for it.
 - M4: the "US threat" test for polling alerts is a pair of latitude and longitude boxes (Atlantic and Gulf coasts, Hawaii) plus any coastal watch or warning in effect; a land-geometry test would be exact.
 - M4: the Erin demo bundle's best track starts at the first recorded advisory (06Z on 19 August), so the first three hours of the replay have no past track; re-record with a longer `--track-hours` if the track history matters.
@@ -53,3 +52,15 @@ and move an item into a milestone brief when it is scheduled.
 - M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.
 - M6: Ctrl+P in the search modal collides with Textual's command palette binding; pick another key for pinning.
 - M6: a watchlisted gauge that is missing from the CO-OPS catalog shows "waiting" forever; say it is unknown.
+- M7: the cone crop margins (`CONE_MARGINS` in `render/images.py`) were measured on the 2025 Erin cone only; check them against the next live cone and the `no_line` variants.
+- M7: the gallery has no key to pick the image size (`500x500`, `2000x2000`) or a satellite band other than 13; the product list is fixed in `ui/gallery.py`.
+- M7: a loop over 24 MB (a long storm's full GEOCOLOR loop) is refused with a message; fall back to the newest ranged loop instead.
+- M7: the download is read whole before the size check (the cache layer already caps a body at 32 MB); stream and abort on the first byte over the limit.
+- M7: the gallery cannot browse the archived per-advisory cones, so an earlier advisory's graphic is out of reach; the replay shows the newest one recorded.
+- M7: Sixel and Kitty drawing, and the size of the picture inside its area, are not verified in a real terminal; see the State after of the M7 brief.
+- M7: the settings screen has no widget for `[graphics] inline`; it stays in the TOML file.
+- M7: surge KML and arrival-time KMZ files are listed as link only; parsing them is still the M1 deferred item.
+- M7: a GIF loop is decoded (frame count, first frame) on the event loop when it opens; move the decode to a thread like the stills.
+- M7: `fetch_bytes` buffers the whole body before the 24 MB size check; check `Content-Length` and stream.
+- M7: the gallery asks NESDIS for the same product listing from several panels; share one in-flight request.
+- M7: the "is inline graphics possible" test is written twice (`run_app` and `GalleryPanel.uses_inline`); keep one predicate.

@@ -43,6 +43,7 @@ from eyewall.providers.nhc.atcf import parse_bdeck
 from eyewall.providers.nhc.gis import parse_forecast_zip, parse_radii_zip
 from eyewall.providers.nhc.tcm import parse_tcm
 from eyewall.providers.nhc.text import parse_pws, parse_tcd, parse_tcp
+from eyewall.render.images import ImageError, check_image_bytes
 from eyewall.sources import bundle
 from eyewall.sources.bundle import BundleError
 
@@ -367,6 +368,20 @@ class ReplaySource:
 
     async def satellite(self, storm: Storm) -> tuple[FloaterProduct, ...]:
         return ()
+
+    async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
+        return None
+
+    async def image(self, url: str) -> bytes:
+        """A still the bundle recorded, named by a `replay:graphics/<file>` link."""
+        relative = url.removeprefix("replay:")
+        path = (self.directory / relative).resolve()
+        if not url.startswith("replay:graphics/") or not path.is_relative_to((self.directory / "graphics").resolve()):
+            raise ImageError(f"{url}: not an image in this recording")
+        try:
+            return check_image_bytes(url, path.read_bytes())
+        except OSError as exc:
+            raise ImageError(f"{url}: {exc.strerror or exc}") from exc
 
     async def outlook(self) -> Outlook:
         return Outlook()

@@ -17,7 +17,17 @@ from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.widgets.map_view import MapView
-from tests.ui_support import ScriptedSource, press, replay_app, running, screen_text, scripted_app, settle, wait_until
+from tests.ui_support import (
+    ScriptedSource,
+    into_the_storm,
+    press,
+    replay_app,
+    running,
+    screen_text,
+    scripted_app,
+    settle,
+    wait_until,
+)
 
 SIZES = [(80, 24), (140, 45)]
 
@@ -140,6 +150,18 @@ async def test_zoom_flips_the_detail_tier_and_fit_returns() -> None:
         assert view.detailed is True
         await press(pilot, "minus", "c", "f")
         assert view.viewport == fitted
+
+
+async def test_a_data_refresh_keeps_the_selected_storm_and_the_map_zoom() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        view = app.screen.query_one(MapView)
+        await press(pilot, "minus", "minus")
+        zoomed, selected = view.viewport, app.selected
+        assert selected is not None
+        await into_the_storm(pilot, 1)
+        assert app.selected == selected
+        assert view.viewport == zoomed
 
 
 async def test_basin_filter_and_units() -> None:

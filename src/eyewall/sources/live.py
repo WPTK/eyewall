@@ -11,6 +11,7 @@ import contextlib
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -37,6 +38,7 @@ from eyewall.ndbc.client import NdbcClient
 from eyewall.net import FetchError, new_client
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.client import NhcClient
+from eyewall.render.images import fetch_image
 from eyewall.sources import protocol
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
 
@@ -46,6 +48,15 @@ MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
 PREDICTION_DAYS_BEHIND = 2  # predictions start at midnight UTC this many days back, so the URL (and its cache entry)
 PREDICTION_HOURS = 120  # changes once a day instead of every poll, and the range reaches into the next day or two
+
+
+def _is_nesdis(url: str) -> bool:
+    """True when the address's parsed host is nesdis.noaa.gov or one of its subdomains."""
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "nesdis.noaa.gov" or host.endswith(".nesdis.noaa.gov")
 
 
 class LiveSource:
@@ -128,6 +139,21 @@ class LiveSource:
             except ParseError:
                 return ()
             return () if product is None else (product,)
+
+    async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
+        """One more NESDIS product for a storm, fetched when the gallery opens; None when NESDIS does not list it."""
+        async with self._feed(protocol.SATELLITE):
+            try:
+                listed = (await self.nhc.fetch_floater_storms()).value or ()
+                if storm.id.upper() not in listed:
+                    return None
+                return (await self.nhc.fetch_floater_product(storm.id, product)).value
+            except ParseError:
+                return None
+
+    async def image(self, url: str) -> bytes:
+        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS):
+            return await fetch_image(self._http, url)
 
     # ---- outlook and alerts -----------------------------------------------------------------------------------
 

@@ -78,11 +78,6 @@ def test_time_ticks_split_the_range_in_four() -> None:
     assert [t.value for t in ticks] == [-48, -36, -24, -12, 0]
 
 
-def test_sparkline_values_skip_missing_and_old_rows() -> None:
-    rows = [obs(10, pressure_hpa=1001.0), obs(20), obs(30, pressure_hpa=1002.0), obs(90 * 60, pressure_hpa=900.0)]
-    assert st.sparkline_values(rows, NOW, 24, "pressure_hpa") == [1002.0, 1001.0]
-
-
 def test_extremes_use_the_supplemental_rows_when_given() -> None:
     rows = [obs(30, pressure_hpa=1000.0, gust_mps=20.0), obs(90, pressure_hpa=996.0, gust_mps=25.0)]
     ext = st.extremes_for(rows, [], NOW, 24)

@@ -158,6 +158,12 @@ class ScriptedSource:
     async def satellite(self, storm: Storm) -> tuple[FloaterProduct, ...]:
         return ()
 
+    async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
+        return None
+
+    async def image(self, url: str) -> bytes:
+        raise FetchError(url, "no images in this fake")
+
     async def ndbc_stations(self) -> tuple[Station, ...]:
         return ()
 
