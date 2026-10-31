@@ -10,10 +10,12 @@ from datetime import datetime
 
 from eyewall.geo import LatLon
 from eyewall.models.forecast import ForecastAdvisory
+from eyewall.models.obs import Station, TideStation
 from eyewall.models.outlook import Outlook
 from eyewall.models.wind import QuadrantRadii
 from eyewall.render import layers as L
 from eyewall.state.store import Store, StormState
+from eyewall.state.tides import observation_age as tide_age
 from eyewall.state.trends import observation_age
 from eyewall.units import convert
 
@@ -131,19 +133,38 @@ def _wind_kt_of(store: Store, station_id: str, now: datetime) -> tuple[float | N
     return convert(obs.wind_speed_mps, "mps", "kt"), stale
 
 
+def _tide_mark(store: Store, gauge: TideStation, now: datetime) -> L.StationMark:
+    """A gauge colored by its own wind where it has an anemometer, dim when its newest water level is old."""
+    series = store.tide_series.get(gauge.id)
+    if series is None:
+        return L.StationMark(gauge.lat, gauge.lon, None, False, gauge.id)
+    age = tide_age(series, now)
+    stale = age is None or age.total_seconds() > STATION_STALE_AFTER_H * 3600
+    wind = next((w.speed_kt for w in series.wind.items if w.speed_kt is not None), None)
+    return L.StationMark(gauge.lat, gauge.lon, wind, stale, gauge.id)
+
+
+def _buoy_mark(store: Store, station: Station, now: datetime) -> L.StationMark:
+    wind, stale = _wind_kt_of(store, station.id, now)
+    return L.StationMark(station.lat, station.lon, wind, stale, station.id)
+
+
 def station_marks(
     store: Store, storm_id: str, now: datetime
 ) -> tuple[tuple[L.StationMark, ...], tuple[L.StationMark, ...]]:
-    """Buoy and tide gauge marks near a storm, nearest first. This is the hook M6 builds on."""
-    buoys = []
-    for entry in store.nearby_buoys(storm_id)[:MAX_MAP_STATIONS]:
-        wind, stale = _wind_kt_of(store, entry.station.id, now)
-        buoys.append(L.StationMark(entry.station.lat, entry.station.lon, wind, stale, entry.station.id))
-    tides = [
-        L.StationMark(entry.station.lat, entry.station.lon, None, False, entry.station.id)
-        for entry in store.nearby_tides(storm_id)[:MAX_MAP_STATIONS]
-    ]
-    return tuple(buoys), tuple(tides)
+    """Buoy and tide gauge marks near a storm, nearest first, colored by reported wind and dim when stale."""
+    buoys = tuple(_buoy_mark(store, e.station, now) for e in store.nearby_buoys(storm_id)[:MAX_MAP_STATIONS])
+    tides = tuple(_tide_mark(store, e.station, now) for e in store.nearby_tides(storm_id)[:MAX_MAP_STATIONS])
+    return buoys, tides
+
+
+def watchlist_marks(store: Store, now: datetime) -> tuple[tuple[L.StationMark, ...], tuple[L.StationMark, ...]]:
+    """The watchlisted stations the catalogs know, for the map when there is no storm to show stations around."""
+    watched = {w.upper() for w in store.config.watchlist.ndbc}
+    buoys = tuple(_buoy_mark(store, s, now) for s in store.stations.values() if s.id.upper() in watched)
+    gauges = {w.upper() for w in store.config.watchlist.coops}
+    tides = tuple(_tide_mark(store, g, now) for g in store.tide_stations if g.id.upper() in gauges)
+    return buoys, tides
 
 
 def map_scene(store: Store, now: datetime, selected: str | None, *, cursor: LatLon | None = None) -> L.MapScene:
@@ -153,6 +174,8 @@ def map_scene(store: Store, now: datetime, selected: str | None, *, cursor: LatL
     tides: tuple[L.StationMark, ...] = ()
     if selected in store.storms:
         buoys, tides = station_marks(store, selected, now)
+    elif not store.storms:
+        buoys, tides = watchlist_marks(store, now)
     return L.MapScene(
         storms=storms,
         outlook=outlook_areas(store.outlook),

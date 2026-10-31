@@ -10,7 +10,6 @@ and move an item into a milestone brief when it is scheduled.
 - Earliest and most-likely arrival-time layers from the KMZ products.
 - Wind speed probability shading on the map.
 - Operating-system notifications in addition to in-app toasts.
-- Predicted tide overlay on the CO-OPS water level chart.
 - Storm surge inundation GeoTIFFs (link-only for now).
 
 ## Found along the way
@@ -34,14 +33,21 @@ and move an item into a milestone brief when it is scheduled.
 - M4: `LiveSource.satellite` makes one listing request per storm per satellite poll; cache the listing across storms.
 - M4: coming back from away mode makes every feed due at once (a burst of requests); stagger the first poll after the return.
 - M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh.
-- M5: README screenshots; `scripts/screenshot_terminal.ps1` needs a visible Windows Terminal, so take them by hand once M6 is in.
-- M5: the poller fetches buoys only for a storm, so the outlook watchlist is empty on a quiet day until M6 changes that.
+- M5: README screenshots; `scripts/screenshot_terminal.ps1` needs a visible Windows Terminal, so take them by hand (M6 is in now).
 - M5: the replay serves no outlook, so the outlook screen is only populated live.
 - M5: only the current wind radii are drawn; the forecast radii at each forecast point are not.
 - M5: surge geometry (KML) is not parsed, so the map has no surge lines and the surge panel shows text only.
 - M5: on a quiet day the dashboard stays the first screen; opening on the outlook automatically is not done.
 - M5: parsing runs on the UI loop with no `asyncio.to_thread`; measure a replay at 3600x for freezes before moving the sync parses off the loop.
 - M5: the status bar crowds below 90 columns; drop segments by priority instead of truncating.
-- M5: the detail tables are cleared and rebuilt on every result; update rows in place when nothing changed.
 - M5: the snapshot tests depend on the platform's text rendering; pin the font metrics or compare structure instead.
 - M5: the map widget invalidates and redraws the whole canvas on every scene change; cache the layers that did not change.
+- M6: a tide gauge has no detail screen; Enter on a gauge row does nothing and `p` pins it. Observed against predicted
+  would want its own chart.
+- M6: the replay bundle has no `.supl` files, so the buoy detail shows "the recording has no supplemental file" and the
+  extremes come from the regular rows; record the `.supl` files with `scripts/record_storm.py`.
+- M6: the buoy charts cover 24, 48 and 72 hours from the 5 day NDBC file; longer ranges (the 45 day file) are not wired.
+- M6: the settings screen edits poll intervals, units, glyph set, basins, nearby radii and alert rules; the map layers,
+  the alert thresholds and the per-storm options still need the TOML file.
+- M6: the watchlist caps at 60 stations per kind and the buoy and gauge polls still fetch at most 24 and 12 series.
+- M6: the tide gauge marks on the map are colored by the gauge's wind only; water level residual is not drawn on the map.

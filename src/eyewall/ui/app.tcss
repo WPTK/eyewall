@@ -242,3 +242,146 @@ HelpScreen, LayerMenu {
 StormDetailScreen Tab {
     padding: 0 1;
 }
+
+/* ---- buoy detail ---- */
+
+#buoy-title {
+    height: 1;
+    background: $panel;
+}
+
+#buoy-sparks {
+    height: 3;
+}
+
+.spark {
+    width: 1fr;
+    height: 3;
+    padding: 0 1;
+}
+
+.spark-label {
+    height: 1;
+}
+
+Sparkline {
+    height: 2;
+}
+
+#buoy-body {
+    height: 1fr;
+}
+
+#buoy-charts {
+    width: 1fr;
+    height: 100%;
+}
+
+#buoy-info {
+    width: 50;
+    height: 100%;
+    border: round $primary 50%;
+    padding: 0 1;
+}
+
+BuoyDetailScreen.narrow #buoy-info {
+    display: none;
+}
+
+BuoyDetailScreen.narrow.show-info #buoy-info {
+    display: block;
+    width: 1fr;
+}
+
+BuoyDetailScreen.narrow.show-info #buoy-charts {
+    display: none;
+}
+
+#buoy-status, #watch-status {
+    dock: bottom;
+    height: 1;
+    background: $panel;
+}
+
+/* ---- watchlist ---- */
+
+#watch-main {
+    height: 1fr;
+}
+
+.watch-title {
+    height: 1;
+    background: $panel;
+}
+
+#watch-buoys, #watch-tides {
+    height: 1fr;
+}
+
+/* ---- station search and settings ---- */
+
+SearchScreen, SettingsScreen {
+    align: center middle;
+}
+
+#search-box {
+    width: 76;
+    max-width: 96%;
+    height: 22;
+    max-height: 92%;
+    border: round $accent;
+    background: $panel;
+}
+
+#search-results {
+    height: 1fr;
+    background: $panel;
+}
+
+#search-note {
+    height: 1;
+    padding: 0 1;
+}
+
+#settings-box {
+    width: 72;
+    max-width: 96%;
+    height: 90%;
+    border: round $accent;
+    background: $panel;
+}
+
+#settings-scroll {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.settings-head {
+    height: 1;
+    margin-top: 1;
+    text-style: bold;
+    color: $secondary;
+}
+
+.settings-row {
+    height: 3;
+}
+
+.settings-label {
+    width: 42;
+    height: 3;
+    content-align: left middle;
+}
+
+.settings-row Input {
+    width: 16;
+}
+
+.settings-row Select {
+    width: 24;
+}
+
+#settings-note {
+    height: 1;
+    padding: 0 1;
+}

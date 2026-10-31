@@ -20,8 +20,10 @@ from eyewall.models.outlook import OutlookArea
 from eyewall.palette import risk_color
 from eyewall.ui import adapt
 from eyewall.ui import format as fmt
+from eyewall.ui import stations as st
 from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.map_view import MapPane, MapView
+from eyewall.ui.widgets.station_table import StationTable
 from eyewall.units import MISSING
 
 if TYPE_CHECKING:
@@ -69,23 +71,34 @@ def outlook_text(eye: EyewallApp) -> Text:
     return out
 
 
-def watchlist_rows(eye: EyewallApp) -> list[tuple[str, ...]]:
-    rows: list[tuple[str, ...]] = []
+WATCHLIST_COLUMNS = ("Buoy", "Name", "Wind", "Pressure", "Age")
+
+
+def watchlist_rows(eye: EyewallApp) -> list[tuple[str, tuple[Text, ...]]]:
+    """The watchlisted buoys: wind, pressure and age, dimmed and marked when a station is not reporting."""
+    rows: list[tuple[str, tuple[Text, ...]]] = []
     now, preset = eye.now(), eye.preset
-    for station_id in eye.config.watchlist.ndbc:
-        station = eye.store.stations.get(station_id)
-        latest = eye.store.latest.get(station_id)
-        series = eye.store.series.get(station_id)
-        obs = series.latest if series and series.latest else (latest.observation if latest else None)
-        wind = None if obs is None or obs.wind_speed_mps is None else obs.wind_speed_mps / 0.514444
-        age = MISSING if obs is None else format_age((now - obs.time).total_seconds())
+    for entry in st.watchlist_buoys(eye.store):
+        station_id = entry.id
+        state = st.buoy_state(eye.store, station_id, now)
+        obs = st.newest_observation(eye.store, station_id)
+        name = st.short_name(entry.station.name) or MISSING
+        if state in ("silent", "dark") or obs is None:
+            note = st.NOT_REPORTING if state in ("silent", "dark") else st.WAITING
+            cells = (station_id, name, MISSING, MISSING, note)
+            rows.append((station_id, tuple(Text(c, style=DIM) for c in cells)))
+            continue
+        wind = st.wind_kt(obs)
         rows.append(
             (
                 station_id,
-                station.name if station else MISSING,
-                preset.fmt_wind(wind),
-                preset.fmt_pressure(None if obs is None else obs.pressure_hpa, "hpa"),
-                age,
+                (
+                    Text(station_id, style="bold"),
+                    Text(name),
+                    st.banded(preset.fmt_wind(wind), wind),
+                    Text(preset.fmt_pressure(obs.pressure_hpa, "hpa")),
+                    Text(format_age((now - obs.time).total_seconds())),
+                ),
             )
         )
     return rows
@@ -110,14 +123,12 @@ class OutlookScreen(Screen[None]):
             with Vertical(id="outlook-left"):
                 with VerticalScroll(id="outlook-scroll"):
                     yield Static("", id="outlook-text")
-                yield Static("Watchlist", id="watchlist-title")
-                yield DataTable(id="watchlist", zebra_stripes=True, cursor_type="row")
+                yield Static("Watchlist   Enter: charts   w: edit", id="watchlist-title")
+                yield StationTable(id="watchlist")
             yield MapPane(self.map_view, id="outlook-map")
         yield Static("", id="outlook-status")
 
     def on_mount(self) -> None:
-        table = self.query_one("#watchlist", DataTable)
-        table.add_columns("Buoy", "Name", "Wind", "Pressure", "Age")
         self.query_one("#outlook-left").border_title = "Tropical weather outlook"
         self.refresh_data()
         self.refresh_status()
@@ -128,15 +139,17 @@ class OutlookScreen(Screen[None]):
     def refresh_data(self) -> None:
         eye = self.eye
         self.query_one("#outlook-text", Static).update(outlook_text(eye))
-        table = self.query_one("#watchlist", DataTable)
-        table.clear()
-        for cells in watchlist_rows(eye):
-            table.add_row(*cells)
+        self.query_one("#watchlist", StationTable).set_rows(WATCHLIST_COLUMNS, watchlist_rows(eye))
         scene = adapt.map_scene(eye.store, eye.now(), None)
         points = [p for area in scene.outlook for ring in area.rings for p in ring] or adapt.basin_points(
             eye.basin_view
         )
         self.map_view.set_scene(scene, points)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.row_key.value is not None:
+            event.stop()
+            self.eye.open_buoy(str(event.row_key.value))
 
     def action_back(self) -> None:
         self.app.pop_screen()

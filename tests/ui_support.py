@@ -16,7 +16,15 @@ from eyewall.config import Config
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.forecast import ForecastGis
 from eyewall.models.graphics import FloaterProduct, GraphicLink
-from eyewall.models.obs import LatestObservation, ObservationSeries, Station, TideSeries, TideStation
+from eyewall.models.obs import (
+    LatestObservation,
+    ObservationSeries,
+    Parsed,
+    Station,
+    SupplementalReading,
+    TideSeries,
+    TideStation,
+)
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms, Storm
 from eyewall.models.track import BestTrack
@@ -55,6 +63,20 @@ async def running(app: EyewallApp, size: tuple[int, int] = (140, 45)) -> AsyncIt
         await asyncio.wait_for(app.first_poll.wait(), 30)
         await settle(pilot)
         yield pilot
+
+
+STORM_STEPS = 14  # advisory 14 of the Erin recording: a hurricane off the Carolinas with buoys and gauges around it
+
+
+async def into_the_storm(pilot, steps: int = STORM_STEPS) -> None:  # type: ignore[no-untyped-def]
+    """Move the replay clock forward by advisories and poll once, instead of paying for a full poll on every step."""
+    app = pilot.app
+    async with app._tick_lock:
+        for _ in range(steps):
+            app.replay.step_advisory(1)
+        app.poller.refresh()
+        await app.poller.tick()
+    await settle(pilot)
 
 
 async def settle(pilot: Pilot[None], times: int = 3) -> None:
@@ -144,6 +166,9 @@ class ScriptedSource:
 
     async def ndbc_series(self, station_id: str) -> ObservationSeries:
         return ObservationSeries(station_id)
+
+    async def ndbc_supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
+        return Parsed(message="scripted: no supplemental file")
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
         return ()

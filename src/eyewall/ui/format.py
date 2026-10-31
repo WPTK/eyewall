@@ -30,6 +30,7 @@ from eyewall.palette import (
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.sources import protocol
 from eyewall.state.store import Store, StormState
+from eyewall.ui import stations as st
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.ui.theme import DIM, FRESHNESS_COLORS
 from eyewall.units import MISSING, Preset
@@ -422,6 +423,9 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
             obs = latest.observation
         out.append(entry.station.id.ljust(6), style="bold")
         out.append(f"{entry.distance_nm:>4.0f}nm {compass_point(entry.bearing_deg):<3} ", style=DIM)
+        if st.buoy_state(store, entry.station.id, now) in ("silent", "dark"):
+            out.append(f" {st.NOT_REPORTING}\n", style=DIM)
+            continue
         wind_kt = None if obs is None or obs.wind_speed_mps is None else obs.wind_speed_mps / 0.514444
         out.append(preset.fmt_wind(wind_kt).rjust(7), style=wind_band_color(wind_kt) or "")
         pressure = None if obs is None else obs.pressure_hpa

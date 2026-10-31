@@ -13,12 +13,14 @@ from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
 from eyewall.ui import format as fmt
 from eyewall.ui import products
+from eyewall.ui import stations as st
 from eyewall.ui.theme import DIM
+from eyewall.ui.widgets.station_table import StationTable
 
 if TYPE_CHECKING:
     from eyewall.app import EyewallApp
 
-# (tab id, title). Summary through Watches and warnings read the store; the three placeholders are filled by M6 and M7.
+# (tab id, title). Buoys and Tides are station tables, the Graphics tab is still a placeholder (M7).
 TABS: tuple[tuple[str, str], ...] = (
     ("summary", "Summary"),
     ("forecast", "Forecast"),
@@ -31,12 +33,9 @@ TABS: tuple[tuple[str, str], ...] = (
     ("graphics", "Graphics"),
     ("history", "History"),
 )
-PLACEHOLDERS = {
-    "buoys": "Buoys near this storm arrive with the observations screens in 0.6.0.",
-    "tides": "Tide gauges near this storm arrive with the observations screens in 0.6.0.",
-    "graphics": "The graphics gallery arrives in 0.7.0.",
-}
+PLACEHOLDERS = {"graphics": "The graphics gallery arrives in 0.7.0."}
 TABLE_TABS = ("forecast", "probs", "history")
+STATION_TABS = {"buoys": "ndbc", "tides": "coops"}  # tab id -> watchlist kind
 
 
 class StormDetailScreen(Screen[None]):
@@ -45,15 +44,17 @@ class StormDetailScreen(Screen[None]):
         Binding("left", "tab(-1)", "Previous tab", show=False, priority=True),
         Binding("right", "tab(1)", "Next tab", show=False, priority=True),
         Binding("t", "toggle_text", "TCP/TCM"),
+        Binding("p", "pin", "Pin station"),
         *[
             Binding(str((i + 1) % 10), f"show_tab('{tab_id}')", title, show=False)
             for i, (tab_id, title) in enumerate(TABS)
         ],
     ]
 
-    def __init__(self, storm_id: str) -> None:
+    def __init__(self, storm_id: str, tab: str | None = None) -> None:
         super().__init__()
         self.storm_id = storm_id
+        self._first_tab = tab
         self.show_tcm = False
 
     @property
@@ -65,7 +66,10 @@ class StormDetailScreen(Screen[None]):
         with TabbedContent(id="detail-tabs"):
             for tab_id, title in TABS:
                 with TabPane(title, id=f"tab-{tab_id}"):
-                    if tab_id in TABLE_TABS:
+                    if tab_id in STATION_TABS:
+                        yield Static("", id=f"{tab_id}-note", classes="note")
+                        yield StationTable(id=f"{tab_id}-table")
+                    elif tab_id in TABLE_TABS:
                         yield Static("", id=f"{tab_id}-note", classes="note")
                         yield DataTable(id=f"{tab_id}-table", zebra_stripes=True, cursor_type="row")
                     else:
@@ -74,6 +78,8 @@ class StormDetailScreen(Screen[None]):
         yield Static("", id="detail-status")
 
     def on_mount(self) -> None:
+        if self._first_tab in dict(TABS):
+            self.query_one("#detail-tabs", TabbedContent).active = f"tab-{self._first_tab}"
         self.refresh_data()
         self.refresh_status()
 
@@ -121,6 +127,32 @@ class StormDetailScreen(Screen[None]):
         self._set_table("probs", products.wind_probabilities(state), products.probabilities_note(state))
         self._set_text("ww", products.watches_warnings(eye.store, state, g))
         self._set_table("history", products.history_table(state, preset), "Best track, newest first.")
+        self._refresh_stations()
+
+    def _refresh_stations(self) -> None:
+        eye = self.eye
+        store, now, preset = eye.store, eye.now(), eye.preset
+        buoys = st.from_nearby(store.nearby_buoys(self.storm_id))
+        self.query_one("#buoys-table", StationTable).set_rows(
+            st.BUOY_COLUMNS, st.buoy_rows(store, buoys, now, preset, eye.glyphs)
+        )
+        nearby = store.config.nearby
+        self.query_one("#buoys-note", Static).update(
+            Text(
+                f"{len(buoys)} buoys within {preset.fmt_distance(nearby.radius_now_nm)} or "
+                f"{preset.fmt_distance(nearby.radius_track_nm)} of the track. Enter: charts. p: pin. * = watchlist.",
+                style=DIM,
+            )
+        )
+        gauges = st.from_nearby(store.nearby_tides(self.storm_id))
+        self.query_one("#tides-table", StationTable).set_rows(st.TIDE_COLUMNS, st.tide_rows(store, gauges, now, preset))
+        self.query_one("#tides-note", Static).update(
+            Text(
+                f"{len(gauges)} gauges near the storm. Residual = observed minus predicted: the surge estimate. "
+                "p: pin. * = watchlist.",
+                style=DIM,
+            )
+        )
 
     # ---- actions ----------------------------------------------------------------------------------------------
 
@@ -132,6 +164,28 @@ class StormDetailScreen(Screen[None]):
         tabs = self.query_one("#detail-tabs", TabbedContent)
         current = ids.index(tabs.active) if tabs.active in ids else 0
         tabs.active = ids[(current + step) % len(ids)]
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Land the focus on the tab's table, so the arrows and Enter act on its rows straight away."""
+        for table in event.pane.query(StationTable):
+            table.focus()
+            break
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id == "buoys-table" and event.row_key.value is not None:
+            event.stop()
+            self.eye.open_buoy(str(event.row_key.value))
+
+    def action_pin(self) -> None:
+        tabs = self.query_one("#detail-tabs", TabbedContent)
+        tab_id = (tabs.active or "").removeprefix("tab-")
+        kind = STATION_TABS.get(tab_id)
+        if kind is None:
+            self.eye.notify("Pin works on the Buoys and Tides tabs: move to a row and press p.", timeout=4)
+            return
+        key = self.query_one(f"#{tab_id}-table", StationTable).current_key()
+        if key is not None:
+            self.run_worker(self.eye.toggle_watch(kind, key), exclusive=False)
 
     def action_show_tab(self, tab_id: str) -> None:
         self.query_one("#detail-tabs", TabbedContent).active = f"tab-{tab_id}"
