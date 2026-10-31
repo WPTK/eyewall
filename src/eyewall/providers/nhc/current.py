@@ -9,7 +9,8 @@ The feed is loosely typed, and the 2019 reference document is wrong in several p
 - Every product and GIS object can be null, and `advNum` is a string such as `018a` for an intermediate advisory.
 - `{"activeStorms": []}` is the quiet answer.
 
-Entries without an `id` are skipped and counted. A missing or extra field never fails the parse.
+Entries without an `id`, and repeats of one already seen (the first wins), are skipped and counted.
+A missing or extra field never fails the parse.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import math
 import re
 from typing import Any
 
+from eyewall.geo import wrap_lon
 from eyewall.models.storm import (
     Classification,
     CurrentStorms,
@@ -28,7 +30,6 @@ from eyewall.models.storm import (
     WindProbabilityGisRef,
 )
 from eyewall.providers.base import ParseError
-from eyewall.providers.nhc.gis import wrap_lon
 from eyewall.providers.nhc.ids import parse_adv_num
 from eyewall.providers.nhc.times import parse_iso
 
@@ -164,12 +165,12 @@ def parse_current_storms(data: bytes | str) -> CurrentStorms:
     entries = document.get("activeStorms")
     if not isinstance(entries, list):
         return CurrentStorms()
-    storms: list[Storm] = []
+    storms: dict[str, Storm] = {}
     skipped = 0
     for entry in entries:
         storm = _storm(entry) if isinstance(entry, dict) else None
-        if storm is None:
+        if storm is None or storm.id in storms:  # no id, or an id already seen: the first entry wins
             skipped += 1
         else:
-            storms.append(storm)
-    return CurrentStorms(tuple(storms), skipped)
+            storms[storm.id] = storm
+    return CurrentStorms(tuple(storms.values()), skipped)

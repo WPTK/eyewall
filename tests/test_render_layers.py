@@ -141,6 +141,19 @@ def test_the_forecast_line_is_dashed_and_the_best_track_is_not():
     assert 0.55 < (dot_count(dashed) - 0) / dot_count(solid) < 0.85, markers  # four dots on, two off
 
 
+def test_a_center_past_the_last_best_track_fix_is_joined_to_it_by_a_solid_line():
+    view = Viewport(29.0, -75.0, 0.05, 120, 40)
+    storm = StormScene(
+        center=TrackPoint(28.0, -75.0, 140.0),  # category 5 colour, which nothing else in the scene uses
+        best_track=(TrackPoint(28.0, -79.0, 60.0), TrackPoint(28.0, -77.0, 60.0)),
+    )
+    canvas = render_map(view, MapScene(storms=(storm,)), options=OPEN_SEA)
+    y = view.dot_at(28.0, -76.0)[1]
+    start, end = view.dot_at(28.0, -77.0)[0], view.dot_at(28.0, -75.0)[0]
+    assert all(canvas.dot(x, y) for x in range(start + 3, end - 3))  # joined, and no dashes
+    assert cell_of(canvas, view, 28.0, -76.0)[1].fg == CATEGORY_COLORS[Category.H5]
+
+
 def test_track_and_warnings_outrank_the_cone_and_the_coast():
     scene = erin_like_scene()
     canvas = render_map(ERIN_VIEW, scene)

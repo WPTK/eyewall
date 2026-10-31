@@ -26,6 +26,14 @@ def normalize_lon(lon: float) -> float:
     return (lon + 180.0) % 360.0 - 180.0
 
 
+def wrap_lon(lon: float) -> float:
+    """Wrap a longitude into (-180, 180], so the dateline itself is 180 and not -180. In-range values pass unchanged."""
+    if -180.0 < lon <= 180.0:
+        return lon
+    wrapped = normalize_lon(lon)
+    return 180.0 if wrapped == -180.0 else wrapped
+
+
 def _to_vector(point: LatLon) -> Vector:
     lat, lon = math.radians(point[0]), math.radians(point[1])
     return (math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat))

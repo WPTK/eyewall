@@ -13,11 +13,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from eyewall.geo import wrap_lon
 from eyewall.models.advisory import ApiProduct, ProductListing
 from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.palette import WatchWarning
 from eyewall.providers.base import ParseError
-from eyewall.providers.nhc.gis import wrap_lon
 from eyewall.providers.nhc.times import parse_iso
 
 _EVENT_KINDS: dict[str, WatchWarning] = {
