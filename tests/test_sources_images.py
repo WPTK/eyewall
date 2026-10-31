@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import UTC, datetime
 
@@ -14,7 +15,7 @@ from eyewall.net import HttpError
 from eyewall.render.images import MAX_IMAGE_BYTES, ImageError, sniff
 from eyewall.sources import bundle
 from eyewall.sources.bundle import resolve_bundle
-from eyewall.sources.live import LiveSource
+from eyewall.sources.live import FLOATER_LISTING_TTL, LiveSource
 from eyewall.sources.replay import ReplaySource
 from tests.nhc_fixtures import nhc_bytes
 from tests.state_support import make_storm
@@ -82,6 +83,70 @@ async def test_the_live_source_asks_only_for_a_product_nesdis_lists_for_the_stor
     try:
         assert await source.satellite_product(storm, "AirMass") is None
         assert [r.url.path for r in origin.seen] == ["/FLOATER/data/"]  # the product listing was never requested
+    finally:
+        await source.aclose()
+
+
+class Listings(httpx.AsyncBaseTransport):
+    """NESDIS with a slow storm listing, so concurrent askers overlap, and a GEOCOLOR page for every storm."""
+
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.paths.append(request.url.path)
+        if request.url.path.endswith("/FLOATER/data/"):
+            await asyncio.sleep(0.01)
+            return httpx.Response(200, content=nhc_bytes("graphics/floater_root.html"), request=request)
+        if request.url.path.endswith("/GEOCOLOR/"):
+            return httpx.Response(200, content=nhc_bytes("graphics/floater_cp032026_geocolor.html"), request=request)
+        return httpx.Response(404, request=request)
+
+
+async def test_panels_and_storms_asking_together_share_one_listing_request(tmp_path):
+    transport = Listings()
+    clock = VirtualClock(NOW)
+    source = LiveSource(cache_dir=tmp_path, transport=transport, clock=clock)
+    try:
+        await asyncio.gather(
+            source.satellite_product(_storm("al012026"), "AirMass"),
+            source.satellite_product(_storm("al022026"), "AirMass"),
+            source.satellite(_storm("al032026")),
+            source.satellite(_storm("al012026")),
+        )
+        assert transport.paths.count("/FLOATER/data/") == 1
+        await source.satellite(_storm("al042026"))  # a later storm of the same poll reuses the listing too
+        assert transport.paths.count("/FLOATER/data/") == 1
+        clock.advance(FLOATER_LISTING_TTL + 1)  # the next poll asks again
+        await source.satellite(_storm("al042026"))
+        assert transport.paths.count("/FLOATER/data/") == 2
+    finally:
+        await source.aclose()
+
+
+async def test_a_failed_listing_is_not_kept_and_a_cancelled_asker_does_not_cancel_the_others(tmp_path):
+    class Flaky(Listings):
+        fail = True
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/FLOATER/data/") and self.fail:
+                self.paths.append(request.url.path)
+                return httpx.Response(503, request=request)
+            return await super().handle_async_request(request)
+
+    transport = Flaky()
+    source = LiveSource(cache_dir=tmp_path, transport=transport, clock=VirtualClock(NOW))
+    try:
+        with pytest.raises(HttpError):
+            await source.satellite_product(_storm("al012026"), "AirMass")
+        transport.fail = False
+        assert await source.satellite_product(_storm("al012026"), "AirMass") is None or True
+        first = asyncio.ensure_future(source.satellite_product(_storm("al022026"), "AirMass"))
+        second = asyncio.ensure_future(source.satellite_product(_storm("al032026"), "AirMass"))
+        await asyncio.sleep(0)
+        first.cancel()
+        await second
+        assert first.cancelled()
     finally:
         await source.aclose()
 

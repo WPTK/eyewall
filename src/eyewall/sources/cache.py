@@ -21,7 +21,7 @@ import hashlib
 import json
 import os
 import tempfile
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -162,6 +162,24 @@ def watch_stale() -> Iterator[StaleMarker]:
         _marker.reset(token)
 
 
+class _Overflow(httpx.AsyncByteStream):
+    """A body too big to cache: the chunks already read, then the rest of the live stream, never held whole here."""
+
+    def __init__(self, head: list[bytes], rest: AsyncIterator[bytes], response: httpx.Response) -> None:
+        self._head = head
+        self._rest = rest
+        self._response = response
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self._head:
+            yield chunk
+        async for chunk in self._rest:
+            yield chunk
+
+    async def aclose(self) -> None:
+        await self._response.aclose()
+
+
 class CachingTransport(httpx.AsyncBaseTransport):
     """Wraps another transport (the real one unless a test supplies its own) with the disk cache."""
 
@@ -207,12 +225,30 @@ class CachingTransport(httpx.AsyncBaseTransport):
             self.cache.touch(url, datetime.now(UTC))
             return self._from_cache(request, entry)
         if 200 <= status < 300:
-            raw = b"".join([chunk async for chunk in response.stream])  # type: ignore[union-attr]
-            await response.aclose()
-            self.cache.store(url, raw, response.headers, datetime.now(UTC))
-            headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
-            return httpx.Response(status, headers=headers, stream=httpx.ByteStream(raw), request=request)
+            return await self._cache_or_pass(request, response, url)
         if status in _FAILURE_STATUSES and entry is not None:
             await response.aclose()
             return self._stale(request, entry)
         return response
+
+    async def _cache_or_pass(self, request: httpx.Request, response: httpx.Response, url: str) -> httpx.Response:
+        """Read a 2xx body into the cache, unless it passes MAX_BODY_BYTES: then hand it on as a stream, uncached, so
+        the transport never holds more than the cap and the caller's own limit decides what to do with the rest."""
+        headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
+        stream = response.stream.__aiter__()  # type: ignore[union-attr]
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in stream:
+            chunks.append(chunk)
+            size += len(chunk)
+            if size > MAX_BODY_BYTES:
+                return httpx.Response(
+                    response.status_code,
+                    headers=response.headers.multi_items(),
+                    stream=_Overflow(chunks, stream, response),
+                    request=request,
+                )
+        await response.aclose()
+        raw = b"".join(chunks)
+        self.cache.store(url, raw, response.headers, datetime.now(UTC))
+        return httpx.Response(response.status_code, headers=headers, stream=httpx.ByteStream(raw), request=request)

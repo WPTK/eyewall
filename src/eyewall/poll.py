@@ -15,8 +15,9 @@ succeeding or stop happening, or when the source had to answer from its disk cac
 - `stale`: the last attempt worked but the age exceeds `stale_after`, or the answer came from the cache.
 - `error`: the last attempt failed. The store keeps the last good data.
 
-**Intervals.** Away mode triples every interval. After a failed poll the delay doubles per consecutive failure up to
-`backoff_max` and never drops below the normal interval. `refresh()` wakes the loop and makes every feed due.
+**Intervals.** Away mode triples every interval; coming back from it makes the feeds due a few seconds apart. After a
+failed poll the delay doubles per consecutive failure up to `backoff_max`
+and never drops below the normal interval. `refresh()` wakes the loop and makes every feed due.
 
 **What is refetched.** `CurrentStorms` is polled on the storms interval; a storm's advisory text, GIS zips, best track
 and graphics are fetched only when its advisory number or last-update time changes. The api.weather.gov copy of the
@@ -53,6 +54,7 @@ AWAY_FACTOR = 3.0
 FALLBACK_ATTEMPTS = 3
 MAX_IN_FLIGHT = 4
 STAGGER_SECONDS = 0.25
+RETURN_STAGGER_SECONDS = 3.0  # between the feeds' first polls after the user comes back from away mode
 MAX_BUOY_SERIES = 24
 MAX_TIDE_GAUGES = 12
 STATION_REFRESH = 24 * 3600.0
@@ -170,11 +172,16 @@ class Poller:
         return self._base(feed) * (AWAY_FACTOR if self.away else 1.0)
 
     def set_away(self, away: bool) -> None:
-        """Enter or leave away mode. Coming back polls everything at once."""
+        """Enter or leave away mode. Coming back polls every feed soon, one `RETURN_STAGGER_SECONDS` after the other
+        (storms first), never all at once."""
         returning = self.away and not away
         self.away = away
         if returning:
-            self.refresh()
+            now = self.clock.monotonic()
+            for index, name in enumerate(protocol.FEEDS):
+                self._feeds[name].next_at = now + index * RETURN_STAGGER_SECONDS
+            if not self.polling:
+                self._wake.set()
 
     def observe_presence(self) -> bool:
         """Call about once a second from the app. Returns True on the moment the user comes back."""

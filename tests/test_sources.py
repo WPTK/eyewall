@@ -368,3 +368,25 @@ async def test_predictions_are_asked_once_a_day_and_never_for_the_great_lakes(tm
     asked = [u for u in feeds.urls if "product=predictions" in u]
     assert len(asked) == 1 and "station=8651370" in asked[0]
     assert again.predictions.items == () and again.predictions.message
+
+
+# ---- the cache never holds a body past its cap --------------------------------------------------------------------
+
+
+class Big(httpx.AsyncBaseTransport):
+    def __init__(self, size: int) -> None:
+        self.size = size
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"y" * self.size, request=request)
+
+
+async def test_a_body_over_the_cache_cap_passes_through_whole_and_uncached(tmp_path, monkeypatch):
+    monkeypatch.setattr("eyewall.sources.cache.MAX_BODY_BYTES", 1000)
+    cache = Cache(tmp_path)
+    for size, cached in ((900, True), (5000, False)):
+        client = httpx.AsyncClient(transport=CachingTransport(cache, Big(size)))
+        url = f"https://example.test/{size}"
+        async with client:
+            assert len((await client.get(url)).content) == size
+        assert (cache.load(url) is not None) is cached

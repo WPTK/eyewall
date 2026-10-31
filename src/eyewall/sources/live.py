@@ -7,10 +7,12 @@ marked stale. The poller decides when to call; this module only fetches and pars
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -46,6 +48,7 @@ CACHE_MAX_AGE = timedelta(days=7)
 INVEST_MAX_AGE = timedelta(hours=48)
 MAX_INVESTS = 6
 SATELLITE_PRODUCT = "GEOCOLOR"
+FLOATER_LISTING_TTL = 60.0  # seconds a NESDIS listing of storms is reused, so one satellite poll asks for it once
 PREDICTION_DAYS_BEHIND = 2  # predictions start at midnight UTC this many days back, so the URL (and its cache entry)
 PREDICTION_HOURS = 120  # changes once a day instead of every poll, and the range reaches into the next day or two
 
@@ -80,6 +83,7 @@ class LiveSource:
         self.coops = CoopsClient(self._http)
         self._stale: dict[str, bool] = {}
         self._predictions: dict[tuple[str, str, str], Parsed] = {}  # (gauge, datum, UTC date) -> the day's answer
+        self._shared: dict[str, tuple[asyncio.Task[Any], float]] = {}  # request key -> (its task, when it started)
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -101,6 +105,33 @@ class LiveSource:
                 yield
             finally:
                 self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
+
+    async def _shared_call[T](self, key: str, call: Callable[[], Awaitable[T]], reuse: float = 0.0) -> T:
+        """One request for every caller that asks for `key` while it is in flight, and for `reuse` seconds after it
+        succeeded. A failure is never kept. Callers are shielded, so a cancelled one does not cancel the others."""
+        now = self._clock.monotonic()
+        kept = self._shared.get(key)
+        if kept is not None:
+            task, started = kept
+            if not task.done() or (not task.cancelled() and task.exception() is None and now - started < reuse):
+                return await asyncio.shield(task)
+        task = asyncio.ensure_future(call())
+        task.add_done_callback(
+            lambda t: t.cancelled() or t.exception()
+        )  # retrieved here; each caller re-raises its own
+        self._shared[key] = (task, now)
+        return await asyncio.shield(task)
+
+    async def _floater_storms(self) -> tuple[str, ...]:
+        """The storms NESDIS lists, asked for once across the panels and storms that want it."""
+        response = await self._shared_call("floater-storms", self.nhc.fetch_floater_storms, FLOATER_LISTING_TTL)
+        return response.value or ()
+
+    async def _floater_product(self, storm_id: str, product: str) -> FloaterProduct | None:
+        found = await self._shared_call(
+            f"floater:{storm_id}:{product}", lambda: self.nhc.fetch_floater_product(storm_id, product)
+        )
+        return found.value
 
     # ---- storms -----------------------------------------------------------------------------------------------
 
@@ -132,10 +163,9 @@ class LiveSource:
         """The newest GEOCOLOR still and loop. The product listing is large, so only a storm NESDIS lists is asked."""
         async with self._feed(protocol.SATELLITE):
             try:
-                listed = (await self.nhc.fetch_floater_storms()).value or ()
-                if storm.id.upper() not in listed:
+                if storm.id.upper() not in await self._floater_storms():
                     return ()
-                product = (await self.nhc.fetch_floater_product(storm.id, SATELLITE_PRODUCT)).value
+                product = await self._floater_product(storm.id, SATELLITE_PRODUCT)
             except ParseError:
                 return ()
             return () if product is None else (product,)
@@ -144,10 +174,9 @@ class LiveSource:
         """One more NESDIS product for a storm, fetched when the gallery opens; None when NESDIS does not list it."""
         async with self._feed(protocol.SATELLITE):
             try:
-                listed = (await self.nhc.fetch_floater_storms()).value or ()
-                if storm.id.upper() not in listed:
+                if storm.id.upper() not in await self._floater_storms():
                     return None
-                return (await self.nhc.fetch_floater_product(storm.id, product)).value
+                return await self._floater_product(storm.id, product)
             except ParseError:
                 return None
 

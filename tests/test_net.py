@@ -3,7 +3,7 @@ import pytest
 import respx
 
 from eyewall import __version__
-from eyewall.net import HttpError, NetworkError, RateLimited, fetch_bytes, new_client, user_agent
+from eyewall.net import HttpError, NetworkError, RateLimited, TooLarge, fetch_bytes, new_client, user_agent
 
 URL = "https://example.test/data.txt"
 
@@ -119,3 +119,49 @@ async def test_other_client_errors_raise_immediately():
         with pytest.raises(HttpError):
             await fetch_bytes(client, URL, sleep=Sleeps())
     assert route.call_count == 1
+
+
+# ---- streaming with a size limit ----------------------------------------------------------------------------------
+
+
+class Chunks(httpx.AsyncByteStream):
+    """A body of `count` one-megabyte chunks that notes how many were pulled."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        self.pulled = 0
+
+    async def __aiter__(self):
+        for _ in range(self.count):
+            self.pulled += 1
+            yield b"x" * (1024 * 1024)
+
+
+async def test_a_body_over_the_limit_stops_at_the_first_chunk_past_it():
+    body = Chunks(50)
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, stream=body))
+    async with new_client(transport=transport) as client:
+        with pytest.raises(TooLarge, match="over the limit"):
+            await fetch_bytes(client, URL, max_bytes=3 * 1024 * 1024)
+    assert body.pulled == 4  # three fit, the fourth crossed the line, the other 46 were never read
+
+
+async def test_a_declared_length_over_the_limit_reads_nothing():
+    body = Chunks(5)
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"Content-Length": str(5 * 1024 * 1024)}, stream=body)
+    )
+    async with new_client(transport=transport) as client:
+        with pytest.raises(TooLarge):
+            await fetch_bytes(client, URL, max_bytes=1024 * 1024)
+    assert body.pulled == 0
+
+
+async def test_a_body_within_the_limit_is_returned_whole_and_errors_still_retry():
+    answers = iter([httpx.Response(503), httpx.Response(200, content=b"x" * 100)])
+    transport = httpx.MockTransport(lambda request: next(answers))
+    sleeps = Sleeps()
+    async with new_client(transport=transport) as client:
+        result = await fetch_bytes(client, URL, max_bytes=100, sleep=sleeps)
+    assert result.body == b"x" * 100
+    assert sleeps.delays == [1.0]
