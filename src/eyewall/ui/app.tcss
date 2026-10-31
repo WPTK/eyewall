@@ -18,6 +18,15 @@ Screen {
     scrollbar-corner-color: $surface;
 }
 
+TooSmallScreen {
+    align: center middle;
+}
+
+#too-small {
+    width: auto;
+    max-width: 100%;
+}
+
 /* ---- dashboard ---- */
 
 #main {
