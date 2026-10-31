@@ -3,6 +3,8 @@ name: Feed canary
 # Weekly check that the live NOAA feeds still parse. Catches silent format drift before users do. Each spot check
 # fetches every endpoint eyewall uses once, with the eyewall User-Agent and a pause between requests, and exits 1 when
 # a fetch or a parser fails. A failure opens one issue, or adds a comment to the one already open.
+# GitHub disables scheduled workflows after 60 days without repository activity; if the Monday run stops appearing, run
+# this workflow by hand (workflow_dispatch) to re-enable it.
 
 on:
   schedule:
@@ -53,6 +55,12 @@ jobs:
                 echo "From $(basename "$file") (matching lines):"
                 echo '```'
                 grep -E '^FAIL|Traceback' "$file" | tail -n 40
+                echo '```'
+              fi
+              if grep -q '^Traceback' "$file"; then
+                echo "Last traceback in $(basename "$file") (final 40 lines):"
+                echo '```'
+                awk '/^Traceback/ { buf = "" } { buf = buf $0 "\n" } END { printf "%s", buf }' "$file" | tail -n 40
                 echo '```'
               fi
             done

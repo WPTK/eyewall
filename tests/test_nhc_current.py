@@ -266,3 +266,14 @@ def test_a_payload_that_is_not_a_json_object_raises(payload):
 
 def test_str_input_is_accepted_too():
     assert parse_current_storms(nhc_bytes("current/empty.json").decode()).storms == ()
+
+
+def test_a_repeated_id_keeps_the_first_entry_and_counts_the_rest_as_skipped():
+    document = _populated()
+    first = document["activeStorms"][0]
+    repeat = {**first, "name": "Again", "id": first["id"].upper()}
+    document["activeStorms"].append(repeat)
+    result = parse_current_storms(json.dumps(document))
+    assert [s.id for s in result.storms] == [s.id for s in parse_current_storms(json.dumps(_populated())).storms]
+    assert result.storms[0].name != "Again"
+    assert result.skipped == 1

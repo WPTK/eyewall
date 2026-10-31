@@ -27,7 +27,7 @@ from typing import Any
 
 import shapefile
 
-from eyewall.geo import normalize_lon
+from eyewall.geo import wrap_lon
 from eyewall.models.forecast import ForecastGis, ForecastPoint
 from eyewall.models.track import BestTrackGis, BestTrackPoint, BestTrackSegment
 from eyewall.models.watches import WatchWarningSegment
@@ -60,20 +60,25 @@ _READ_ERRORS = (
 )
 
 
+# The largest layer member read into memory. A real layer is well under 1 MB; the cap stops a zip bomb, and a layer
+# over it is dropped like any other unreadable layer.
+MAX_MEMBER_BYTES = 32 * 1024 * 1024
+
+
+def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
+    with archive.open(name) as handle:
+        data = handle.read(MAX_MEMBER_BYTES + 1)
+    if len(data) > MAX_MEMBER_BYTES:
+        raise ValueError(f"zip member {name!r} is larger than {MAX_MEMBER_BYTES} bytes")
+    return data
+
+
 @dataclass(frozen=True, slots=True)
 class Feature:
     """One shape with its attributes (keys upper-cased). `parts` are the rings or lines as (lat, lon) tuples."""
 
     attrs: Mapping[str, Any]
     parts: tuple[tuple[tuple[float, float], ...], ...]
-
-
-def wrap_lon(lon: float) -> float:
-    """Wrap a longitude into (-180, 180], so the dateline itself is 180 and not -180. In-range values pass unchanged."""
-    if -180.0 < lon <= 180.0:
-        return lon
-    wrapped = normalize_lon(lon)
-    return 180.0 if wrapped == -180.0 else wrapped
 
 
 def _open_zip(data: bytes) -> zipfile.ZipFile:
@@ -109,9 +114,9 @@ def read_features(archive: zipfile.ZipFile, prefix: str) -> list[Feature]:
     features: list[Feature] = []
     try:
         reader = shapefile.Reader(
-            shp=io.BytesIO(archive.read(shp)),
-            dbf=io.BytesIO(archive.read(dbf)) if dbf else None,
-            shx=io.BytesIO(archive.read(shx)) if shx else None,
+            shp=io.BytesIO(_read_member(archive, shp)),
+            dbf=io.BytesIO(_read_member(archive, dbf)) if dbf else None,
+            shx=io.BytesIO(_read_member(archive, shx)) if shx else None,
         )
         fields = [field[0].upper() for field in reader.fields[1:]] if dbf else []
         for shape_record in _iter_shape_records(reader, bool(dbf)):

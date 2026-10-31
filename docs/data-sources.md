@@ -87,8 +87,8 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
   `.spec` has `WVHT SwH SwP WWH WWP SwD WWD STEEPNESS APD MWD`, directions as compass text and steepness as words
   (`STEEP`, `AVERAGE`, `VERY_STEEP`, `N/A`). The 5-day files hold about 700 rows, newest first.
 - **NDBC historical:** a past year's file is oldest first and its `VIS` unit line says `mi` where current files say
-  `nmi`. Only Jul and Aug 2026 monthly names were seen for 41010 (Jan 2026 was a 404, Oct is empty until the month
-  ends, so Oct to Dec naming is unknown); the previous month is a plain `{id}.txt`. A closed year's monthly names
+  `nmi`. Monthly names were seen for Jan, Jul and Aug 2026 (`Jan/4100212026.txt.gz`; 41010 has none for Jan), `Sep/` holds only the plain files,
+  and Oct to Dec were empty directories on 31 Oct 2026, so Oct to Dec naming is unknown; the previous month is a plain `{id}.txt`. A closed year's monthly names
   (the old `Aug/4101082025.txt.gz` example) return 404, so replay recording uses the yearly file. 41025's 2025 file
   runs to 31 Dec and holds Hurricane Erin; 41010's ends on 31 Jul 2025 and holds nothing from it.
 - **CO-OPS:** `datum` required for water level (HTTP 400 with `{"error": {"message": ...}}` otherwise, and also

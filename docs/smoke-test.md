@@ -6,19 +6,19 @@ for the platform and `SHA256SUMS` from the release page.
 | Platform | File |
 | --- | --- |
 | Windows 10 or 11, x86_64 | `eyewall-windows-x86_64.exe` |
-| Linux x86_64 (glibc 2.31 or newer) | `eyewall-linux-x86_64` |
-| Linux arm64 (Raspberry Pi OS 64-bit) | `eyewall-linux-arm64` |
-| macOS, Apple silicon | `eyewall-macos-arm64` |
-| macOS, Intel | `eyewall-macos-x86_64` |
+| Linux x86_64 (glibc 2.31 or newer) | `eyewall-linux-x86_64.tar.gz` |
+| Linux arm64 (Raspberry Pi OS 64-bit) | `eyewall-linux-arm64.tar.gz` |
+| macOS, Apple silicon | `eyewall-macos-arm64.tar.gz` |
+| macOS, Intel | `eyewall-macos-x86_64.tar.gz` |
 
 The binaries are not signed. Windows SmartScreen may warn on first run ("More info", then "Run anyway"); on macOS clear
-the quarantine flag with `xattr -d com.apple.quarantine eyewall-macos-arm64`.
+the quarantine flag with `xattr -d com.apple.quarantine eyewall`.
 
 ## Checklist
 
 1. Verify the download: `sha256sum -c --ignore-missing SHA256SUMS` (Linux, macOS) or
    `Get-FileHash eyewall-windows-x86_64.exe` and compare with the line in `SHA256SUMS` (Windows).
-2. On Linux and macOS, `chmod +x` the file.
+2. On Linux and macOS, unpack the archive (`tar -xzf`); the `eyewall` inside is already executable.
 3. `eyewall --version` prints the release number.
 4. `eyewall --selftest` prints `selftest ok` and exits 0.
 5. `eyewall --demo --headless --until +1h` prints three events and `3 event(s)`.

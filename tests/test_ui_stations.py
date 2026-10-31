@@ -209,3 +209,14 @@ def test_a_buoy_missing_from_a_loaded_latest_obs_is_not_reporting() -> None:
     store.latest["41010"] = LatestObservation("41010", 28.9, -78.5, obs(10, wind_speed_mps=5.0))
     assert st.buoy_state(store, "41002", NOW) == "dark"
     assert st.buoy_state(store, "41010", NOW) == "ok"
+
+
+def test_a_watchlisted_gauge_missing_from_the_loaded_catalog_reads_unknown() -> None:
+    store = _store()
+    preset = PRESETS["nautical"]
+    ghost = st.TideStation("1234567", "", 0.0, 0.0)
+    assert st.tide_row(store, st.Entry(ghost, watchlisted=True), NOW, preset)[9].plain == "unknown"
+    listed = st.Entry(store.tide_stations[0], watchlisted=True)
+    assert st.tide_row(store, listed, NOW, preset)[9].plain == "waiting"
+    store.tide_stations = ()  # catalog not loaded yet: nothing is known to be missing
+    assert st.tide_row(store, st.Entry(ghost, watchlisted=True), NOW, preset)[9].plain == "waiting"
