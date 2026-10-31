@@ -1,0 +1,98 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Erin Discussion Number  32
+NWS National Hurricane Center Miami FL       AL052025
+500 AM EDT Tue Aug 19 2025
+ 
+Moderate to strong northwesterly shear has caused Erin's structure 
+to become more asymmetric, with dry air infiltrating into the 
+northwestern part of the circulation, and a long trailing convective 
+band still draped to the south over the Turks and Caicos Islands.  
+An earlier Air Force Reserve Hurricane Hunter mission made a final 
+pass through the center of Erin around 1230 am and measured 
+flight-level winds of 97 kt, with a central pressure up to 953 mb.  
+Combining this information with the latest satellite estimates, 
+Erin's intensity is set at 100 kt, which could be a bit generous.
+
+Erin has been moving slowly northwestward since yesterday, with an 
+initial motion estimated to be 325/6 kt.  There is not much change 
+to the track forecast reasoning, with the hurricane still expected 
+to recurve over the western Atlantic between the U.S. east coast and 
+Bermuda over the next 3-4 days.  The main highlight of the new 
+forecast is that much of the track guidance, including the consensus 
+aids, have shifted slightly west of the previous NHC prediction 
+during the first 2-3 days.  The new NHC forecast is very close to 
+the TVCA and HCCA consensus aids during the first 48 hours, and then 
+closer to the TVCA aid beyond 48 hours.  It should be noted that 
+there is still some space for additional adjustments to the track 
+forecast, particularly beyond 48 hours with the HCCA aid lying along 
+the northwestern edge of the guidance envelope.
+ 
+There are mixed signals on Erin's future intensity.  On one hand, 
+more favorable environmental shear and upper-level divergence in 
+24-36 hours should support some re-intensification.  On the other 
+hand, Erin's slow motion and large size could lead to some upwelling 
+of cooler water, and the hurricane's broad structure could limit 
+significant strengthening.  The official forecast only shows 
+fluctuations in intensity for the next 3 days, although it's 
+becoming more likely that Erin could just weaken very gradually 
+during that time.  Erin is forecast to maintain hurricane strength 
+for the next 5 days, but it is likely to begin interacting with a 
+frontal boundary by Friday and become extratropical by late 
+Saturday.
+ 
+The more important part of the forecast is that model guidance has 
+continued to show Erin growing in size, and the wind radii have been 
+made larger in the new NHC forecast.  This new forecast now brings 
+tropical-storm-force winds very close to the Mid-Atlantic and 
+southern New England coast later this week.  Erin's expanding wind 
+field will result in rough ocean conditions over much of the western 
+Atlantic. It should be noted that the 34- and 50-kt wind speed 
+probabilities beyond 36 hours in the text and graphical products are 
+likely underestimating the risk of those winds occurring.  This is 
+because the forecast wind field of Erin is considerably larger than 
+average compared to the wind field used to derive the wind speed 
+probability product.
+ 
+KEY MESSAGES:
+ 
+1. Erin is expected to produce life-threatening surf and rip 
+currents along the beaches of the Bahamas, much of the east coast of 
+the U.S., Bermuda, and Atlantic Canada during the next several days. 
+Beachgoers in those areas should follow advice from lifeguards, 
+local authorities, and beach warning flags.
+
+2. Tropical storm conditions and coastal flooding are possible in 
+the North Carolina Outer Banks beginning late Wednesday or Wednesday 
+night where Tropical Storm and Storm Surge Watches are in effect.  
+Interests in along the U.S. Mid-Atlantic and southern New England 
+coasts and on Bermuda should also monitor the progress of Erin as 
+strong winds are possible Thursday and Friday.
+  
+3. Heavy rainfall from the outer bands of Erin will continue today 
+for the Turks and Caicos and through tonight for the Bahamas. Flash 
+and urban flooding are possible. 
+ 
+4. Tropical storm conditions are expected in the Turks and Caicos 
+Islands and in the southeast Bahamas for a few more hours.  Tropical 
+storm conditions are possible in portions of the central Bahamas 
+today.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  19/0900Z 24.8N  72.0W  100 KT 115 MPH
+ 12H  19/1800Z 26.1N  72.7W   95 KT 110 MPH
+ 24H  20/0600Z 28.1N  73.5W   95 KT 110 MPH
+ 36H  20/1800Z 30.3N  74.0W  100 KT 115 MPH
+ 48H  21/0600Z 32.6N  73.4W  100 KT 115 MPH
+ 60H  21/1800Z 34.6N  71.4W   95 KT 110 MPH
+ 72H  22/0600Z 36.5N  68.4W   90 KT 105 MPH
+ 96H  23/0600Z 39.5N  61.0W   75 KT  85 MPH
+120H  24/0600Z 42.0N  53.4W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Berg
+ 
+NNNN

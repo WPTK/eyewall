@@ -196,3 +196,22 @@ class TidePressure:
     time: datetime
     pressure_mb: float | None = None
     flags: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class TideSeries:
+    """What one tide gauge reported: water level always, wind and pressure where the gauge has the sensors.
+
+    Every list is newest first. `datum` is the one the water level was asked for (MLLW, or IGLD on the Great Lakes).
+    A product the gauge does not offer is an empty `Parsed` carrying NOAA's message.
+    """
+
+    station_id: str
+    datum: str
+    water_level: Parsed[WaterLevelReading] = Parsed()
+    wind: Parsed[TideWind] = Parsed()
+    pressure: Parsed[TidePressure] = Parsed()
+
+    @property
+    def latest_level(self) -> WaterLevelReading | None:
+        return next((r for r in self.water_level.items if r.level_ft is not None), None)

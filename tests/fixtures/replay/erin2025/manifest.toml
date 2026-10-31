@@ -1,0 +1,12 @@
+format = 1
+name = "erin2025"
+title = "Erin (2025)"
+storm_id = "al052025"
+storm_name = "Erin"
+bin = "AT5"
+start = 2025-08-19 03:00:00+00:00
+end = 2025-08-21 12:00:00+00:00
+graphics = [
+    { file = "cone_033.png", kind = "cone", product = "5day_cone_with_line_and_wind", adv = "033" },
+    { file = "cone_038.png", kind = "cone", product = "5day_cone_with_line_and_wind", adv = "038" },
+]

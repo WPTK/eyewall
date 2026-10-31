@@ -1,0 +1,81 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Erin Discussion Number  40
+NWS National Hurricane Center Miami FL       AL052025
+500 AM EDT Thu Aug 21 2025
+ 
+Erin's satellite presentation currently shows the low-level center 
+embedded beneath a 90 n mi-wide Central Dense Overcast.  Outer 
+convective bands extend a couple of hundred miles away from the 
+center, but there has recently been some erosion of the clouds 
+within the southwestern part of the circulation, which likely 
+signals an increase in shear.  On the last transect through the 
+storm, the Air Force Reserve Hurricane Hunters measured 700-mb 
+flight-level winds of 100 kt, and found that the central pressure 
+had risen to 945 mb.  The current intensity is estimated to be 90 
+kt, although it should be noted that some of the satellite intensity 
+estimates are lower.
+ 
+Erin has made its closest approach to the North Carolina coast and 
+is now moving north-northeastward (020 degrees) at 15 kt.  There is 
+no change in the forecast reasoning of the future track.  Erin 
+should continue to accelerate and turn east-northeastward by Friday 
+as it becomes increasingly embedded within the mid-latitude 
+westerlies.  The new NHC track forecast is a bit faster than the 
+previous prediction, showing Erin racing across the north Atlantic 
+with a peak forward speed of about 35 kt in 72 hours.
+ 
+The prospects for strengthening appear to be coming to a close, 
+particularly with the atmosphere becoming more stable and shear 
+increasing during the next 12-24 hours.  Only slow weakening is 
+forecast during the next 36 hours, but steady weakening is likely 
+after that time.  Erin's transition to a post-tropical cyclone has 
+been moved up to 60 hours in the official forecast, but some of the 
+latest guidance indicate it could happen as soon as 36-48 hours 
+from now.  The global models, including the GFS and ECMWF, are also 
+trending toward keeping the post-tropical cyclone big and strong 
+while it moves across the north Atlantic, and the NHC wind radii and 
+intensity forecasts have been adjusted upward accordingly.
+
+ 
+KEY MESSAGES:
+ 
+1. Erin will continue to produce life-threatening surf and rip
+currents along the beaches of the Bahamas, much of the east coast of
+the U.S., Bermuda, and Atlantic Canada during the next several days.
+Beachgoers in those areas should follow advice from lifeguards,
+local authorities, and beach warning flags.
+ 
+2. Storm surge flooding and tropical storm conditions will continue
+on the North Carolina Outer Banks today.  The storm surge will be 
+accompanied by large waves, leading to significant beach erosion and 
+overwash, making some roads impassible.
+ 
+3. Tropical storm conditions are expected today along the Virginia 
+coast.  Wind gusts to tropical storm force are likely along
+portions of the remainder of the U.S. Mid-Atlantic and southern New
+England coasts today through early Friday.
+ 
+4. Tropical storm conditions are possible on Bermuda this afternoon 
+through early Friday.  Gusts to gale force are possible along the 
+coast of Nova Scotia on Friday and the Avalon Peninsula of 
+Newfoundland on Saturday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  21/0900Z 34.2N  72.1W   90 KT 105 MPH
+ 12H  21/1800Z 35.8N  70.3W   90 KT 105 MPH
+ 24H  22/0600Z 37.8N  66.7W   85 KT 100 MPH
+ 36H  22/1800Z 39.6N  62.1W   85 KT 100 MPH
+ 48H  23/0600Z 41.4N  56.2W   75 KT  85 MPH
+ 60H  23/1800Z 43.6N  48.7W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 72H  24/0600Z 46.7N  40.2W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 96H  25/0600Z 53.0N  26.7W   55 KT  65 MPH...POST-TROP/EXTRATROP
+120H  26/0600Z 56.8N  21.7W   45 KT  50 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Berg
+ 
+NNNN

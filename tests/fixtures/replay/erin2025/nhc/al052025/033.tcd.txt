@@ -1,0 +1,90 @@
+ZCZC MIATCDAT5 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Erin Discussion Number  33
+NWS National Hurricane Center Miami FL       AL052025
+1100 AM EDT Tue Aug 19 2025
+
+Erin's cloud pattern continues to be disrupted by vertical wind 
+shear, with the low-level center situated near the northwestern edge 
+of the main area of deep convection.  There are still well-defined 
+convective banding features over the eastern semicircle of the 
+system.  Reports from an Air Force Hurricane Hunter aircraft 
+indicate that the central pressure has risen compared to earlier 
+this morning.  The advisory intensity is set to 90 kt, comparable to 
+a Dvorak Current Intensity number from TAFB.  However, wind 
+observations from the Hurricane Hunters suggest that this intensity 
+estimate may be on the high side. 
+
+The hurricane is moving a little faster to the northwest with an 
+initial motion estimate of 325/8 kt.  Erin is expected to turn 
+northward around the western periphery of a subtropical anticyclone 
+centered southeast of Bermuda.  Later in the period, the system 
+should turn to the northeast with some increase in forward speed as 
+it moves into the mid-latitude westerlies.  There are no 
+significant adjustments to the previous NHC forecast track and the 
+official forecast lies very close to the latest dynamical model 
+consensus, TVCA.  
+
+Predicting Erin's intensity is somewhat problematic.  Given the 
+current disorganization of the cloud pattern, one would be reluctant 
+to call for restrengthening.  However,the dynamical guidance shows 
+increasingly anticyclonic upper-level flow over the system and the 
+SHIPS model diagnoses a significant decrease in vertical wind shear. 
+ Therefore, the official forecast shows a bit of restrengthening in 
+the next 36 hours.  This is somewhat above the model consensus but 
+below the latest statistical/dynamical LGEM guidance.
+
+The global models continue to show an increase in the size of the 
+hurricane, with the tropical-storm-force wind radii crossing the 
+North Carolina Outer Banks within the next couple of days.  
+Accordingly, Tropical Storm and Storm Surge warnings have been 
+issued for this area.
+
+It should be noted that the 34- and 50-kt wind speed probabilities 
+beyond 36 hours in the text and graphical products are likely 
+underestimating the risk of those winds occurring.  This is because 
+the forecast wind field of Erin is considerably larger than average 
+compared to the wind field used to derive the wind speed probability 
+product.
+ 
+KEY MESSAGES:
+
+1. Erin is expected to produce life-threatening surf and rip 
+currents along the beaches of the Bahamas, much of the east coast of 
+the U.S., Bermuda, and Atlantic Canada during the next several days. 
+Beachgoers in those areas should follow advice from lifeguards, 
+local authorities, and beach warning flags.
+
+2. Storm surge flooding and tropical storm conditions are expected 
+in the North Carolina Outer Banks beginning late Wednesday or 
+Wednesday night, where Tropical Storm and Storm Surge Warnings are 
+now in effect.  The storm surge will be accompanied by large waves, 
+leading to significant beach erosion and overwash, making some roads 
+impassible.   
+  
+3. Heavy rainfall from the outer bands of Erin will continue today 
+for the Turks and Caicos and through tonight for the Bahamas. Flash 
+and urban flooding are possible. 
+ 
+4. Interests along the U.S. Mid-Atlantic and southern New England 
+coasts and on Bermuda should also monitor the progress of Erin as 
+strong winds are possible Thursday and Friday.
+
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  19/1500Z 25.6N  72.4W   90 KT 105 MPH
+ 12H  20/0000Z 27.0N  73.1W   90 KT 105 MPH
+ 24H  20/1200Z 29.1N  73.9W   90 KT 105 MPH
+ 36H  21/0000Z 31.4N  73.6W   95 KT 110 MPH
+ 48H  21/1200Z 33.7N  72.4W   95 KT 110 MPH
+ 60H  22/0000Z 35.6N  70.0W   90 KT 105 MPH
+ 72H  22/1200Z 37.3N  66.6W   85 KT 100 MPH
+ 96H  23/1200Z 40.3N  58.7W   65 KT  75 MPH
+120H  24/1200Z 42.8N  50.0W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Pasch
+ 
+NNNN
