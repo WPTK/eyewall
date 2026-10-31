@@ -186,6 +186,10 @@ def committed_recipes() -> list[Recipe]:
 
 # Hand-built fixtures: files that are not recordings, with the reason. They are written into the manifest too.
 HAND_BUILT: dict[str, str] = {
+    "nhc/two/at_special_20261031.txt": (
+        "the routine at_20261031.txt with only the heading changed to 'Special Tropical Weather Outlook'. NHC issues "
+        "specials under the same product header into the same tgftp file; none was available to record."
+    ),
     "nhc/current/populated.json": (
         "hand-built from NHC_JSON_Sample.json and edited to the live shape: lowercase ids, string intensity and "
         "pressure, latitudeNumeric/longitudeNumeric, mph movement. Holds Erin (AT5), a potential tropical cyclone, "
