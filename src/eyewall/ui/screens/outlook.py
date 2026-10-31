@@ -50,7 +50,12 @@ def outlook_text(eye: EyewallApp) -> Text:
         out.append("Waiting for the tropical weather outlook.", style=DIM)
         return out
     shown = False
+    seen: set[tuple[str, str]] = set()  # the eastern Pacific text repeats the central Pacific areas east of 180
     for text in outlook.texts:
+        areas = [a for a in text.areas if (a.title, a.description) not in seen]
+        seen.update((a.title, a.description) for a in text.areas)
+        if text.areas and not areas:
+            continue
         covered = [b for b in fmt.text_basins(text) if b in eye.basin_view]
         if not covered:
             continue
@@ -60,8 +65,8 @@ def outlook_text(eye: EyewallApp) -> Text:
             out.append(f"Issued {format_zulu(text.issued, day=True)}\n", style=DIM)
         if text.active_systems:
             out.append("\n" + fmt.collapse(text.active_systems) + "\n")
-        if text.areas:
-            for index, area in enumerate(text.areas, start=1):
+        if areas:
+            for index, area in enumerate(areas, start=1):
                 _area_text(out, area, fmt.invest_label(area, "", index) + f": {fmt.collapse(area.title)}")
         else:
             out.append("\n" + fmt.collapse(text.summary) + "\n")

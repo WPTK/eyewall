@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import DataTable, Static
 
@@ -28,17 +29,33 @@ class AlertLogScreen(Screen[None]):
         yield Static("", id="alert-empty")
 
     def on_mount(self) -> None:
-        self.query_one("#alert-table", DataTable).add_columns("Time (Z)", "Event", "Storm", "Message")
+        self.refresh_data()
+
+    def on_resize(self, event: Resize) -> None:
         self.refresh_data()
 
     def refresh_data(self) -> None:
+        """Rebuild the table. The message column takes the width the other columns leave, and long messages wrap."""
         table = self.query_one("#alert-table", DataTable)
-        table.clear()
         log = self.eye.alert_log
-        for event in log:
-            storm = (event.storm_id or "--").upper()
-            title = Text(fmt.event_title(event), style=fmt.SEVERITY_COLORS[event.severity])
-            table.add_row(f"{event.time:%b %d %H:%M}", title, storm, event.message)
+        rows = [
+            (
+                f"{event.time:%b %d %H:%M}",
+                Text(fmt.event_title(event), style=fmt.SEVERITY_COLORS[event.severity]),
+                (event.storm_id or "--").upper(),
+                event.message,
+            )
+            for event in log
+        ]
+        headers = ("Time (Z)", "Event", "Storm", "Message")
+        fixed = [max([len(headers[i])] + [len(str(row[i])) for row in rows]) for i in range(3)]
+        # Each column has a cell of padding either side; the scrollbar takes one more column.
+        message_width = max(20, self.size.width - sum(fixed) - 2 * len(headers) - 1)
+        table.clear(columns=True)
+        for header, width in zip(headers, (*fixed, message_width), strict=True):
+            table.add_column(header, width=width)
+        for time, title, storm, message in rows:
+            table.add_row(time, title, storm, Text(message), height=None)
         self.query_one("#alert-empty", Static).update("" if log else "No alerts yet this session.")
 
     def action_back(self) -> None:

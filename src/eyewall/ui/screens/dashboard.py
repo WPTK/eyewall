@@ -119,6 +119,11 @@ class DashboardScreen(Screen[None]):
         }
         for panel in self.query(Panel):
             panel.update(texts[panel.kind])
+        tabs = self.query_one("#side-tabs", TabbedContent)
+        if texts["surge"]:
+            tabs.show_tab("tab-surge")
+        else:
+            tabs.hide_tab("tab-surge")
         scene = adapt.map_scene(store, now, selected)
         self.map_view.set_scene(scene, self._fit_points())
 

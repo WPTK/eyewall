@@ -31,7 +31,11 @@ class Panel(VerticalScroll):
         yield self.body
 
     def update(self, text: Text) -> None:
+        text = text.copy()
+        text.rstrip()  # the builders end every line with a newline; the last one would show as a blank row
         self.body.update(text)
+        if self.kind == "surge":  # no surge text, no panel: an empty box says nothing
+            self.display = bool(text)
 
 
 class StatusBar(Static):

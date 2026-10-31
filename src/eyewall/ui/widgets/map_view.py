@@ -157,6 +157,7 @@ class MapView(Widget, can_focus=True):
     def on_resize(self, event: events.Resize) -> None:
         self._strips = None
         self._ensure_viewport()
+        self.refresh()
         self.post_message(self.Changed())
 
     # ---- actions ----------------------------------------------------------------------------------------------
