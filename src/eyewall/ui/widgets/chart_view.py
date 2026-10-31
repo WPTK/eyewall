@@ -13,6 +13,7 @@ from textual.widget import Widget
 from eyewall.render.canvas import Mode
 from eyewall.render.chart import ChartSeries, Tick, render_chart
 from eyewall.ui.theme import DIM
+from eyewall.ui.widgets.strips import blank, canvas_strips
 
 
 class ChartView(Widget):
@@ -55,10 +56,10 @@ class ChartView(Widget):
         if width < 1 or height < 1:
             return []
         if not self._has_data():
-            blank = Strip.blank(width)
+            empty = blank(width)
             message = f" {self._title}: {self._empty}"[:width]
             line = Strip([Segment(message, RichStyle(color=DIM))], width)
-            return [line] + [blank] * (height - 1)
+            return [line] + [empty] * (height - 1)
         canvas = render_chart(
             self._series,
             width,
@@ -68,18 +69,14 @@ class ChartView(Widget):
             x_ticks=self._x_ticks,
             title=self._title,
         )
-        strips = []
-        for runs in canvas.rows_as_runs():
-            segments = [Segment(text, RichStyle(color=s.fg, bgcolor=s.bg, bold=s.bold or None)) for text, s in runs]
-            strips.append(Strip(segments, width))
-        return strips
+        return canvas_strips(canvas, width)
 
     def render_line(self, y: int) -> Strip:
         if self._strips is None:
             self._strips = self._build()
         if 0 <= y < len(self._strips):
             return self._strips[y]
-        return Strip.blank(self.size.width)
+        return blank(self.size.width)
 
     def on_resize(self, event: events.Resize) -> None:
         self._strips = None

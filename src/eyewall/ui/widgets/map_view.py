@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from rich.segment import Segment
-from rich.style import Style as RichStyle
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
@@ -28,6 +26,7 @@ from eyewall.render.layers import DEFAULT_MAP_STYLE, EMPTY_SCENE, MapOptions, Ma
 from eyewall.render.projection import Viewport
 from eyewall.ui.adapt import basin_points
 from eyewall.ui.theme import DIM
+from eyewall.ui.widgets.strips import blank, canvas_strips
 
 ZOOM_STEP = 2.0
 PAN_FRACTION = 8  # an arrow key moves the view by 1/8 of its size
@@ -144,18 +143,14 @@ class MapView(Widget, can_focus=True):
             return []
         scene = replace(self.scene, cursor=self.cursor)
         canvas = render_map(view, scene, self.mode, self.options, DEFAULT_MAP_STYLE)
-        strips = []
-        for runs in canvas.rows_as_runs():
-            segments = [Segment(text, RichStyle(color=s.fg, bgcolor=s.bg, bold=s.bold or None)) for text, s in runs]
-            strips.append(Strip(segments, view.cols))
-        return strips
+        return canvas_strips(canvas, view.cols)
 
     def render_line(self, y: int) -> Strip:
         if self._strips is None:
             self._strips = self._build()
         if 0 <= y < len(self._strips):
             return self._strips[y]
-        return Strip.blank(self.size.width)
+        return blank(self.size.width)
 
     def on_resize(self, event: events.Resize) -> None:
         self._strips = None

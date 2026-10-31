@@ -82,7 +82,6 @@ class BuoyDetailScreen(Screen[None]):
 
     def on_resize(self, event: Resize) -> None:
         self._apply_layout(event.size.width)
-        self.refresh_status()
 
     def _apply_layout(self, width: int) -> None:
         narrow = width < NARROW_BELOW
