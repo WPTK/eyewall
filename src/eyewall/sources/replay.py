@@ -95,14 +95,19 @@ class ReplaySource:
         self._tcp: list[_Product[PublicAdvisory]] = []
         self._tcd: list[_Product[Discussion]] = []
         self._pws: list[_Product[WindProbabilities]] = []
-        self._load_text()
-        self._gis_issued = self._index_gis()
-        self._best_track = self._load_best_track()
-        self._stations = self._load_stations()
-        self._series: dict[str, ObservationSeries] = {}
-        self._forecast_cache: dict[str, ForecastGis] = {}
-        self._radii_cache: dict[str, WindRadiiGis] = {}
-        self._tide_stations = self._load_tide_stations()
+        try:
+            self._load_text()
+            self._gis_issued = self._index_gis()
+            self._best_track = self._load_best_track()
+            self._stations = self._load_stations()
+            self._series: dict[str, ObservationSeries] = {}
+            self._forecast_cache: dict[str, ForecastGis] = {}
+            self._radii_cache: dict[str, WindRadiiGis] = {}
+            self._tide_stations = self._load_tide_stations()
+        except BundleError:
+            raise
+        except (ValueError, KeyError, TypeError, AttributeError, OSError) as exc:
+            raise BundleError(f"{directory}: the recording could not be read ({exc})") from exc
 
     # ---- loading ----------------------------------------------------------------------------------------------
 

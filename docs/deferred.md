@@ -33,7 +33,6 @@ and move an item into a milestone brief when it is scheduled.
 - M5: surge geometry (KML) is not parsed, so the map has no surge lines and the surge panel shows text only.
 - M5: on a quiet day the dashboard stays the first screen; opening on the outlook automatically is not done.
 - M5: parsing runs on the UI loop with no `asyncio.to_thread`; measure a replay at 3600x for freezes before moving the sync parses off the loop.
-- M5: the status bar crowds below 90 columns; drop segments by priority instead of truncating.
 - M5: the snapshot tests depend on the platform's text rendering; pin the font metrics or compare structure instead.
 - M5: the map widget invalidates and redraws the whole canvas on every scene change; cache the layers that did not change.
 - M6: a tide gauge has no detail screen; Enter on a gauge row does nothing and `p` pins it. Observed against predicted
@@ -56,11 +55,10 @@ and move an item into a milestone brief when it is scheduled.
 - #18: the map marks states by colour alone: station marks by reported wind and dimmed when stale, outlook areas by risk, watch and warning track segments by kind. The same facts are in text on the panels and tables; a glyph per state would need new marks on a braille canvas.
 - #18: the buoy chart draws wind and gust as two lines told apart by colour alone (the legend names them); a dashed gust line would need a new line style in `render/chart.py`.
 - #20: the dashboard map fit shows the whole five-day cone, so a storm that recurves (Erin at advisory 38 reaches 57 N) is fitted by its long extent and sits at one edge with empty bands above and below. Centring on the storm needs the fit to stop at the 72 hour point, which means a `tau` on the map's `ForecastPoint` and a decision about whether the cone may be cropped; the "Fit cone" key and help text promise the whole cone.
-- #20: at 80 columns the Forecast table still scrolls sideways because it has eleven columns (position, wind, gust and the three radii); fewer columns or a second row per fix would change the table, not just its sizing.
 - Footer (#16): the outlook screen's footer shows `+/- zoom` and `fit` when its map is focused, and `esc back` stands in for `O`; its hard-coded `Enter: charts   w: edit` line above the watchlist remains.
 - Footer (#16): `t` now works only on the Advisory tab (it used to jump there from any tab), and `p` does nothing off the Buoys and Tides tabs (the toast that explained it is gone).
-- Footer (#16): the keys that fit depend on the status text's width, so a key can appear or vanish at the edge when the `next` countdown changes length; pin the status width if it distracts.
 - Footer (#16): `q`, `g`, `O`, `A`, `w`, `S`, `/`, `r`, `u` and the replay keys are in `?` help only; the snapshot tests pin the status line, so `tests/test_footer.py` checks the footer instead.
 - Poller: the feeds are still polled one after another; `FEED_DEADLINE` bounds a hung host, but independent feeds (buoys, tides, satellite) could run concurrently. Parked: it changes the ordering the store and the alert engine rely on.
 - Poller: when a new advisory arrives the old cone and wind radii are dropped (they carry their advisory number); the graphics links are not, because a graphics page lists intermediate advisories under their own numbers. They are refetched with the cone and retried like it.
 - Cache: parsing a large body (the 1 MB NESDIS listing, the zips) still happens on the UI loop; only the disk reads, writes and the startup prune moved to a thread.
+- `fetch_image` follows redirects itself; give `fetch_bytes` a per-hop URL check so the two can be one.

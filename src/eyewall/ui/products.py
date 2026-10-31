@@ -94,11 +94,6 @@ def _fix_row(fix: ForecastFix, preset: Preset, tz: tzinfo | None) -> tuple[str, 
             "dissipated",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "",
         )
     return (
         f"{fix.tau}h" + ("*" if fix.outlook else ""),
@@ -108,10 +103,6 @@ def _fix_row(fix: ForecastFix, preset: Preset, tz: tzinfo | None) -> tuple[str, 
         fmt_lon(fix.lon),
         preset.fmt_wind(wind),
         label,
-        preset.fmt_wind(fix.gust_kt),
-        fmt_radii(fix.radii.kt34),
-        fmt_radii(fix.radii.kt50),
-        fmt_radii(fix.radii.kt64),
     )
 
 
@@ -123,15 +114,11 @@ FORECAST_COLUMNS = (
     "Lon",
     "Wind",
     "Cat",
-    "Gust",
-    "34 kt NE/SE/SW/NW",
-    "50 kt",
-    "64 kt",
 )
 
 
 def forecast_table(state: StormState, preset: Preset, tz: tzinfo | None) -> Table:
-    """The forecast advisory's positions, with the current position first. Radii stay in nautical miles."""
+    """The forecast advisory's positions, with the current position first. Gusts and radii are in the advisory text."""
     tcm = state.advisories.forecast
     rows: list[tuple[str, ...]] = []
     if tcm is not None:
@@ -150,10 +137,6 @@ def forecast_table(state: StormState, preset: Preset, tz: tzinfo | None) -> Tabl
                     fmt_lon(p.lon),
                     preset.fmt_wind(p.max_wind_kt),
                     category.value if category else MISSING,
-                    preset.fmt_wind(p.gust_kt),
-                    "",
-                    "",
-                    "",
                 )
             )
     return FORECAST_COLUMNS, rows
@@ -163,9 +146,7 @@ def forecast_note(state: StormState) -> str:
     tcm = state.advisories.forecast
     if tcm is None:
         return "No forecast advisory yet."
-    return (
-        TCM_OUTLOOK_NOTE if tcm.outlook_fixes else "Radii are in nautical miles, as the forecast advisory gives them."
-    )
+    return TCM_OUTLOOK_NOTE if tcm.outlook_fixes else ""
 
 
 def public_advisory(state: StormState, g: UiGlyphs) -> Text:

@@ -16,22 +16,25 @@ at a time with a few frames kept (`Frames`).
 
 from __future__ import annotations
 
+import asyncio
 import io
 import math
 import sys
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin
 
 import httpx
 from PIL import Image as PILImage
 from PIL import ImageChops, ImageFilter, ImageOps
 
-from eyewall.net import TooLarge, fetch_bytes
+from eyewall.net import MAX_BYTES_EXTENSION, HttpError, NetworkError, RateLimited, TooLarge
 from eyewall.render.canvas import Mode, Run, Style
+from eyewall.urls import is_noaa_url
 
 MAX_IMAGE_BYTES = 24 * 1024 * 1024  # the full GEOCOLOR loop of a long storm is about 13 MB
 MAX_PIXELS = 36_000_000  # per frame; the satellite loops are 1000 by 1000
@@ -81,18 +84,91 @@ def check_image_bytes(url: str, data: bytes, max_bytes: int = MAX_IMAGE_BYTES) -
     return data
 
 
-async def fetch_image(client: httpx.AsyncClient, url: str, *, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
+MAX_REDIRECTS = 5
+RETRIES = 2
+BACKOFF_SECONDS = 1.0
+MAX_RETRY_AFTER = 30.0
+ERROR_BODY_LIMIT = 64 * 1024
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    try:
+        return max(0.0, float(response.headers["Retry-After"]))
+    except (KeyError, ValueError):
+        return None
+
+
+async def _drain(response: httpx.Response) -> None:
+    """Read a small error body to its end so the connection goes back to the pool; a big one is dropped."""
+    size = 0
+    try:
+        async for chunk in response.aiter_bytes():
+            size += len(chunk)
+            if size > ERROR_BODY_LIMIT:
+                return
+    except httpx.TransportError:
+        return
+
+
+async def fetch_image(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    max_bytes: int = MAX_IMAGE_BYTES,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> bytes:
     """GET an image through eyewall's HTTP client (User-Agent, timeouts, and the cache's conditional requests).
 
-    Raises `eyewall.net.FetchError` when the request fails and `ImageError` when the answer is not a usable image.
+    Only https NOAA addresses are fetched, and a redirect is followed only to another one; the client's own redirect
+    following is switched off for these requests so each hop can be checked. Transport errors, 429 and 5xx are retried
+    twice with backoff (Retry-After is honoured up to 30 seconds). Raises `eyewall.net.FetchError` when the request
+    fails and `ImageError` when the address is refused or the answer is not a usable image.
     """
-    if urlsplit(url).scheme not in ("http", "https"):
-        raise ImageError(f"{url}: not a web address")
-    try:
-        fetched = await fetch_bytes(client, url, max_bytes=max_bytes)
-    except TooLarge as exc:
-        raise ImageError(f"{url}: over the {max_bytes // (1024 * 1024)} MB limit") from exc
-    return check_image_bytes(url, fetched.body, max_bytes)
+    hops = 0
+    attempt = 0
+    while True:
+        if not is_noaa_url(url):
+            raise ImageError(f"{url}: not an https NOAA address")
+        retry_after: float | None = None
+        try:
+            async with client.stream(
+                "GET", url, follow_redirects=False, extensions={MAX_BYTES_EXTENSION: max_bytes}
+            ) as response:
+                status = response.status_code
+                if response.is_redirect and (location := response.headers.get("Location")):
+                    await _drain(response)
+                    hops += 1
+                    if hops > MAX_REDIRECTS:
+                        raise ImageError(f"{url}: too many redirects")
+                    url = urljoin(url, location)
+                    continue
+                if not response.is_success:
+                    retry_after = _retry_after(response)
+                    await _drain(response)
+                else:
+                    declared = response.headers.get("Content-Length", "")
+                    if declared.isdigit() and int(declared) > max_bytes:
+                        raise TooLarge(url, max_bytes)
+                    chunks: list[bytes] = []
+                    size = 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > max_bytes:
+                            raise TooLarge(url, max_bytes)
+                        chunks.append(chunk)
+                    return check_image_bytes(url, b"".join(chunks), max_bytes)
+        except TooLarge as exc:
+            raise ImageError(f"{url}: over the {max_bytes // (1024 * 1024)} MB limit") from exc
+        except httpx.TransportError as exc:
+            if attempt >= RETRIES:
+                raise NetworkError(url, str(exc) or type(exc).__name__) from exc
+            await sleep(BACKOFF_SECONDS * 2**attempt)
+            attempt += 1
+            continue
+        if (status != 429 and status < 500) or attempt >= RETRIES:
+            raise RateLimited(url, retry_after) if status == 429 else HttpError(url, status)
+        await sleep(min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else BACKOFF_SECONDS * 2**attempt)
+        attempt += 1
 
 
 class Frames:
