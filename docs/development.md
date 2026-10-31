@@ -71,4 +71,6 @@ git push origin v0.1.0
 ```
 
 `release.yml` then checks that the tag, `__version__` and the changelog heading agree, builds the wheel and source
-distribution, and creates the GitHub release using that changelog section as its notes.
+distribution and the five standalone binaries (`binaries.yml`, which also runs on pull requests that touch the build and can
+be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog section
+as its notes. `scripts/build_exe.ps1` builds the Windows binary locally; `docs/smoke-test.md` is the manual checklist.
