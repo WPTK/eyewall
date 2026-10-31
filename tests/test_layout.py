@@ -140,3 +140,40 @@ async def test_the_quiet_outlook_shows_each_area_once() -> None:
         assert flat.count("Area 1: Well Southeast") == 1
         assert "For the North Atlantic...Caribbean Sea and the Gulf of America" in flat
         assert isinstance(app.screen_stack[0], DashboardScreen)
+
+
+async def test_a_repeated_area_is_skipped_but_its_text_keeps_its_header() -> None:
+    app = scripted_app()
+    async with running(app, (140, 45)) as pilot:
+        await press(pilot, "O")
+        flat = " ".join(screen_text(app).split())
+        assert "For the central North Pacific...between 140W and 180W" in flat
+        assert flat.count("A broad area of low pressure") == 1
+
+
+async def test_a_text_outside_the_basin_view_does_not_hide_areas() -> None:
+    app = scripted_app()
+    async with running(app, (140, 45)) as pilot:
+        app.basin_filter = "CP"
+        await press(pilot, "O")
+        flat = " ".join(screen_text(app).split())
+        assert flat.count("A broad area of low pressure") == 1
+        assert "Area 1: Well Southeast" in flat
+
+
+async def test_hiding_the_active_surge_tab_falls_back_to_another_tab(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from rich.text import Text
+
+    app = replay_app()
+    async with running(app, (80, 24)) as pilot:
+        await into_the_storm(pilot)
+        tabs = app.screen.query_one("#side-tabs", TabbedContent)
+        tabs.active = "tab-surge"
+        await settle(pilot)
+        monkeypatch.setattr("eyewall.ui.format.surge_panel", lambda store, selected: Text("\n "))
+        app.screen.refresh_selection()
+        await settle(pilot)
+        assert tabs.get_tab("tab-surge").display is False
+        assert tabs.active != "tab-surge"
+        assert tabs.active
+        assert not _stacked(app)["surge"].display

@@ -52,21 +52,20 @@ def outlook_text(eye: EyewallApp) -> Text:
     shown = False
     seen: set[tuple[str, str]] = set()  # the eastern Pacific text repeats the central Pacific areas east of 180
     for text in outlook.texts:
-        areas = [a for a in text.areas if (a.title, a.description) not in seen]
-        seen.update((a.title, a.description) for a in text.areas)
-        if text.areas and not areas:
-            continue
         covered = [b for b in fmt.text_basins(text) if b in eye.basin_view]
         if not covered:
             continue
+        areas = [a for a in text.areas if (a.title, a.description) not in seen]
+        seen.update((a.title, a.description) for a in text.areas)
         shown = True
         out.append(f"{text.region or ' / '.join(fmt.BASIN_NAMES[b] for b in covered)}\n", style="bold #8fd3ff")
         if text.issued is not None:
             out.append(f"Issued {format_zulu(text.issued, day=True)}\n", style=DIM)
         if text.active_systems:
             out.append("\n" + fmt.collapse(text.active_systems) + "\n")
-        if areas:
-            for index, area in enumerate(areas, start=1):
+        if text.areas:
+            for area in areas:
+                index = text.areas.index(area) + 1
                 _area_text(out, area, fmt.invest_label(area, "", index) + f": {fmt.collapse(area.title)}")
         else:
             out.append("\n" + fmt.collapse(text.summary) + "\n")

@@ -21,7 +21,7 @@ from eyewall.sources import protocol
 from eyewall.ui import adapt
 from eyewall.ui import format as fmt
 from eyewall.ui.widgets.map_view import MapPane, MapView
-from eyewall.ui.widgets.panels import PANEL_KINDS, Panel, StatusBar
+from eyewall.ui.widgets.panels import PANEL_KINDS, Panel, StatusBar, has_text
 from eyewall.ui.widgets.storm_list import StormList
 
 if TYPE_CHECKING:
@@ -120,7 +120,7 @@ class DashboardScreen(Screen[None]):
         for panel in self.query(Panel):
             panel.update(texts[panel.kind])
         tabs = self.query_one("#side-tabs", TabbedContent)
-        if texts["surge"]:
+        if has_text(texts["surge"]):
             tabs.show_tab("tab-surge")
         else:
             tabs.hide_tab("tab-surge")
