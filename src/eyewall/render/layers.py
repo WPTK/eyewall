@@ -264,6 +264,12 @@ def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSt
     past = view.project_path((t.lat, t.lon) for t in storm.best_track)
     for i in range(1, len(past)):
         canvas.line(*past[i - 1], *past[i], category_color(storm.best_track[i].wind_kt), Priority.TRACK)
+    last, center = (storm.best_track[-1] if storm.best_track else None), storm.center
+    if last is not None and center is not None and (last.lat, last.lon) != (center.lat, center.lon):
+        # The center is newer than the last best-track fix: close the gap with a solid segment (projected together,
+        # so a pair across the antimeridian stays in one piece).
+        a, b = view.project_path([(last.lat, last.lon), (center.lat, center.lon)])
+        canvas.line(*a, *b, category_color(center.wind_kt), Priority.TRACK)
     ahead: list[TrackPoint | ForecastPoint] = list(storm.forecast)
     if storm.center is not None:
         ahead.insert(0, storm.center)

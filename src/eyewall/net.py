@@ -18,6 +18,10 @@ PROJECT_URL = "https://github.com/WPTK/eyewall"
 CONNECT_TIMEOUT = 10.0
 READ_TIMEOUT = 30.0
 MAX_RETRY_AFTER = 30.0
+ERROR_BODY_LIMIT = 64 * 1024  # an error page is read to the end (so the connection is reused) only if it is this small
+MAX_BYTES_EXTENSION = (
+    "eyewall_max_bytes"  # request extension: the caller's body limit, so the cache can skip a body it would reject
+)
 
 
 def user_agent() -> str:
@@ -50,6 +54,14 @@ class HttpError(FetchError):
     def __init__(self, url: str, status: int) -> None:
         super().__init__(url, f"HTTP {status}")
         self.status = status
+
+
+class TooLarge(FetchError):
+    """A body over the caller's size limit; the download was abandoned at the first byte past it."""
+
+    def __init__(self, url: str, limit: int) -> None:
+        super().__init__(url, f"more than {limit // (1024 * 1024)} MB, over the limit")
+        self.limit = limit
 
 
 class RateLimited(HttpError):
@@ -95,6 +107,7 @@ async def fetch_bytes(
     etag: str | None = None,
     last_modified: str | None = None,
     allow_404: bool = False,
+    max_bytes: int | None = None,
     retries: int = 2,
     backoff: float = 1.0,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -103,6 +116,9 @@ async def fetch_bytes(
 
     A 304 comes back as a Fetched with not_modified set. A 404 comes back the same way, as missing, only when
     allow_404 is true (a buoy that stopped reporting is normal, not an error). Anything else raises a FetchError.
+
+    With `max_bytes` the body is streamed: a `Content-Length` over the limit, or the first byte past it, raises
+    `TooLarge` without buffering the rest. Without it the whole body is read, as before.
     """
     request_headers = dict(headers or {})
     if etag:
@@ -112,22 +128,30 @@ async def fetch_bytes(
     attempt = 0
     while True:
         try:
-            response = await client.get(url, params=params, headers=request_headers)
+            async with client.stream(
+                "GET",
+                url,
+                params=params,
+                headers=request_headers,
+                extensions={} if max_bytes is None else {MAX_BYTES_EXTENSION: max_bytes},
+            ) as response:
+                status = response.status_code
+                if 200 <= status < 300 or status == 304:
+                    body = await _read_body(response, url, max_bytes) if status != 304 else b""
+                    return Fetched(
+                        url, status, body, response.headers.get("ETag"), response.headers.get("Last-Modified")
+                    )
+                await _drain(response)
+                if status == 404 and allow_404:
+                    return Fetched(url, 404)
+                retry_after = _retry_after(response)
         except httpx.TransportError as exc:
             if attempt >= retries:
                 raise NetworkError(url, str(exc) or type(exc).__name__) from exc
             await sleep(backoff * 2**attempt)
             attempt += 1
             continue
-        status = response.status_code
-        if 200 <= status < 300 or status == 304:
-            return Fetched(
-                url, status, response.content, response.headers.get("ETag"), response.headers.get("Last-Modified")
-            )
-        if status == 404 and allow_404:
-            return Fetched(url, 404)
         if status == 429 or status >= 500:
-            retry_after = _retry_after(response)
             if attempt >= retries:
                 raise RateLimited(url, retry_after) if status == 429 else HttpError(url, status)
             delay = min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else backoff * 2**attempt
@@ -135,3 +159,32 @@ async def fetch_bytes(
             attempt += 1
             continue
         raise HttpError(url, status)
+
+
+async def _drain(response: httpx.Response) -> None:
+    """Read a small error body to its end so the keep-alive connection goes back to the pool; a big one is dropped."""
+    size = 0
+    try:
+        async for chunk in response.aiter_bytes():
+            size += len(chunk)
+            if size > ERROR_BODY_LIMIT:
+                return
+    except httpx.TransportError:
+        return  # the status is already known; a broken body is not worth a retry
+
+
+async def _read_body(response: httpx.Response, url: str, max_bytes: int | None) -> bytes:
+    """The decoded body; with a limit, stop reading at the first byte over it."""
+    if max_bytes is None:
+        return await response.aread()
+    declared = response.headers.get("Content-Length", "")
+    if declared.isdigit() and int(declared) > max_bytes:
+        raise TooLarge(url, max_bytes)
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in response.aiter_bytes():
+        size += len(chunk)
+        if size > max_bytes:
+            raise TooLarge(url, max_bytes)
+        chunks.append(chunk)
+    return b"".join(chunks)

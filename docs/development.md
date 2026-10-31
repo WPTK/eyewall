@@ -79,4 +79,7 @@ git push origin v0.1.0
 `release.yml` then checks that the tag, `__version__` and the changelog heading agree, builds the wheel and source
 distribution and the five standalone binaries (`binaries.yml`, which also runs on pull requests that touch the build and can
 be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog section
-as its notes. `scripts/build_exe.ps1` builds the Windows binary locally; `docs/smoke-test.md` is the manual checklist.
+as its notes. The Linux and macOS binaries ship as `.tar.gz` archives so they keep the executable bit. The binaries are built
+with the pins in `scripts/binary-constraints.txt`; refresh them with `python scripts/update_constraints.py` (`--check` shows drift)
+before a release. `canary.yml` is a scheduled workflow, which GitHub disables after 60 days without repository activity; run it by
+hand to re-enable it. `scripts/build_exe.ps1` builds the Windows binary locally; `docs/smoke-test.md` is the manual checklist.

@@ -25,7 +25,7 @@ from eyewall.models.wind import WindRadiiGis
 from eyewall.state import events as ev
 from eyewall.state.alerts import tropical_alerts
 from eyewall.state.nearby import NearbyStation, TrackFix, nearby_stations
-from eyewall.state.trends import PressureTendency, observation_age, pressure_tendency
+from eyewall.state.trends import PressureTendency, pressure_tendency
 
 # A storm is a threat to the United States when its center or a forecast position is inside one of these boxes
 # (south, west, north, east): the Atlantic and Gulf coasts with the Caribbean territories, and Hawaii.
@@ -117,10 +117,13 @@ class Store:
         events: list[Event] = []
         changes: dict[str, object] = {} if key is None else {"fetched_key": key}  # None: tried again next poll
         if advisories is not None:
-            advisories = _keep_previous(state.advisories, advisories)
-            previous = state.advisories if state.advisories != AdvisorySet() else None
-            events += ev.watch_warning_events(state.storm, previous, advisories, now)
-            events += ev.discussion_events(state.storm, previous, advisories, now)
+            if _is_older(advisories, state.advisories):
+                pass  # the replay stepped back: show that advisory as it was, with no events and nothing newer mixed in
+            else:
+                advisories = _keep_previous(state.advisories, advisories)
+                previous = state.advisories if state.advisories != AdvisorySet() else None
+                events += ev.watch_warning_events(state.storm, previous, advisories, now)
+                events += ev.discussion_events(state.storm, previous, advisories, now)
             changes["advisories"] = advisories
         if forecast_gis is not None:
             changes["forecast_gis"] = forecast_gis
@@ -225,15 +228,39 @@ class Store:
     def tendency(self, station_id: str, now: datetime) -> PressureTendency | None:
         """The 3 hour pressure change at a station, or None when there is no data or the station has gone quiet.
 
-        `trends.pressure_tendency` does not look at how old the newest row is, so the check lives here.
+        `trends.pressure_tendency` does not look at how old its reading is, so the check lives here, on the same reading
+        it uses: the newest row that has a pressure, not the newest row of any kind.
         """
         series = self.series.get(station_id.upper())
         if series is None:
             return None
-        age = observation_age(series, now)
-        if age is None or age > TENDENCY_MAX_AGE:
+        tendency = pressure_tendency(series.observations)
+        times = [o.time for o in series.observations if o.pressure_hpa is not None]
+        if tendency is None or not times:
             return None
-        return pressure_tendency(series.observations)
+        if max(timedelta(0), now - max(times)) > TENDENCY_MAX_AGE:
+            return None
+        return tendency
+
+
+def _is_older(new: AdvisorySet, old: AdvisorySet) -> bool:
+    """True when a product in both sets was issued earlier in the new one, which only happens when a replay steps back.
+
+    A partial refetch (one product missing) or a set whose newest product predates a stored intermediate advisory
+    has no such product pair, so it keeps the usual merge.
+    """
+    earlier = later = False
+    for fresh, stored in (
+        (new.forecast, old.forecast),
+        (new.public, old.public),
+        (new.discussion, old.discussion),
+        (new.wind_probabilities, old.wind_probabilities),
+    ):
+        if fresh is None or stored is None or fresh.issued is None or stored.issued is None:
+            continue
+        earlier |= fresh.issued < stored.issued
+        later |= fresh.issued > stored.issued
+    return earlier and not later
 
 
 def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:

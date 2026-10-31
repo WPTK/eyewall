@@ -5,16 +5,17 @@ from datetime import UTC, datetime
 
 import pytest
 
+from eyewall.geo import wrap_lon
 from eyewall.models.storm import AdvNum
 from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import WatchWarning
 from eyewall.providers.base import ParseError
+from eyewall.providers.nhc import gis as gis_module
 from eyewall.providers.nhc.gis import (
     parse_best_track_zip,
     parse_forecast_zip,
     parse_radii_zip,
     read_layer_names,
-    wrap_lon,
 )
 from eyewall.providers.nhc.two import parse_gtwo_zip
 from tests.nhc_fixtures import gis_bytes
@@ -300,3 +301,10 @@ def test_outlook_zip_with_no_areas_is_empty():
     assert empty.systems == ()
     assert empty.empty
     assert empty.issued == datetime(2026, 10, 31, 5, 7, tzinfo=UTC)
+
+
+def test_a_layer_member_over_the_size_cap_is_dropped_like_an_unreadable_layer(monkeypatch):
+    data = gis_bytes("erin_5day_030.zip")
+    assert parse_forecast_zip(data).points
+    monkeypatch.setattr(gis_module, "MAX_MEMBER_BYTES", 16)
+    assert parse_forecast_zip(data).points == ()

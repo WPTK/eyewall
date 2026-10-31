@@ -4,11 +4,15 @@ name: Binaries
 # tag; also runs by hand (workflow_dispatch) and on pull requests that touch the build, so a broken spec shows up before
 # a release rather than during one. Nothing here publishes anything.
 #
-#   eyewall-windows-x86_64.exe   windows-latest
-#   eyewall-linux-x86_64         ubuntu-latest, built inside python:3.12-bullseye so the glibc floor is 2.31
-#   eyewall-linux-arm64          ubuntu-24.04-arm, same container
-#   eyewall-macos-arm64          macos-latest (Apple silicon)
-#   eyewall-macos-x86_64         macos-15-intel (GitHub's last Intel image)
+# Dependencies install with the pins in scripts/binary-constraints.txt (regenerate it with
+# scripts/update_constraints.py). Artifacts lose file modes, so the Linux and macOS binaries are tar.gz archives that
+# keep the executable bit; the archive holds one file named `eyewall`. Windows ships the bare exe.
+#
+#   eyewall-windows-x86_64.exe      windows-latest
+#   eyewall-linux-x86_64.tar.gz     ubuntu-latest, built inside python:3.12-bullseye so the glibc floor is 2.31
+#   eyewall-linux-arm64.tar.gz      ubuntu-24.04-arm, same container
+#   eyewall-macos-arm64.tar.gz      macos-latest (Apple silicon)
+#   eyewall-macos-x86_64.tar.gz     macos-15-intel (GitHub's last Intel image)
 
 on:
   workflow_call:
@@ -17,6 +21,8 @@ on:
     paths:
       - eyewall.spec
       - scripts/build_exe.ps1
+      - scripts/binary-constraints.txt
+      - scripts/pyinstaller-version.txt
       - pyproject.toml
       - src/eyewall/**
       - tests/fixtures/replay/erin2025/**
@@ -45,21 +51,26 @@ jobs:
         include:
           - name: windows-x86_64
             os: windows-latest
+            asset: eyewall-windows-x86_64.exe
             ext: .exe
           # python:3.12-bullseye, pinned by digest (multi-arch index, checked 2026-10-31). Bullseye is past Debian's LTS
           # window, kept on purpose for the glibc 2.31 floor; move the pin deliberately, and update smoke-test.md with it.
           - name: linux-x86_64
+            asset: eyewall-linux-x86_64.tar.gz
             os: ubuntu-latest
             container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
           - name: linux-arm64
+            asset: eyewall-linux-arm64.tar.gz
             os: ubuntu-24.04-arm
             container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
           - name: macos-arm64
+            asset: eyewall-macos-arm64.tar.gz
             os: macos-latest
           - name: macos-x86_64
+            asset: eyewall-macos-x86_64.tar.gz
             os: macos-15-intel
     env:
-      BINARY: eyewall-${{ matrix.name }}${{ matrix.ext }}
+      ASSET: ${{ matrix.asset }}
       BUILT: dist/eyewall${{ matrix.ext }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,12 +81,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: scripts/binary-constraints.txt
 
       # tzdata is a Windows-only dependency of the package; a standalone binary may land on a minimal system with no zone
       # files, so every binary bundles its own.
       - name: Install
         shell: bash
-        run: python -m pip install -e . tzdata textual-image "pyinstaller==$(cat scripts/pyinstaller-version.txt)"
+        run: python -m pip install -c scripts/binary-constraints.txt -e . tzdata textual-image "pyinstaller==$(cat scripts/pyinstaller-version.txt)"
 
       - name: Build
         shell: bash
@@ -89,12 +101,22 @@ jobs:
           "./$BUILT" --selftest || { echo "--selftest failed: the frozen app is missing something"; exit 1; }
           "./$BUILT" --replay demo --headless --until +1h
 
-      - name: Name the binary for its platform
+      # Artifacts drop the executable bit, so Linux and macOS ship a tar.gz, which keeps it. Windows ships the exe.
+      - name: Package the binary for its platform
         shell: bash
-        run: mv "$BUILT" "dist/$BINARY"
+        run: |
+          if [ "${ASSET%.tar.gz}" = "$ASSET" ]; then
+            mv "$BUILT" "dist/$ASSET"
+          else
+            tar -C dist -czf "dist/$ASSET" eyewall
+            listing=$(tar -tvzf "dist/$ASSET")
+            echo "$listing"
+            case "$listing" in -rwx*) ;; *) echo "the archive lost the executable bit"; exit 1 ;; esac
+          fi
+          ls -la "dist/$ASSET"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binary-${{ matrix.name }}
-          path: dist/${{ env.BINARY }}
+          path: dist/${{ env.ASSET }}
           if-no-files-found: error
           retention-days: 7

@@ -33,7 +33,7 @@ from eyewall.net import FetchError
 from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
 from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
-from eyewall.render.images import Depth, InlineBackend, load_inline
+from eyewall.render.images import Depth, InlineBackend, inline_wanted, load_inline
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource
@@ -179,18 +179,21 @@ class EyewallApp(App[None]):
             replay = fmt.ReplayStatus(
                 self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over
             )
-        text = fmt.status_bar(
-            feeds,
-            next_poll=self.poller.seconds_until_next(),
-            alert_count=len(self.alert_log),
-            replay=replay,
-            away=self.poller.away,
-            width=width,
-            g=self.glyphs,
-        )
-        if width >= 70:  # `? help` keeps its place, then the keys; the status gives way
-            text = fmt.footer_row(text, self.footer_keys(screen), width)
-        return text
+
+        def status(room: int) -> Text:
+            return fmt.status_bar(
+                feeds,
+                next_poll=self.poller.seconds_until_next(),
+                alert_count=len(self.alert_log),
+                replay=replay,
+                away=self.poller.away,
+                width=room,
+                g=self.glyphs,
+            )
+
+        if width >= 70:  # `? help` keeps its place, then the keys; the status degrades to the room left
+            return fmt.footer_row(status, self.footer_keys(screen), width)
+        return status(width)
 
     def footer_keys(self, screen: Screen[Any]) -> list[tuple[str, str]]:
         """The keys that work where the focus is on `screen`: Textual's own active bindings, nearest widget first,
@@ -653,7 +656,9 @@ def run_app(
     file_config: Config | None = None,
     config_file_broken: bool = False,
 ) -> None:
-    inline = None if config.map.glyph_set == "ascii" else load_inline(config.graphics.inline)
+    inline = (
+        load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
+    )
     EyewallApp(
         config,
         source,

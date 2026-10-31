@@ -12,13 +12,14 @@ Python is needed.
 | Platform | File |
 | --- | --- |
 | Windows, x86_64 | `eyewall-windows-x86_64.exe` |
-| Linux, x86_64 | `eyewall-linux-x86_64` |
-| Linux, arm64 | `eyewall-linux-arm64` |
-| macOS, Apple silicon | `eyewall-macos-arm64` |
-| macOS, Intel | `eyewall-macos-x86_64` |
+| Linux, x86_64 | `eyewall-linux-x86_64.tar.gz` |
+| Linux, arm64 | `eyewall-linux-arm64.tar.gz` |
+| macOS, Apple silicon | `eyewall-macos-arm64.tar.gz` |
+| macOS, Intel | `eyewall-macos-x86_64.tar.gz` |
 
-Check the download against `SHA256SUMS` from the same release. On Linux and macOS, `chmod +x` the file first. The
-binaries are not signed; see `smoke-test.md` for the SmartScreen and Gatekeeper prompts. Then try it:
+Check the download against `SHA256SUMS` from the same release. On Linux and macOS, unpack the archive
+(`tar -xzf eyewall-linux-x86_64.tar.gz`); it holds one executable file, `eyewall`, with the executable bit set, so there
+is no `chmod`. The binaries are not signed; see `smoke-test.md` for the SmartScreen and Gatekeeper prompts. Then try it:
 
 ```
 eyewall --demo         # replay the bundled recording of Hurricane Erin (2025)

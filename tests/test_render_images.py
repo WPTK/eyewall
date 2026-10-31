@@ -6,11 +6,12 @@ import io
 import subprocess
 import sys
 
+import httpx
 import pytest
 import respx
 from PIL import Image
 
-from eyewall.net import HttpError, new_client
+from eyewall.net import HttpError, RateLimited, new_client
 from eyewall.render import images
 from eyewall.render.canvas import Mode, Style
 from eyewall.render.images import (
@@ -23,6 +24,7 @@ from eyewall.render.images import (
     crop_cone,
     fetch_image,
     fit_cells,
+    is_noaa_url,
     quantize,
     render_fallback,
     sniff,
@@ -71,17 +73,17 @@ def test_image_bytes_over_the_cap_or_not_images_are_refused() -> None:
 
 @respx.mock
 async def test_fetch_image_sends_the_user_agent_and_checks_the_answer() -> None:
-    route = respx.get("https://example.test/cone.png").respond(200, content=png(Image.new("RGB", (3, 3))))
-    respx.get("https://example.test/page.png").respond(200, content=b"<html>soft 404</html>")
-    respx.get("https://example.test/gone.png").respond(404)
+    route = respx.get("https://www.nhc.noaa.gov/cone.png").respond(200, content=png(Image.new("RGB", (3, 3))))
+    respx.get("https://www.nhc.noaa.gov/page.png").respond(200, content=b"<html>soft 404</html>")
+    respx.get("https://www.nhc.noaa.gov/gone.png").respond(404)
     async with new_client() as client:
-        assert sniff(await fetch_image(client, "https://example.test/cone.png")) == "png"
+        assert sniff(await fetch_image(client, "https://www.nhc.noaa.gov/cone.png")) == "png"
         assert route.calls.last.request.headers["User-Agent"].startswith("eyewall/")
         with pytest.raises(ImageError):
-            await fetch_image(client, "https://example.test/page.png")
+            await fetch_image(client, "https://www.nhc.noaa.gov/page.png")
         with pytest.raises(HttpError):
-            await fetch_image(client, "https://example.test/gone.png")
-        with pytest.raises(ImageError, match="web address"):
+            await fetch_image(client, "https://www.nhc.noaa.gov/gone.png")
+        with pytest.raises(ImageError, match="NOAA"):
             await fetch_image(client, "file:///etc/passwd")
 
 
@@ -302,3 +304,119 @@ def test_limited_palettes_remember_their_nearest_colour() -> None:
         assert quantize((12, 200, 77), Depth.C16) is not None
     info = _snap.cache_info()
     assert info.misses == 2 and info.hits == 7
+
+
+# ---- downloads stay on https NOAA hosts ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://www.nhc.noaa.gov/x.png",
+        "https://noaa.gov.evil.com/x.png",
+        "https://noaa.gov@evil.com/x.png",
+        "https://user@www.nhc.noaa.gov/x.png",
+        "https://evil.com\\@noaa.gov/x.png",
+        "https://noaa.gov\\.evil.com/x.png",
+        "https://evilnoaa.gov/x.png",
+        "https://www.nhc.noaa.gov:8443/x.png",
+        "https://www.nhc.noaa.gov/x .png",
+        "https://www.nhc.noaa.gov/\nx.png",
+        "ftp://www.nhc.noaa.gov/x.png",
+        "//www.nhc.noaa.gov/x.png",
+        "",
+    ],
+)
+def test_is_noaa_url_refuses_lookalikes_and_other_schemes(url: str) -> None:
+    assert is_noaa_url(url) is False
+
+
+@pytest.mark.parametrize(
+    "url", ["https://www.nhc.noaa.gov/x.png", "https://WWW.NOAA.GOV/x", "https://forecast.weather.gov:443/x"]
+)
+def test_is_noaa_url_accepts_https_noaa_hosts(url: str) -> None:
+    assert is_noaa_url(url) is True
+
+
+@respx.mock
+async def test_fetch_image_refuses_other_hosts_and_http_without_sending_a_request() -> None:
+    route = respx.route().respond(200, content=png(Image.new("RGB", (2, 2))))
+    async with new_client() as client:
+        for url in ("https://example.test/a.png", "http://www.nhc.noaa.gov/a.png", "https://noaa.gov.evil.com/a.png"):
+            with pytest.raises(ImageError, match="NOAA"):
+                await fetch_image(client, url)
+    assert not route.called
+
+
+@respx.mock
+async def test_fetch_image_follows_a_redirect_inside_noaa_and_refuses_one_that_leaves() -> None:
+    body = png(Image.new("RGB", (2, 2)))
+    respx.get("https://www.nhc.noaa.gov/old.png").respond(302, headers={"Location": "/new.png"})
+    respx.get("https://www.nhc.noaa.gov/new.png").respond(200, content=body)
+    respx.get("https://www.nhc.noaa.gov/to-http.png").respond(
+        301, headers={"Location": "http://www.nhc.noaa.gov/a.png"}
+    )
+    respx.get("https://www.nhc.noaa.gov/away.png").respond(301, headers={"Location": "https://example.test/a.png"})
+    respx.get("https://www.nhc.noaa.gov/loop.png").respond(302, headers={"Location": "/loop.png"})
+    other = respx.get("https://example.test/a.png").respond(200, content=body)
+    async with new_client() as client:
+        assert await fetch_image(client, "https://www.nhc.noaa.gov/old.png") == body
+        for name in ("to-http", "away"):
+            with pytest.raises(ImageError, match="NOAA"):
+                await fetch_image(client, f"https://www.nhc.noaa.gov/{name}.png")
+        with pytest.raises(ImageError, match="redirects"):
+            await fetch_image(client, "https://www.nhc.noaa.gov/loop.png")
+    assert not other.called
+
+
+async def _no_sleep(seconds: float) -> None:
+    _SLEPT.append(seconds)
+
+
+_SLEPT: list[float] = []
+
+
+@respx.mock
+async def test_fetch_image_retries_a_503_and_a_dropped_connection_then_succeeds() -> None:
+    _SLEPT.clear()
+    body = png(Image.new("RGB", (2, 2)))
+    url = "https://www.nhc.noaa.gov/retry.png"
+    route = respx.get(url).mock(
+        side_effect=[
+            httpx.Response(503, content=b"busy"),
+            httpx.ConnectError("reset"),
+            httpx.Response(200, content=body),
+        ]
+    )
+    async with new_client() as client:
+        assert await fetch_image(client, url, sleep=_no_sleep) == body
+    assert route.call_count == 3 and _SLEPT == [1.0, 2.0]
+
+
+@respx.mock
+async def test_fetch_image_gives_up_after_two_retries_and_caps_retry_after() -> None:
+    _SLEPT.clear()
+    url = "https://www.nhc.noaa.gov/down.png"
+    route = respx.get(url).respond(503, headers={"Retry-After": "9999"}, content=b"x" * 100)
+    async with new_client() as client:
+        with pytest.raises(HttpError):
+            await fetch_image(client, url, sleep=_no_sleep)
+    assert route.call_count == 3 and _SLEPT == [30.0, 30.0]
+    limited = respx.get("https://www.nhc.noaa.gov/slow.png").respond(429)
+    async with new_client() as client:
+        with pytest.raises(RateLimited):
+            await fetch_image(client, "https://www.nhc.noaa.gov/slow.png", sleep=_no_sleep)
+    assert limited.call_count == 3
+
+
+@respx.mock
+async def test_fetch_image_does_not_retry_a_404_or_a_redirect_to_another_host() -> None:
+    _SLEPT.clear()
+    gone = respx.get("https://www.nhc.noaa.gov/gone2.png").respond(404)
+    respx.get("https://www.nhc.noaa.gov/away2.png").respond(302, headers={"Location": "https://evil.example/a.png"})
+    async with new_client() as client:
+        with pytest.raises(HttpError):
+            await fetch_image(client, "https://www.nhc.noaa.gov/gone2.png", sleep=_no_sleep)
+        with pytest.raises(ImageError, match="NOAA"):
+            await fetch_image(client, "https://www.nhc.noaa.gov/away2.png", sleep=_no_sleep)
+    assert gone.call_count == 1 and _SLEPT == []
