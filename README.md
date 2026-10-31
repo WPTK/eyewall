@@ -12,8 +12,26 @@ storm (Hurricane Erin, 2025) so every screen can be tried in the off-season.
 
 ## Status
 
-Pre-alpha, version 0.0.1. The project is built in milestones, each released as its own `0.y.0`; the interface arrives in
-0.5.0. See `docs/plan.md` for the design and `docs/milestones/` for what each release adds.
+Pre-alpha, version 0.3.0. The data layers (NHC, NDBC, CO-OPS) and the terminal map renderer are in; there is no
+interface yet, so `python -m eyewall` only reports its version. Each milestone ships as its own `0.y.0` release.
+
+| Milestone | Release | Status |
+|---|---|---|
+| M1 NHC data layer | 0.1.0 | done |
+| M2 Observations data layer | 0.2.0 | done |
+| M3 Renderer and basemap | 0.3.0 | done |
+| M4 Core: sources, store, poller, replay | 0.4.0 | next |
+| M5 Storm UI | 0.5.0 | planned |
+| M6 Observations UI | 0.6.0 | planned |
+| M7 Graphics | 0.7.0 | planned |
+| M8 Polish and release | 0.8.0 | planned |
+
+See `docs/plan.md` for the design and `docs/milestones/` for what each release adds. Open work is tracked in the
+[issues](https://github.com/WPTK/eyewall/issues) and [milestones](https://github.com/WPTK/eyewall/milestones).
+
+## Contributing
+
+`CLAUDE.md` holds the working rules. Run the checks listed in `docs/development.md` before opening a pull request.
 
 ## Try it
 
