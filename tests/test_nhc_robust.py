@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import gzip
 import json
 
 import pytest
@@ -129,6 +130,14 @@ def test_graphics_pages_of_any_text_do_not_crash(page):
     graphics.parse_floater_storms(page)
     graphics.parse_floater_products(page)
     graphics.parse_floater_listing(page, "al052025", "GEOCOLOR")
+
+
+@SETTINGS
+@given(body=st.binary(max_size=300), cut=st.integers(0, 300))
+def test_gzip_looking_bytes_are_a_parse_error_or_a_result(body, cut):
+    for data in (b"\x1f\x8b" + body, gzip.compress(body)[:cut]):
+        with contextlib.suppress(ParseError):
+            atcf.parse_bdeck(data)
 
 
 @SETTINGS

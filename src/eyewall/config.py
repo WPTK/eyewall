@@ -9,7 +9,7 @@ without comment, so a newer file still opens in an older build. The file is crea
 
 .. code-block:: toml
 
-    [poll]                    # seconds between polls of each feed
+    [poll]                    # seconds between polls; the feed values are also the shortest allowed
     storms = 300
     outlook = 1800
     alerts = 300
@@ -77,13 +77,15 @@ INLINE_MODES = ("auto", "never")
 MAX_WATCHLIST = 60
 _STATION_ID = re.compile(r"^[A-Za-z0-9]{3,10}$")
 
+# The lower limits are the cadences in docs/data-sources.md: NOAA's CDN max-age for the storms and buoys feeds, and the
+# polite rate for the rest. A setting outside its limits is replaced by the default, with a warning.
 POLL_LIMITS: dict[str, tuple[float, float]] = {
-    "storms": (60.0, 3600.0),
-    "outlook": (300.0, 86400.0),
-    "alerts": (60.0, 3600.0),
-    "buoys": (300.0, 3600.0),
-    "tides": (120.0, 3600.0),
-    "satellite": (300.0, 3600.0),
+    "storms": (300.0, 3600.0),
+    "outlook": (1800.0, 86400.0),
+    "alerts": (300.0, 3600.0),
+    "buoys": (600.0, 3600.0),
+    "tides": (360.0, 3600.0),
+    "satellite": (600.0, 3600.0),
     "backoff_max": (60.0, 86400.0),
     "away_after": (30.0, 86400.0),
 }

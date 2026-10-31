@@ -165,3 +165,23 @@ async def test_a_body_within_the_limit_is_returned_whole_and_errors_still_retry(
         result = await fetch_bytes(client, URL, max_bytes=100, sleep=sleeps)
     assert result.body == b"x" * 100
     assert sleeps.delays == [1.0]
+
+
+async def test_a_broken_content_encoding_is_a_network_error_not_a_raw_httpx_error():
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"this is not gzip data")
+        )
+    )
+    sleeps = Sleeps()
+    async with new_client(transport=transport) as client:
+        with pytest.raises(NetworkError):
+            await fetch_bytes(client, URL, sleep=sleeps)
+    assert sleeps.delays == [1.0, 2.0]  # retried like any other unreadable answer
+
+
+async def test_a_redirect_loop_is_a_network_error():
+    transport = httpx.MockTransport(lambda request: httpx.Response(302, headers={"Location": URL}))
+    async with new_client(transport=transport) as client:
+        with pytest.raises(NetworkError):
+            await fetch_bytes(client, URL, retries=0)

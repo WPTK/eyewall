@@ -7,8 +7,11 @@ the parsers knowing about it:
   caller as the cached 200, so a feed that has not changed costs a header exchange and no body.
 - A 2xx answer replaces the cached copy.
 - When the network fails (no connection, a timeout) or the server answers 429 or 5xx, and a copy exists, the caller
-  gets the copy and the current `StaleMarker` is set, so the live source can say the feed is stale. With no copy the
+  gets the copy and the current `StaleMarker` is set, so the live source can say the feed is stale. A 429 or 5xx also
+  records the status and the server's Retry-After on the marker, so the poller can back off. With no copy the
   failure propagates as usual.
+- The disk is touched from a worker thread, one await at a time, so the UI loop never waits on it. The body file is
+  read only when it is used: after a 304 or when serving a copy.
 
 Entries live under `platformdirs.user_cache_dir("eyewall")` as a `.json` metadata file and a `.bin` raw body (still
 compressed if the server compressed it, so the client decodes it the same way as a fresh answer).
@@ -16,22 +19,25 @@ compressed if the server compressed it, so the client decodes it the same way as
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 from platformdirs import user_cache_dir
 
-from eyewall.net import MAX_BYTES_EXTENSION
+from eyewall.net import MAX_BYTES_EXTENSION, FetchError, HttpError, RateLimited, retry_after_seconds
 
+log = logging.getLogger(__name__)
 MAX_BODY_BYTES = 32 * 1024 * 1024
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "content-encoding")
 _FAILURE_STATUSES = frozenset({429, 500, 502, 503, 504})
@@ -68,11 +74,18 @@ class Cache:
         folder = self.directory / digest[:2]
         return folder / f"{digest}.json", folder / f"{digest}.bin"
 
-    def load(self, url: str) -> CacheEntry | None:
+    def load(self, url: str, *, with_body: bool = True) -> CacheEntry | None:
+        """The cached answer for a URL. Without `with_body` the body file is only checked for, not read (`body` is
+        empty); `read_body` fetches it when it is needed."""
         meta_path, body_path = self._paths(url)
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            body = body_path.read_bytes()
+            if with_body:
+                body = body_path.read_bytes()
+            elif body_path.is_file():
+                body = b""
+            else:
+                return None
             return CacheEntry(
                 url=str(meta["url"]),
                 headers={str(k): str(v) for k, v in meta["headers"].items()},
@@ -80,6 +93,13 @@ class Cache:
                 body=body,
             )
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+
+    def read_body(self, url: str) -> bytes | None:
+        """The cached body, or None when the file is gone."""
+        try:
+            return self._paths(url)[1].read_bytes()
+        except OSError:
             return None
 
     def store(self, url: str, body: bytes, headers: httpx.Headers, fetched_at: datetime) -> None:
@@ -148,6 +168,8 @@ class StaleMarker:
 
     hit: bool = False
     urls: list[str] = field(default_factory=list)
+    failure: FetchError | None = None  # the first 429 or 5xx the cache answered for
+    retry_after: float | None = None  # the longest Retry-After any of them carried
 
 
 _marker: ContextVar[StaleMarker | None] = ContextVar("eyewall_stale_marker", default=None)
@@ -182,12 +204,34 @@ class _Overflow(httpx.AsyncByteStream):
         await self._response.aclose()
 
 
+class EnvTransport(httpx.AsyncBaseTransport):
+    """The network, reached the way httpx reaches it for a client with no custom transport: through the proxies named
+    by HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and NO_PROXY, and on Windows and macOS the system proxy setting (httpx reads
+    both through `urllib.request.getproxies`). A client given a transport of its own ignores them (httpx only reads the
+    environment when it builds the transport itself), so the proxy routing lives in this inner client. A proxy address
+    httpx cannot use (an unknown scheme, or socks without the socksio package) is logged and skipped: the requests go
+    direct instead of the app failing to start. Redirects are left to the outer client."""
+
+    def __init__(self) -> None:
+        try:
+            self._client = httpx.AsyncClient(trust_env=True, follow_redirects=False)
+        except (ValueError, ImportError) as exc:
+            log.warning("ignoring the configured proxy, requests go direct (%s)", type(exc).__name__)
+            self._client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return await self._client.send(request, stream=True)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
 class CachingTransport(httpx.AsyncBaseTransport):
     """Wraps another transport (the real one unless a test supplies its own) with the disk cache."""
 
     def __init__(self, cache: Cache, inner: httpx.AsyncBaseTransport | None = None) -> None:
         self.cache = cache
-        self._inner = inner if inner is not None else httpx.AsyncHTTPTransport()
+        self._inner = inner if inner is not None else EnvTransport()
 
     async def aclose(self) -> None:
         await self._inner.aclose()
@@ -198,18 +242,34 @@ class CachingTransport(httpx.AsyncBaseTransport):
         headers.append(("content-length", str(len(entry.body))))  # of the stored (still compressed) bytes
         return httpx.Response(200, headers=headers, stream=httpx.ByteStream(entry.body), request=request)
 
-    def _stale(self, request: httpx.Request, entry: CacheEntry) -> httpx.Response:
+    async def _stale(
+        self, request: httpx.Request, entry: CacheEntry, failure: httpx.Response | None = None
+    ) -> httpx.Response | None:
+        """The cached copy as the answer, noting on the marker why; None when the body file is gone. `failure` is the
+        server's 429 or 5xx, which the poller treats as a failure (it backs off) even though the copy is served."""
+        body = await asyncio.to_thread(self.cache.read_body, str(request.url))
+        if body is None:
+            return None
         marker = _marker.get()
         if marker is not None:
             marker.hit = True
             marker.urls.append(str(request.url))
-        return self._from_cache(request, entry)
+            if failure is not None:
+                after = retry_after_seconds(failure)
+                if marker.failure is None:
+                    url = str(request.url)
+                    marker.failure = (
+                        RateLimited(url, after) if failure.status_code == 429 else HttpError(url, failure.status_code)
+                    )
+                if after is not None:
+                    marker.retry_after = max(after, marker.retry_after or 0.0)
+        return self._from_cache(request, replace(entry, body=body))
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         if request.method != "GET":
             return await self._inner.handle_async_request(request)
         url = str(request.url)
-        entry = self.cache.load(url)
+        entry = await asyncio.to_thread(self.cache.load, url, with_body=False)
         conditional = entry is not None and "if-none-match" not in request.headers
         if entry is not None and conditional:
             if entry.etag:
@@ -219,14 +279,23 @@ class CachingTransport(httpx.AsyncBaseTransport):
         try:
             response = await self._inner.handle_async_request(request)
         except httpx.TransportError:
-            if entry is None:
+            served = None if entry is None else await self._stale(request, entry)
+            if served is None:
                 raise
-            return self._stale(request, entry)
+            return served
         status = response.status_code
         if status == 304 and entry is not None and conditional:
             await response.aclose()
-            self.cache.touch(url, datetime.now(UTC))
-            return self._from_cache(request, entry)
+            body = await asyncio.to_thread(self.cache.read_body, url)
+            if body is not None:
+                await asyncio.to_thread(self.cache.touch, url, datetime.now(UTC))
+                return self._from_cache(request, replace(entry, body=body))
+            # The body file is gone: ask again without validators, as for a URL that was never cached.
+            entry = None
+            request.headers.pop("If-None-Match", None)
+            request.headers.pop("If-Modified-Since", None)
+            response = await self._inner.handle_async_request(request)
+            status = response.status_code
         if 200 <= status < 300:
             limit = min(MAX_BODY_BYTES, int(request.extensions.get(MAX_BYTES_EXTENSION) or MAX_BODY_BYTES))
             declared = response.headers.get("content-length", "")
@@ -234,8 +303,10 @@ class CachingTransport(httpx.AsyncBaseTransport):
                 return response  # too big to cache or for this caller: pass it on untouched, nothing is read here
             return await self._cache_or_pass(request, response, url, limit)
         if status in _FAILURE_STATUSES and entry is not None:
-            await response.aclose()
-            return self._stale(request, entry)
+            served = await self._stale(request, entry, response)
+            if served is not None:
+                await response.aclose()
+                return served
         return response
 
     async def _cache_or_pass(
@@ -258,7 +329,7 @@ class CachingTransport(httpx.AsyncBaseTransport):
                 )
         await response.aclose()
         raw = b"".join(chunks)
-        self.cache.store(url, raw, response.headers, datetime.now(UTC))
+        await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
         headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
         headers.append(("content-length", str(len(raw))))
         return httpx.Response(response.status_code, headers=headers, stream=httpx.ByteStream(raw), request=request)

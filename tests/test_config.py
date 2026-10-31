@@ -2,6 +2,7 @@ import tomllib
 from dataclasses import replace
 
 from eyewall.config import (
+    POLL_LIMITS,
     Config,
     NearbyConfig,
     PollConfig,
@@ -41,7 +42,7 @@ def test_values_are_read():
     config, warnings = parse(
         """
         [poll]
-        storms = 120
+        storms = 900
         [basins]
         enabled = ["ep", "AL"]
         [nearby]
@@ -62,7 +63,7 @@ def test_values_are_read():
         """
     )
     assert warnings == []
-    assert config.poll.storms == 120
+    assert config.poll.storms == 900
     assert config.basins.enabled == ("AL", "EP")  # canonical order
     assert config.nearby.radius_now_nm == 500
     assert config.nearby.max_stations == 10
@@ -162,15 +163,15 @@ def test_invalid_toml_falls_back_with_a_warning(tmp_path):
 
 def test_use_file_false_skips_the_file(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text("[poll]\nstorms = 99\n", encoding="utf-8")
+    path.write_text("[poll]\nstorms = 900\n", encoding="utf-8")
     assert load_config(path, use_file=False).config == Config()
-    assert load_config(path).config.poll.storms == 99
+    assert load_config(path).config.poll.storms == 900
 
 
 def test_save_then_load_round_trips(tmp_path):
     config = replace(
         Config(),
-        poll=replace(PollConfig(), storms=120.0),
+        poll=replace(PollConfig(), storms=900.0),
         watchlist=WatchlistConfig(ndbc=("41010",), coops=()),
     )
     path = save_config(config, tmp_path / "deep" / "config.toml")
@@ -197,3 +198,16 @@ def test_overrides_win_and_are_validated():
 def test_default_path_is_under_an_eyewall_directory():
     assert default_path().name == "config.toml"
     assert default_path().parent.name.lower() == "eyewall"
+
+
+def test_no_interval_can_be_set_below_the_documented_cadence():
+    defaults = PollConfig()
+    for feed in ("storms", "outlook", "alerts", "buoys", "tides", "satellite"):
+        low, _high = POLL_LIMITS[feed]
+        assert low == getattr(defaults, feed), feed  # the default is the documented cadence and the floor
+        config, warnings = parse(f"[poll]\n{feed} = {low - 1}\n")
+        assert getattr(config.poll, feed) == low
+        assert any(f"poll.{feed}" in w and "outside" in w for w in warnings)
+        config, warnings = parse(f"[poll]\n{feed} = {low}\n")
+        assert getattr(config.poll, feed) == low
+        assert warnings == []

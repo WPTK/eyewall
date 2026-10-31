@@ -47,7 +47,7 @@ class FetchError(Exception):
 
 
 class NetworkError(FetchError):
-    """No response at all: DNS, connection, TLS or timeout."""
+    """No usable response: DNS, connection, TLS or timeout, or a body that cannot be read (bad encoding, loop)."""
 
 
 class HttpError(FetchError):
@@ -90,7 +90,7 @@ class Fetched:
         return self.body.decode(encoding, errors="replace")
 
 
-def _retry_after(response: httpx.Response) -> float | None:
+def retry_after_seconds(response: httpx.Response) -> float | None:
     """Seconds from a Retry-After header. HTTP-date values are ignored."""
     try:
         return max(0.0, float(response.headers["Retry-After"]))
@@ -144,8 +144,8 @@ async def fetch_bytes(
                 await _drain(response)
                 if status == 404 and allow_404:
                     return Fetched(url, 404)
-                retry_after = _retry_after(response)
-        except httpx.TransportError as exc:
+                retry_after = retry_after_seconds(response)
+        except httpx.RequestError as exc:  # transport errors, but also DecodingError and TooManyRedirects
             if attempt >= retries:
                 raise NetworkError(url, str(exc) or type(exc).__name__) from exc
             await sleep(backoff * 2**attempt)
@@ -169,7 +169,7 @@ async def _drain(response: httpx.Response) -> None:
             size += len(chunk)
             if size > ERROR_BODY_LIMIT:
                 return
-    except httpx.TransportError:
+    except httpx.RequestError:
         return  # the status is already known; a broken body is not worth a retry
 
 
