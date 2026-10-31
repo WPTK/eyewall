@@ -35,7 +35,7 @@ def test_detail_follows_the_zoom():
     assert is_detailed(Viewport(25.0, -75.0, DETAIL_SWITCH - 0.01, 100, 30))
     assert not is_detailed(Viewport(25.0, -75.0, DETAIL_SWITCH, 100, 30))
     assert not is_detailed(Viewport(30.0, -150.0, 1.0, 120, 40))  # the whole Pacific basin
-    assert is_detailed(Viewport(25.0, -60.0, 0.45, 120, 40))  # a view of the Atlantic is still the 10 m data
+    assert is_detailed(Viewport(25.0, -60.0, 0.25, 120, 40))  # a regional view is still the 10 m data
 
 
 def test_each_layer_can_be_switched_off():
@@ -155,8 +155,9 @@ def test_lakes_are_holes_in_the_land_with_a_shoreline():
     style = BasemapStyle(land="#111111", coast="#222222", land_shade=Shade.SOLID)
     view = Viewport(45.0, -84.0, 0.05, 120, 40)  # Lake Huron and Lake Michigan
     canvas = Canvas(view.cols, view.rows)
-    draw_basemap(canvas, view, borders=False, style=style)
+    draw_basemap(canvas, view, coast=False, borders=False, style=style)  # land fill alone, so no shoreline helps
     x, y = view.dot_at(44.8, -82.3)  # open water in Lake Huron
+    assert not canvas.dot(x, y)
     assert canvas.cell(x // 2, y // 4)[1].fg != "#111111"
     x, y = view.dot_at(46.2, -84.6)  # Michigan's Upper Peninsula
     assert canvas.cell(x // 2, y // 4)[1].fg == "#111111"

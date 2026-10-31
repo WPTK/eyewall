@@ -165,6 +165,14 @@ def test_unknown_layer_and_bad_data_are_rejected():
         loader.parse(struct.pack("<4sBBHII", b"XXXX", 2, 0, 0, 10_000, 0))
     with pytest.raises(ValueError):
         loader.parse(struct.pack("<4sBBHII", b"EWMD", 9, 0, 0, 10_000, 0))
+    with pytest.raises(ValueError, match="truncated"):
+        loader.parse(b"EWMD")
+    with pytest.raises(ValueError, match="unit scale"):
+        loader.parse(struct.pack("<4sBBHII", b"EWMD", 2, 0, 0, 0, 0))
+    good = (DATA_DIR / "coast_lo.bin").read_bytes()
+    for cut in (len(good) - 3, 20):
+        with pytest.raises(ValueError, match="truncated"):
+            loader.parse(good[:cut])
 
 
 def test_the_attribution_page_matches_the_data(build):
@@ -234,6 +242,11 @@ def test_a_ring_keeps_its_corners(build):
 def test_quantize_rounds_to_ten_thousandths_and_drops_repeats(build):
     assert build.quantize([(1.00004, 2.00006), (1.000049, 2.000051), (-0.00015, 0.0)]) == [(10000, 20001), (-1, 0)]
     assert build.quantize([(-122.449999, 37.77549)]) == [(-1224500, 377755)]
+
+
+def test_a_collinear_ring_has_no_area(build):
+    result = build.simplify_ring([(0, 0), (1, 0), (2, 0), (3, 0)], 0.01)
+    assert len(result) <= 3 and area(result) == 0
 
 
 def test_a_tiny_ring_survives_simplification_as_a_triangle(build):

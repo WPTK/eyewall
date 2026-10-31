@@ -221,7 +221,9 @@ def simplify(points: Sequence[Point], tolerance: float) -> list[Point]:
 
 
 def simplify_ring(ring: Sequence[Point], tolerance: float) -> list[Point]:
-    """Douglas-Peucker for a closed ring, split at the vertex farthest from the first so the ring keeps its shape."""
+    """Douglas-Peucker for a closed ring, split at the vertex farthest from the first so the ring keeps its shape.
+    A ring smaller than the tolerance comes back as a triangle. A ring with no area (all points collinear) comes back
+    as a degenerate three-point path that fills nothing; rings of fewer than three points are dropped by the caller."""
     points = list(ring)
     if len(points) > 1 and points[0] == points[-1]:
         points.pop()

@@ -1,7 +1,7 @@
 """The base map: land, coastline and borders from the vendored Natural Earth data.
 
-Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except the whole-basin view, where
-one dot spans about a degree and a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
+Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except basin-scale views (0.3
+degrees per dot or coarser), where a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
 State and province lines appear with the detailed data. The raster for a viewport is kept, because a map that only
 gains a cursor or a new advisory should not redraw the coast.
 """
@@ -17,7 +17,7 @@ from eyewall.render.projection import Bounds, Viewport
 
 # Degrees per dot at which the map switches from the detailed data to the coarse copy. A 120 by 40 cell view of the Gulf
 # of Mexico and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
-DETAIL_SWITCH = 0.6
+DETAIL_SWITCH = 0.3
 
 
 @dataclass(frozen=True)

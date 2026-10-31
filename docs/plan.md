@@ -114,8 +114,8 @@ islands, land, lakes, country boundaries and admin-1 state lines), clips to the 
 domain); `loader.py` reads with `struct`. Checked in. Long lines and land fill are cut into pieces so a viewport
 only projects what it can see.
 The download is pinned to one commit of the mirror and verified by SHA-256, so a rebuild is byte for byte the
-same (`--check` confirms it). Every view draws the full 10 m tier except the whole-basin view (`DETAIL_SWITCH`, 0.6°
-per dot), which draws the `_lo` copy of the same data (every island kept) because the full tier takes about a
+same (`--check` confirms it). Every view draws the full 10 m tier except basin-scale views (`DETAIL_SWITCH`, 0.3°
+per dot or coarser), which draw the `_lo` copy of the same data (every island kept) because the full tier takes about half a
 second there. Lakes are holes in the land fill with their own shoreline; country boundaries and state lines share
 `borders.bin`, and state lines show only in detailed views.
 

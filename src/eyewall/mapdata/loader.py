@@ -53,15 +53,23 @@ class MapLayer:
 
 def parse(data: bytes) -> MapLayer:
     """Decode the bytes of one .bin file."""
+    if len(data) < _HEADER.size:
+        raise ValueError("map data file is truncated")
     magic, version, flags, _, units, count = _HEADER.unpack_from(data)
     if magic != MAGIC or version != FORMAT_VERSION:
         raise ValueError("not an eyewall map data file of a supported version")
+    if units <= 0:
+        raise ValueError("map data file has a non-positive unit scale")
     offset = _HEADER.size
     scale = float(units)
     paths: list[MapPath] = []
     for _ in range(count):
+        if offset + _PATH_HEADER.size > len(data):
+            raise ValueError("map data file is truncated")
         kind, n = _PATH_HEADER.unpack_from(data, offset)
         offset += _PATH_HEADER.size
+        if n == 0 or offset + 8 * n > len(data):
+            raise ValueError("map data file is truncated or has an empty path")
         flat = struct.unpack_from(f"<{2 * n}i", data, offset)
         offset += 8 * n
         lons, lats = flat[0::2], flat[1::2]

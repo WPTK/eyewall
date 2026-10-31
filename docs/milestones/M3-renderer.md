@@ -78,6 +78,7 @@ golden text renderings in `tests/golden/`.
 
 - `mapdata/land50.bin` (50 m land polygons, 62 KB) is vendored next to the 110 m land the brief lists. With only 110 m
   fill, the land stopped several dots short of or past the 50 m coastline at storm zoom levels. The total is still 165 KB.
+  _Superseded by PR #10 (Natural Earth 10m): the 50 m and 110 m files are gone and the data is 4.3 MB._
 - `tests/render_support.py` (the golden helper and the hand-built Erin-like storm) and `tests/golden/` sit outside the
   `tests/test_render_*.py` pattern the brief names; they exist only for these tests.
 - `docs/plan.md`, `docs/data-sources.md` and `docs/deferred.md` got small edits (land50, pinned source, the renderer
