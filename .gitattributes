@@ -1,0 +1,14 @@
+# Text is LF everywhere except PowerShell scripts.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+
+# Saved NOAA payloads must stay byte-for-byte as recorded.
+tests/fixtures/** -text
+
+# Binary assets
+*.bin binary
+*.gz binary
+*.zip binary
+*.png binary
+*.gif binary
+*.jpg binary
