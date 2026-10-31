@@ -1,0 +1,68 @@
+{
+  "recorded_by": "scripts/record_obs_fixtures.py",
+  "payloads": [
+    {
+      "file": "latest_obs.txt",
+      "url": "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt",
+      "params": null,
+      "status": 200,
+      "bytes": 2499,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "trimmed to chosen rows"
+    },
+    {
+      "file": "activestations.xml",
+      "url": "https://www.ndbc.noaa.gov/activestations.xml",
+      "params": null,
+      "status": 200,
+      "bytes": 4293,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "trimmed to chosen stations; the count attribute is the full catalog's"
+    },
+    {
+      "file": "41010_5day.txt",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.txt",
+      "params": null,
+      "status": 200,
+      "bytes": 66364,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "whole file"
+    },
+    {
+      "file": "41010_5day.supl",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.supl",
+      "params": null,
+      "status": 200,
+      "bytes": 33888,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "whole file"
+    },
+    {
+      "file": "41010_5day.spec",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.spec",
+      "params": null,
+      "status": 200,
+      "bytes": 15891,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "whole file"
+    },
+    {
+      "file": null,
+      "url": "https://www.ndbc.noaa.gov/data/5day2/42040_5day.txt",
+      "params": null,
+      "status": 404,
+      "bytes": 0,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "a listed buoy that is dark: 404 means not reporting"
+    },
+    {
+      "file": "41025h2025_erin_week.txt.gz",
+      "url": "https://www.ndbc.noaa.gov/data/historical/stdmet/41025h2025.txt.gz",
+      "params": null,
+      "status": 200,
+      "bytes": 17021,
+      "fetched": "2026-10-31T08:22Z",
+      "note": "rows from 2025-08-17 to 2025-08-25 only, regzipped; historical fills (99.0, 999, 9999.0)"
+    }
+  ]
+}

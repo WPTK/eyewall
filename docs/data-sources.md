@@ -32,10 +32,10 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
 | Feed | URL | Used for | Cadence |
 |---|---|---|---|
 | NDBC station catalog | `https://www.ndbc.noaa.gov/activestations.xml` (1352 stations, 865 `met="y"`) | id, lat/lon, name, type, reported-in-last-8h flags | 24 h, cached |
-| NDBC latest obs, all stations | `https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt` (~98 KB, ~826 stations, obs < 2 h old) | one fetch for every station's newest met obs | 10 min (CDN max-age 600) |
+| NDBC latest obs, all stations | `https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt` (~100 KB, ~850 stations, obs < 2 h old) | one fetch for every station's newest met obs | 10 min (CDN max-age 600) |
 | NDBC 5-day station files | `https://www.ndbc.noaa.gov/data/5day2/{ID}_5day.txt` (~66 KB), `_5day.supl` (interval min pressure, peak wind with times), `_5day.spec` (waves) | history, charts and trends for nearby/pinned stations | 10 min, staggered, ≤4 in flight |
 | NDBC 45-day files | `https://www.ndbc.noaa.gov/data/realtime2/{ID}.txt` (~600 KB) | only when the user asks for 72 h+ | on demand |
-| NDBC historical | `data/historical/stdmet/{id}h{yyyy}.txt.gz` (lowercase id, no PTDY, `99.0`/`999` fills); `data/stdmet/{Mon}/{id}{M}{yyyy}.txt.gz` (e.g. `Aug/4101082025.txt.gz`) | replay bundles only | dev script |
+| NDBC historical | a past year: `data/historical/stdmet/{id}h{yyyy}.txt.gz` (lowercase id, oldest row first, no PTDY, `99.0`/`999`/`9999.0` fills); a finished month of the current year: `data/stdmet/{Mon}/{id}{M}{yyyy}.txt.gz` (seen: `Jul/4101072026.txt.gz`, `Aug/4101082026.txt.gz`); the latest finished month: plain `data/stdmet/{Mon}/{id}.txt` (`Sep/41010.txt`) | replay bundles only | dev script |
 | CO-OPS stations | `https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels` (302; `?type=met` 314); longitude field is `lng` | tide gauge catalog | 24 h, cached |
 | CO-OPS data | `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product={water_level\|predictions\|air_pressure\|wind}&station=…&datum=MLLW&units=english&time_zone=gmt&format=json&application=eyewall` with `date=latest\|recent` or `begin_date`/`range` | observed vs predicted water level (surge residual), wind, pressure near the storm | 6 min |
 | Basemap | Natural Earth GeoJSON (nvkelso mirror): 50 m coastline 1.6 MB, 50 m admin-1 state lines 0.9 MB, admin-0 boundaries 0.7 MB, 110 m coastline 137 KB, 110 m land for dim fill | vendored, pre-simplified, no runtime download | dev script |
@@ -69,14 +69,39 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
   west of -180 (`-182.3`), the cone continues east of 180, and radii polygons use either; eyewall wraps every vertex to
   (-180, 180]. The points layer spells the name out (`Hurricane Erin`), the other layers do not.
 - **NDBC:** winds are m/s 8-minute (buoy) or 2-minute (C-MAN) averages, never equated with NHC's 1-minute kt.
-  Missing is `MM` in realtime files but `99.0`/`999`/`9999` fills in historical and `.cwind` files. Parse by
-  header name, not position (PTDY sits in different places in `latest_obs.txt` and `realtime2`). Waves are often
+  Missing is `MM` in realtime files but `99.0`/`999`/`9999.0` fills in historical and `.cwind` files (per column:
+  WDIR and MWD 999, PRES 9999.0, ATMP, WTMP and DEWP 999.0, everything else 99.0 or 99.00). Parse by
+  header name, not position (PTDY sits in different places in `latest_obs.txt` and `realtime2`), and keep the
+  names case sensitive: `MM` is the month and `mm` the minute. Waves are often
   `MM` in a `latest_obs` row; waves come from station files. Buoy cadence 10 min, waves at :20/:50, PTDY only on
-  the hour, C-MAN hourly, ~20 min latency. Listed ≠ reporting (41001 recovered 2026-09-09; 42040, 42003,
-  42019, 42020, 42059 dark): a 404 is normal and shown as "not reporting". C-MAN ids are lowercase in the XML
-  and uppercase in file names; ids can be 7 characters.
-- **CO-OPS:** `datum` required for water level (400 otherwise); values are strings; missing is `""`; 6-min data;
+  the hour and signed (`+1.3`), C-MAN hourly, ~20 min latency. Listed ≠ reporting: on 2026-10-31 the 5-day files
+  of 42040, 41001 and 41002 were 404 and the catalog flagged 42003 and 42019 `met="n"` too. A 404 is normal and
+  shown as "not reporting". C-MAN ids are lowercase in the XML and uppercase in file names; ids can be 7
+  characters (`1801589`).
+- **NDBC catalog:** the `met`, `currents`, `waterquality` and `dart` flags mean "reported in the last 8 hours", so
+  `met="n"` is a buoy that is dark now; the 48 TAO entries leave all four flags out. Types seen: `buoy`,
+  `fixed`, `oilrig`, `tao`, `dart`, `usv`, `other`. Names can be empty or hold XML entities (`&quot;`).
+- **NDBC tables:** every table has a `#` header line and usually a `#` units line. `latest_obs.txt` puts
+  `STN LAT LON` in front of the usual columns and has no station name. `.supl` has `PRES PTIME WSPD WDIR WTIME`
+  with the times as bare `hhmm` inside the row's interval, so a row at 00:00 can hold 23:58 of the day before.
+  `.spec` has `WVHT SwH SwP WWH WWP SwD WWD STEEPNESS APD MWD`, directions as compass text and steepness as words
+  (`STEEP`, `AVERAGE`, `VERY_STEEP`, `N/A`). The 5-day files hold about 700 rows, newest first.
+- **NDBC historical:** a past year's file is oldest first and its `VIS` unit line says `mi` where current files say
+  `nmi`. Only Jul and Aug 2026 monthly names were seen for 41010 (Jan 2026 was a 404, Oct is empty until the month
+  ends, so Oct to Dec naming is unknown); the previous month is a plain `{id}.txt`. A closed year's monthly names
+  (the old `Aug/4101082025.txt.gz` example) return 404, so replay recording uses the yearly file. 41025's 2025 file
+  runs to 31 Dec and holds Hurricane Erin; 41010's ends on 31 Jul 2025 and holds nothing from it.
+- **CO-OPS:** `datum` required for water level (HTTP 400 with `{"error": {"message": ...}}` otherwise, and also
+  for a datum the station lacks: Great Lakes gauges such as 8311030 refuse MLLW and answer to IGLD); values are
+  strings; missing is `""` (a gap row is `"v":"", "s":""` with flags `1,1,1,1`, not an absent row); 6-min data;
   6-minute requests span at most a month; they throttle heavy users, so one request per gauge per poll.
+  `date=recent` is the last 3 days (720 readings); `begin_date` plus `range` (hours) works for any window.
+  `units=english` gives feet, wind in knots (checked against C-MAN TRDF1: 4.1 m/s is 7.97 kt) and pressure in mb.
+  A product the gauge does not offer is HTTP 200 `{"error": {"message": "No data was found..."}}` (East Fowl River
+  Bridge 8735523 has water level but no wind or pressure). `interval=hilo` predictions carry `type` `H` or `L`; with
+  no interval they are 6-minute; `date=today` gives the day's tides. Station list entries are about 2.5 KB each
+  (780 KB for `waterlevels`) because of nested link objects; use `id`, `name`, `lat`, `lng`, `state`, `greatlakes`.
+  Only the `type=met` list says which gauges have wind and pressure.
 - **No published rate limits** on NHC or NDBC; NDBC asks to "limit retrievals to a minimal level". Cadences
   match CDN `max-age`. NDBC has no JSON API; the classic text endpoints remain documented and supported.
 - **2026 season:** cones shrank 3–8 % and carry inland watches/warnings; CPHC operations run under NHC (PHFO
