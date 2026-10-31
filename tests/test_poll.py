@@ -6,12 +6,14 @@ import pytest
 
 from eyewall.clock import VirtualClock
 from eyewall.config import Config, PollConfig
+from eyewall.models.advisory import AdvisorySet
 from eyewall.models.storm import CurrentStorms
+from eyewall.models.watches import AlertsResult
 from eyewall.poll import FALLBACK_ATTEMPTS, FreshnessState, Poller, no_sleep
 from eyewall.sources import protocol
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.store import Store
-from tests.state_support import T0, FakeSource, advisories, area, gauge, obs, series, station
+from tests.state_support import T0, FakeSource, advisories, area, gauge, make_public, obs, series, station
 
 
 def build(source=None, config=None, **kw):
@@ -273,3 +275,103 @@ async def test_seconds_until_next_counts_down_with_the_clock(away):
     poller.set_away(away)
     clock.advance(100)
     assert poller.seconds_until_next() is not None
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------
+
+
+async def test_one_lagging_product_is_treated_as_behind_and_does_not_wipe_the_good_data():
+    poller, source, store, clock, _ = build()
+    source.set_storm("1")
+    source.texts["1"] = advisories("1", area("Tropical Storm Warning", "Keys"))
+    await poller.tick()
+    assert store.us_threat()
+    source.set_storm("2")
+    full = advisories("2", area("Tropical Storm Warning", "Keys"))
+    source.texts["2"] = AdvisorySet(public=full.public, discussion=full.discussion)  # the forecast (TCM) still lags
+    await step(poller, clock, 300)
+    assert store.storms["al012026"].fetched_key[0] == "1"  # not settled: asked again
+    assert store.storms["al012026"].advisories.public.adv_num.number == 1  # type: ignore[union-attr]
+    source.fallback_texts["2"] = full  # the second ask goes through api.weather.gov
+    await step(poller, clock, 300)
+    assert store.storms["al012026"].fetched_key[0] == "2"
+
+
+async def test_a_product_that_stays_missing_keeps_the_previous_one_and_the_warning_diff_survives():
+    poller, source, store, clock, got = build()
+    source.set_storm("1")
+    source.texts["1"] = advisories("1", area("Tropical Storm Warning", "Keys"))
+    await poller.tick()
+    old_forecast = store.storms["al012026"].advisories.forecast
+    source.set_storm("2")
+    full = advisories("2", area("Hurricane Warning", "Keys"))
+    source.texts["2"] = AdvisorySet(public=full.public, discussion=full.discussion)
+    source.fallback_texts["2"] = source.texts["2"]
+    for _ in range(FALLBACK_ATTEMPTS):
+        await step(poller, clock, 300)
+    state = store.storms["al012026"]
+    assert state.advisories.forecast is old_forecast  # kept, not replaced with None
+    assert state.advisories.public.adv_num.number == 2  # type: ignore[union-attr]
+    assert store.us_threat()
+    assert any(e.kind.value == "ww_changed" or e.kind.value == "ww_issued" for e in got)
+
+
+async def test_store_keeps_the_previous_product_when_the_new_one_is_none():
+    _, source, store, _, _ = build()
+    source.set_storm("1")
+    store.apply_storms(source.current, T0)
+    store.apply_products("al012026", T0, key=("1", T0), advisories=advisories("1"))
+    store.apply_products("al012026", T0, key=("2", T0), advisories=AdvisorySet(public=make_public("2")))
+    kept = store.storms["al012026"].advisories
+    assert kept.public.adv_num.number == 2  # type: ignore[union-attr]
+    assert kept.forecast is not None and kept.discussion is not None
+
+
+@pytest.mark.parametrize("product", ["forecast_gis", "radii_gis", "track", "graphics"])
+async def test_a_product_that_fails_is_retried_on_the_next_poll_within_the_attempt_cap(product):
+    poller, source, store, clock, _ = build()
+    source.set_storm("1")
+    source.texts["1"] = advisories("1")
+    source.fail_products.add(product)
+    await poller.tick()
+    assert store.storms["al012026"].fetched_key is None  # not settled
+    await step(poller, clock, 300)
+    assert source.count(product) == 2
+    source.fail_products.clear()
+    await step(poller, clock, 300)
+    assert source.count(product) == 3
+    assert store.storms["al012026"].fetched_key[0] == "1"
+    await step(poller, clock, 300)
+    assert source.count(product) == 3  # settled
+
+
+async def test_a_product_that_always_fails_stops_being_retried_at_the_cap():
+    poller, source, store, clock, _ = build()
+    source.set_storm("1")
+    source.texts["1"] = advisories("1")
+    source.fail_products.add("track")
+    for _ in range(FALLBACK_ATTEMPTS + 3):
+        await step(poller, clock, 300)
+    assert source.count("track") == FALLBACK_ATTEMPTS
+    assert store.storms["al012026"].fetched_key is not None
+
+
+async def test_the_backoff_exponent_is_capped_so_a_long_outage_cannot_overflow():
+    poller, source, _, _, _ = build()
+    source.fail.add("storms")
+    await poller.tick()
+    poller._feeds[protocol.STORMS].failures = 5000
+    assert poller.delay(protocol.STORMS) == poller.config.backoff_max
+
+
+async def test_the_alerts_are_cleared_when_the_alerts_feed_turns_off():
+    poller, source, store, clock, _ = build()
+    source.alert_result = AlertsResult(skipped=2)
+    source.set_storm("1", lat=26.0, lon=-80.0)
+    source.texts["1"] = advisories("1")
+    await poller.tick()
+    assert store.alerts.skipped == 2
+    source.set_storm("2", lat=14.0, lon=-40.0)  # out to sea: not a US threat any more
+    source.texts["2"] = advisories("2")
+    await step(poller, clock, 300)
+    assert store.alerts == AlertsResult()

@@ -54,6 +54,17 @@ def fetched_adv(advisories: AdvisorySet) -> AdvNum | None:
     return max((p.adv_num for p in products if p is not None and p.adv_num is not None), default=None)
 
 
+def missing_products(storm: Storm, advisories: AdvisorySet) -> bool:
+    """True when the feed lists a text product that did not come back parsed: tgftp lags one product at a time."""
+    pairs = (
+        (storm.forecast_advisory, advisories.forecast),
+        (storm.public_advisory, advisories.public),
+        (storm.forecast_discussion, advisories.discussion),
+        (storm.wind_speed_probabilities, advisories.wind_probabilities),
+    )
+    return any(ref is not None and product is None for ref, product in pairs)
+
+
 def _label(storm: Storm) -> str:
     return f"{storm.classification_text} {storm.name}".strip() if storm.name else storm.id
 

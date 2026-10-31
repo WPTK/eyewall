@@ -71,7 +71,9 @@ def _headless(args: argparse.Namespace, config: Config) -> int:
     from eyewall.sources.replay import ReplaySource
     from eyewall.state.alerts import default_state_dir
 
-    state_dir = args.state_dir if args.state_dir is not None else default_state_dir()
+    replaying = bool(args.replay or args.demo)
+    # A replay must not read or write the user's real seen set; it keeps none unless --state-dir is given.
+    state_dir = args.state_dir if args.state_dir is not None or replaying else default_state_dir()
 
     def emit(event: Event) -> None:
         print_event(event, sys.stdout)

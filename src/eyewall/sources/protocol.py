@@ -45,6 +45,10 @@ class DataSource(Protocol):
         """True when the last fetch of this feed was answered from the disk cache because the network failed."""
         ...
 
+    def start_poll(self, feed: str) -> None:
+        """Called before each poll of a feed, so `stale` reports only that poll's requests."""
+        ...
+
     async def storms(self) -> CurrentStorms: ...
 
     async def advisory(self, storm: Storm, *, fallback: bool = False) -> AdvisorySet:

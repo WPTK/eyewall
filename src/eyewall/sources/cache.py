@@ -109,6 +109,16 @@ class Cache:
                 os.unlink(temp_name)
             raise
 
+    def touch(self, url: str, fetched_at: datetime) -> None:
+        """Record that the entry was just validated (a 304), so `prune` does not age out a page that rarely changes."""
+        meta_path, _ = self._paths(url)
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            meta["fetched_at"] = fetched_at.astimezone(UTC).isoformat()
+            self._write(meta_path, json.dumps(meta).encode("utf-8"))
+        except (OSError, ValueError, TypeError, AttributeError):
+            return
+
     def prune(self, max_age: timedelta, now: datetime) -> int:
         """Delete entries not refreshed within `max_age`. Returns how many were removed."""
         removed = 0
@@ -194,6 +204,7 @@ class CachingTransport(httpx.AsyncBaseTransport):
         status = response.status_code
         if status == 304 and entry is not None and conditional:
             await response.aclose()
+            self.cache.touch(url, datetime.now(UTC))
             return self._from_cache(request, entry)
         if 200 <= status < 300:
             raw = b"".join([chunk async for chunk in response.stream])  # type: ignore[union-attr]

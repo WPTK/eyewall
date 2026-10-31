@@ -68,6 +68,9 @@ class LiveSource:
     def stale(self, feed: str) -> bool:
         return self._stale.get(feed, False)
 
+    def start_poll(self, feed: str) -> None:
+        self._stale[feed] = False
+
     @contextlib.asynccontextmanager
     async def _feed(self, feed: str) -> AsyncIterator[None]:
         """Record whether any request made for this feed was answered from the cache instead of the network."""
@@ -75,7 +78,7 @@ class LiveSource:
             try:
                 yield
             finally:
-                self._stale[feed] = marker.hit
+                self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
 
     # ---- storms -----------------------------------------------------------------------------------------------
 

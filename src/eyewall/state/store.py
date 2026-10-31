@@ -103,7 +103,7 @@ class Store:
         storm_id: str,
         now: datetime,
         *,
-        key: tuple[str | None, datetime | None],
+        key: tuple[str | None, datetime | None] | None,
         advisories: AdvisorySet | None = None,
         forecast_gis: ForecastGis | None = None,
         radii_gis: WindRadiiGis | None = None,
@@ -115,8 +115,9 @@ class Store:
         if state is None:
             return []
         events: list[Event] = []
-        changes: dict[str, object] = {"fetched_key": key}
+        changes: dict[str, object] = {} if key is None else {"fetched_key": key}  # None: tried again next poll
         if advisories is not None:
+            advisories = _keep_previous(state.advisories, advisories)
             previous = state.advisories if state.advisories != AdvisorySet() else None
             events += ev.watch_warning_events(state.storm, previous, advisories, now)
             events += ev.discussion_events(state.storm, previous, advisories, now)
@@ -233,6 +234,16 @@ class Store:
         if age is None or age > TENDENCY_MAX_AGE:
             return None
         return pressure_tendency(series.observations)
+
+
+def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:
+    """A product that did not come back (tgftp lags one at a time) keeps the previous one instead of wiping it."""
+    return AdvisorySet(
+        forecast=new.forecast or old.forecast,
+        public=new.public or old.public,
+        discussion=new.discussion or old.discussion,
+        wind_probabilities=new.wind_probabilities or old.wind_probabilities,
+    )
 
 
 def track_fixes(state: StormState) -> list[TrackFix]:

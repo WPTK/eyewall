@@ -31,3 +31,6 @@ and move an item into a milestone brief when it is scheduled.
 - M4: the "US threat" test for polling alerts is a pair of latitude and longitude boxes (Atlantic and Gulf coasts, Hawaii) plus any coastal watch or warning in effect; a land-geometry test would be exact.
 - M4: the Erin demo bundle's best track starts at the first recorded advisory (06Z on 19 August), so the first three hours of the replay have no past track; re-record with a longer `--track-hours` if the track history matters.
 - M4: the replay serves no outlook, invests, alerts or satellite; a bundle format for them is not worth recording until a UI needs them.
+- M4: `LiveSource.satellite` makes one listing request per storm per satellite poll; cache the listing across storms.
+- M4: coming back from away mode makes every feed due at once (a burst of requests); stagger the first poll after the return.
+- M4: the replay source does not classify its feeds (outlook, alerts, satellite) the way the live source does, so a replay reports them as always fresh.

@@ -110,6 +110,20 @@ def test_prune_removes_only_entries_older_than_the_limit(tmp_path):
     assert cache.load("https://b/") is not None
 
 
+async def test_a_304_refreshes_the_entry_so_prune_keeps_a_page_that_rarely_changes(tmp_path):
+    cache = Cache(tmp_path)
+    cache.store("https://x/a", b"body", httpx.Headers({"etag": '"1"'}), NOW - timedelta(days=10))
+
+    class NotModified(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            return httpx.Response(304, request=request)
+
+    response = await CachingTransport(cache, NotModified()).handle_async_request(httpx.Request("GET", "https://x/a"))
+    assert response.status_code == 200
+    assert cache.prune(timedelta(days=7), datetime.now(UTC)) == 0
+    assert cache.load("https://x/a") is not None
+
+
 # ---- the live source ----------------------------------------------------------------------------------------------
 
 
@@ -136,6 +150,7 @@ async def test_the_live_source_goes_stale_instead_of_failing_when_the_network_dr
         assert source.stale(protocol.STORMS)
         assert not source.stale(protocol.BUOYS)
         feeds.down = False
+        source.start_poll(protocol.STORMS)
         await source.storms()
         assert not source.stale(protocol.STORMS)
     finally:
@@ -228,3 +243,21 @@ async def test_replay_serves_gis_and_tide_gauges(demo):
     series = await demo.coops_series(stations[0], "MLLW")
     assert all(r.time <= demo.clock.now() for r in series.water_level.items)
     assert not demo.stale("storms")  # a replay is never stale
+
+
+async def test_the_stale_flag_is_true_if_any_request_of_the_poll_was_stale_and_resets_each_poll(tmp_path):
+    feeds = Feeds()
+    source = LiveSource(cache_dir=tmp_path, transport=feeds, clock=VirtualClock(NOW))
+    try:
+        await source.storms()
+        feeds.down = True
+        source.start_poll(protocol.STORMS)
+        await source.storms()  # from the cache
+        feeds.down = False
+        await source.storms()  # a later live answer in the same poll does not clear it
+        assert source.stale(protocol.STORMS)
+        source.start_poll(protocol.STORMS)
+        await source.storms()
+        assert not source.stale(protocol.STORMS)
+    finally:
+        await source.aclose()

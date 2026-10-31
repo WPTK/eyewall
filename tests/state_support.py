@@ -6,7 +6,8 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from eyewall.clock import VirtualClock
-from eyewall.models.advisory import AdvisorySet, PublicAdvisory, PublicSummary, WatchWarningText
+from eyewall.models.advisory import AdvisorySet, Discussion, PublicAdvisory, PublicSummary, WatchWarningText
+from eyewall.models.forecast import ForecastAdvisory
 from eyewall.models.graphics import FloaterProduct, GraphicLink
 from eyewall.models.obs import (
     LatestObservation,
@@ -19,6 +20,7 @@ from eyewall.models.obs import (
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import AdvNum, Classification, CurrentStorms, ProductRef, Storm
 from eyewall.models.watches import AlertsResult, WatchWarningArea
+from eyewall.models.wind import WindRadii
 from eyewall.net import FetchError, HttpError
 from eyewall.palette import WatchWarning
 
@@ -91,8 +93,26 @@ def make_public(adv_num: str, *areas: WatchWarningArea, issued: datetime = T0) -
     )
 
 
+def make_forecast(adv_num: str) -> ForecastAdvisory:
+    n = adv(adv_num)
+    return ForecastAdvisory(
+        "al012026", "TROPICAL STORM", "ANA", AdvNum(n.number, ""), T0, T0, None, None, None, None, None, None, None,
+        None, None, None, None, WindRadii(), None, None, (),
+    )  # fmt: skip
+
+
+def make_discussion(adv_num: str) -> Discussion:
+    n = adv(adv_num)
+    return Discussion("al012026", "TROPICAL STORM", "ANA", AdvNum(n.number, ""), T0, None, (), (), (), None)
+
+
 def advisories(adv_num: str, *areas: WatchWarningArea) -> AdvisorySet:
-    return AdvisorySet(public=make_public(adv_num, *areas))
+    """Every product `make_storm` lists: the forecast and discussion carry the base number, the public the full one."""
+    return AdvisorySet(
+        forecast=make_forecast(adv_num),
+        public=make_public(adv_num, *areas),
+        discussion=make_discussion(adv_num),
+    )
 
 
 def obs(time: datetime, wind_kt: float | None = None, pressure: float | None = None) -> Observation:
@@ -132,12 +152,17 @@ class FakeSource:
     calls: list[str] = field(default_factory=list)
     datums: list[tuple[str, str]] = field(default_factory=list)
     bad_datum: set[str] = field(default_factory=set)
+    fail_products: set[str] = field(default_factory=set)  # forecast_gis, radii_gis, track or graphics
+    alert_result: AlertsResult = field(default_factory=AlertsResult)
 
     def now(self) -> datetime:
         return self.clock.now()
 
     def stale(self, feed: str) -> bool:
         return feed in self.cached
+
+    def start_poll(self, feed: str) -> None:
+        return None
 
     def count(self, name: str) -> int:
         return self.calls.count(name)
@@ -163,18 +188,26 @@ class FakeSource:
 
     async def forecast_gis(self, storm: Storm):
         self.calls.append("forecast_gis")
+        if "forecast_gis" in self.fail_products:
+            raise FetchError("fake://forecast_gis", "network down")
         return None
 
     async def radii_gis(self, storm: Storm):
         self.calls.append("radii_gis")
+        if "radii_gis" in self.fail_products:
+            raise FetchError("fake://radii_gis", "network down")
         return None
 
     async def track(self, storm: Storm):
         self.calls.append("track")
+        if "track" in self.fail_products:
+            raise FetchError("fake://track", "network down")
         return None
 
     async def graphics(self, storm: Storm) -> tuple[GraphicLink, ...]:
         self.calls.append("graphics")
+        if "graphics" in self.fail_products:
+            raise FetchError("fake://graphics", "network down")
         return ()
 
     async def satellite(self, storm: Storm) -> tuple[FloaterProduct, ...]:
@@ -187,7 +220,7 @@ class FakeSource:
 
     async def alerts(self) -> AlertsResult:
         self._call("alerts")
-        return AlertsResult()
+        return self.alert_result
 
     async def ndbc_stations(self) -> tuple[Station, ...]:
         self.calls.append("ndbc_stations")

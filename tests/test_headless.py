@@ -111,3 +111,16 @@ def test_a_storm_in_a_disabled_basin_is_ignored():
     store = Store(Config(basins=BasinsConfig(enabled=("EP",))))
     assert store.apply_storms(CurrentStorms((make_storm("1"),)), T0) == []
     assert store.storms == {}
+
+
+def test_a_replay_never_touches_the_user_seen_file_unless_asked(tmp_path, monkeypatch, capsys):
+    import eyewall.state.alerts as alerts
+
+    def refuse() -> None:
+        raise AssertionError("a replay must not look for the user state directory")
+
+    monkeypatch.setattr(alerts, "default_state_dir", refuse)
+    assert main(["--demo", "--headless", "--until", "+4h", "--no-config"]) == 0
+    first = capsys.readouterr().out
+    assert main(["--demo", "--headless", "--until", "+4h", "--no-config"]) == 0
+    assert capsys.readouterr().out == first  # nothing was remembered between the two runs

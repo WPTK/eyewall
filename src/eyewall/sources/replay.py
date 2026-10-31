@@ -185,6 +185,9 @@ class ReplaySource:
     def stale(self, feed: str) -> bool:
         return False
 
+    def start_poll(self, feed: str) -> None:
+        return None
+
     def advisory_times(self) -> tuple[datetime, ...]:
         """Every moment an advisory (including intermediates) was issued, oldest first."""
         return tuple(sorted({p.issued for p in (*self._tcm, *self._tcp)}))

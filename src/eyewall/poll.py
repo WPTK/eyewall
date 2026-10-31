@@ -35,14 +35,16 @@ from enum import StrEnum
 
 from eyewall.clock import Clock, SystemClock
 from eyewall.config import PollConfig
+from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.obs import TideStation
+from eyewall.models.watches import AlertsResult
 from eyewall.net import FetchError
 from eyewall.providers.base import ParseError
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource
 from eyewall.state.alerts import AlertEngine
-from eyewall.state.events import current_adv, fetched_adv
+from eyewall.state.events import current_adv, fetched_adv, missing_products
 from eyewall.state.store import Store, storm_key
 
 STALE_FACTOR = 2.5
@@ -53,6 +55,8 @@ STAGGER_SECONDS = 0.25
 MAX_BUOY_SERIES = 24
 MAX_TIDE_GAUGES = 12
 STATION_REFRESH = 24 * 3600.0
+_PRODUCTS = ("forecast_gis", "radii_gis", "track", "graphics")
+MAX_BACKOFF_EXPONENT = 16  # 2**failures overflows a float after about 1000 consecutive failures
 
 # CO-OPS answers a water level request with HTTP 400 for a datum the gauge lacks; the Great Lakes need IGLD.
 DATUM_COAST = "MLLW"
@@ -148,6 +152,7 @@ class Poller:
             protocol.SATELLITE: self._poll_satellite,
         }
         self._attempts: dict[tuple[str, tuple[str | None, datetime | None]], int] = {}
+        self._pending: dict[tuple[str, tuple[str | None, datetime | None]], set[str]] = {}
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
 
@@ -182,7 +187,7 @@ class Poller:
         state = self._feeds[feed]
         base = self.interval(feed)
         if state.failures:
-            return max(base, min(self.config.backoff_max, base * 2**state.failures))
+            return max(base, min(self.config.backoff_max, base * 2 ** min(state.failures, MAX_BACKOFF_EXPONENT)))
         return base
 
     def due(self) -> list[str]:
@@ -248,6 +253,7 @@ class Poller:
         events: list[Event] = []
         error: Exception | None = None
         self.fetch_counts[feed] = self.fetch_counts.get(feed, 0) + 1
+        self.source.start_poll(feed)
         try:
             events = await self._fetchers[feed]()
         except asyncio.CancelledError:
@@ -293,6 +299,8 @@ class Poller:
             if state.fetched_key == key:
                 continue
             events += await self._fetch_products(storm_id, key)
+        if not self.store.us_threat():
+            self.store.apply_alerts(AlertsResult())  # the alerts feed is off now; do not keep showing its last answer
         return events
 
     async def _fetch_products(self, storm_id: str, key: tuple[str | None, datetime | None]) -> list[Event]:
@@ -301,36 +309,51 @@ class Poller:
         now = self.source.now()
         attempt = self._attempts.get((storm_id, key), 0) + 1
         self._attempts[(storm_id, key)] = attempt
-        advisories = await self.source.advisory(storm, fallback=attempt >= 2)
-        wanted = current_adv(storm)
-        have = fetched_adv(advisories)
-        behind = wanted is not None and have != wanted
-        if behind and attempt < FALLBACK_ATTEMPTS:
-            # tgftp still serves the previous advisory. Keep the old products and ask again next poll, the second
-            # time through api.weather.gov.
-            return []
-        forecast_gis = await self._optional(self.source.forecast_gis(storm))
-        radii_gis = await self._optional(self.source.radii_gis(storm))
-        track = await self._optional(self.source.track(storm))
-        graphics = await self._optional(self.source.graphics(storm))
-        self._attempts = {k: v for k, v in self._attempts.items() if k[0] != storm_id or k == (storm_id, key)}
+        pending = self._pending.get((storm_id, key))  # set once the text is in: only failed products remain
+        advisories: AdvisorySet | None = None
+        behind = False
+        if pending is None:
+            advisories = await self.source.advisory(storm, fallback=attempt >= 2)
+            wanted = current_adv(storm)
+            have = fetched_adv(advisories)
+            behind = (wanted is not None and have != wanted) or missing_products(storm, advisories)
+            if behind and attempt < FALLBACK_ATTEMPTS:
+                # tgftp still serves the previous advisory, or one product of this one. Keep the old products and
+                # ask again next poll, the second time through api.weather.gov.
+                return []
+            if behind and have is None:
+                advisories = None
+            pending = set(_PRODUCTS)
+        failed: set[str] = set()
+        got: dict[str, object] = {}
+        for name in _PRODUCTS:
+            if name in pending:
+                value = await self._optional(getattr(self.source, name)(storm), name, failed)
+                got[name] = value
+        retry = bool(failed) and attempt < FALLBACK_ATTEMPTS  # a failed product is asked for again, within the cap
+        if retry:
+            self._pending[(storm_id, key)] = failed
+        else:
+            self._pending.pop((storm_id, key), None)
+            self._attempts = {k: v for k, v in self._attempts.items() if k[0] != storm_id or k == (storm_id, key)}
         return self.store.apply_products(
             storm_id,
             now,
-            key=key,
-            advisories=advisories if not behind or have is not None else None,
-            forecast_gis=forecast_gis,
-            radii_gis=radii_gis,
-            track=track,
-            graphics=graphics,
+            key=None if retry else key,
+            advisories=advisories,
+            forecast_gis=got.get("forecast_gis"),  # type: ignore[arg-type]
+            radii_gis=got.get("radii_gis"),  # type: ignore[arg-type]
+            track=got.get("track"),  # type: ignore[arg-type]
+            graphics=got.get("graphics"),  # type: ignore[arg-type]
         )
 
     @staticmethod
-    async def _optional[T](call: Awaitable[T]) -> T | None:
-        """A product that fails does not discard the others; the next advisory change tries it again."""
+    async def _optional[T](call: Awaitable[T], name: str, failed: set[str]) -> T | None:
+        """A product that fails does not discard the others; it is noted in `failed` so the storm is tried again."""
         try:
             return await call
         except (FetchError, ParseError, ValueError):
+            failed.add(name)
             return None
 
     async def _poll_outlook(self) -> list[Event]:
