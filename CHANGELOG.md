@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0] - 2026-10-31
+
+### Changed
+
+- Replace the Graphics tab placeholder with the image gallery ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+
+### Added
+
+- Add the graphics gallery and the `g` screen: the cone, wind probabilities at 34, 50 and 64 kt, arrival times, surge watch and warning and peak surge, and the GEOCOLOR, air mass and infrared stills and loops, each shown with its address ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Add inline images through Sixel or the Kitty graphics protocol when the terminal supports them, probed once before the app starts ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Add a fallback that draws images in colored half blocks, braille or ASCII at the terminal's color depth, and trims the legend off NHC cone graphics ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Add satellite loops that decode one frame at a time, play at up to 10 frames per second and step with `[` and `]` ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Add `o` to open an image's address in the browser and `y` to copy it, with a message when no browser or clipboard is available ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+- Add image fetching to the data sources, size-capped and conditional, and the recorded Erin cones to the replay ([`COMMIT`](https://github.com/WPTK/eyewall/commit/COMMIT), [#PR](https://github.com/WPTK/eyewall/pull/PR))
+
+[0.7.0]: https://github.com/WPTK/eyewall/releases/tag/v0.7.0
+
 ## [0.6.0] - 2026-10-31
 
 ### Changed
