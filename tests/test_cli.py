@@ -81,3 +81,13 @@ def test_replay_starts_the_app_without_a_state_dir(monkeypatch):
 def test_a_bad_replay_path_exits_two(capsys):
     assert main(["--no-config", "--replay", "no-such-bundle-anywhere"]) == 2
     assert capsys.readouterr().err.startswith("eyewall:")
+
+
+def test_the_config_file_path_is_handed_to_the_app_so_settings_can_be_saved(tmp_path, monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append(kw))
+    path = tmp_path / "config.toml"
+    assert main(["--config", str(path), "--demo"]) == 0
+    assert launched[0]["config_path"] == path
+    assert main(["--no-config", "--demo"]) == 0
+    assert launched[1]["config_path"] is None

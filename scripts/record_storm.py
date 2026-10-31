@@ -297,15 +297,16 @@ class Recorder:
                 break
             got = False
             for product in bundle.TIDE_PRODUCTS:
-                if product != "water_level" and station_id not in located["met"]:
+                if product not in ("water_level", "predictions") and station_id not in located["met"]:
                     continue
                 params = datagetter_params(product, station_id, begin=start, end=end)  # type: ignore[arg-type]
                 body = await self.get(DATAGETTER_URL, params=params)
                 payload = json.loads(body) if body else {}
-                if not isinstance(payload, dict) or "error" in payload or not payload.get("data"):
+                rows_key = "predictions" if product == "predictions" else "data"
+                if not isinstance(payload, dict) or "error" in payload or not payload.get(rows_key):
                     log(f"gauge {station_id} {product}: no data")
                     continue
-                log(f"gauge {station_id} {product}: {len(payload['data'])} rows")
+                log(f"gauge {station_id} {product}: {len(payload[rows_key])} rows")
                 self.write(bundle.coops_path(station_id, product), json.dumps(payload, separators=(",", ":")))
                 got = got or product == "water_level"
             if got:

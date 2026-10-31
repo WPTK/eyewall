@@ -203,7 +203,9 @@ class TideSeries:
     """What one tide gauge reported: water level always, wind and pressure where the gauge has the sensors.
 
     Every list is newest first. `datum` is the one the water level was asked for (MLLW, or IGLD on the Great Lakes).
-    A product the gauge does not offer is an empty `Parsed` carrying NOAA's message.
+    A product the gauge does not offer is an empty `Parsed` carrying NOAA's message. `predictions` are the 6-minute
+    astronomical tide (soonest first), covering the same stretch as the water level, so the difference between the two
+    is the residual: wind, pressure and surge pushing the water away from the tide table.
     """
 
     station_id: str
@@ -211,6 +213,7 @@ class TideSeries:
     water_level: Parsed[WaterLevelReading] = Parsed()
     wind: Parsed[TideWind] = Parsed()
     pressure: Parsed[TidePressure] = Parsed()
+    predictions: Parsed[Prediction] = Parsed()
 
     @property
     def latest_level(self) -> WaterLevelReading | None:

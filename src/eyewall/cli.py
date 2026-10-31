@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from eyewall import __version__
-from eyewall.config import BASINS, GLYPH_SETS, Config, apply_overrides, load_config
+from eyewall.config import BASINS, GLYPH_SETS, Config, apply_overrides, default_path, load_config
 from eyewall.models.events import Event
 
 DEMO_BUNDLE = "demo"
@@ -91,7 +91,14 @@ def _headless(args: argparse.Namespace, config: Config) -> int:
     return 0
 
 
+def _config_path(args: argparse.Namespace) -> Path | None:
+    """Where the app saves settings and the watchlist: the file it was told to read, else the default; with
+    --no-config nowhere, so changes last for the run."""
+    return None if args.no_config else (args.config or default_path())
+
+
 def _run_app(args: argparse.Namespace, config: Config) -> int:
+    config_path = _config_path(args)
     from eyewall.app import run_app
     from eyewall.sources.bundle import BundleError, resolve_bundle
     from eyewall.sources.live import LiveSource
@@ -107,10 +114,10 @@ def _run_app(args: argparse.Namespace, config: Config) -> int:
         except BundleError as exc:
             print(f"eyewall: {exc}", file=sys.stderr)
             return 2
-        run_app(config, source, state_dir=state_dir)
+        run_app(config, source, state_dir=state_dir, config_path=config_path)
         return 0
     live = LiveSource()
-    run_app(config, live, state_dir=state_dir, closer=live.aclose)
+    run_app(config, live, state_dir=state_dir, closer=live.aclose, config_path=config_path)
     return 0
 
 

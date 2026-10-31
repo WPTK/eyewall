@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 
 from eyewall.clock import VirtualClock
-from eyewall.config import Config, PollConfig
+from eyewall.config import Config, PollConfig, WatchlistConfig
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
@@ -262,10 +262,52 @@ async def test_each_tide_gauge_gets_its_datum_and_one_that_answers_400_does_not_
     assert poller.freshness(protocol.TIDES).state is FreshnessState.FRESH
 
 
-async def test_a_quiet_basin_polls_only_storms_and_outlook():
-    poller, source, *_ = build()
+async def test_a_quiet_basin_with_no_watchlist_polls_only_storms_and_outlook():
+    poller, source, *_ = build(config=Config(watchlist=WatchlistConfig(ndbc=(), coops=())))
     source.current = CurrentStorms()
     assert [r.feed for r in await poller.tick()] == [protocol.STORMS, protocol.OUTLOOK]
+
+
+async def test_a_quiet_basin_still_polls_the_watchlisted_buoys_and_gauges():
+    config = Config(watchlist=WatchlistConfig(ndbc=("41010", "42001"), coops=("8721604",)))
+    poller, source, _store, *_ = build(config=config)
+    source.current = CurrentStorms()
+    source.stations = (station("41010", 28.9, -78.5), station("42001", 25.9, -89.7), station("41002", 32.0, -75.0))
+    source.tide_stations = (gauge("8721604", 28.4, -80.6),)
+    results = await poller.tick()
+    assert [r.feed for r in results] == [protocol.STORMS, protocol.OUTLOOK, protocol.BUOYS, protocol.TIDES]
+    assert sorted(c for c in source.calls if c.startswith("series:")) == ["series:41010", "series:42001"]
+    assert source.datums == [("8721604", "MLLW")]
+    assert not poller.active(protocol.SATELLITE) and not poller.active(protocol.ALERTS)
+
+
+async def test_only_the_gauge_side_of_the_watchlist_switches_the_tides_feed_on():
+    config = Config(watchlist=WatchlistConfig(ndbc=("41010",), coops=()))
+    poller, source, *_ = build(config=config)
+    source.current = CurrentStorms()
+    assert poller.active(protocol.BUOYS) and not poller.active(protocol.TIDES)
+
+
+async def test_a_station_an_open_screen_asks_for_is_polled_and_a_changed_watchlist_is_due_at_once():
+    config = Config(watchlist=WatchlistConfig(ndbc=(), coops=()))
+    poller, source, store, _clock, _ = build(config=config)
+    source.current = CurrentStorms()
+    source.stations = (station("41002", 32.0, -75.0),)
+    await poller.tick()
+    assert not poller.active(protocol.BUOYS)
+    poller.extra_buoys.add("41002")
+    assert poller.active(protocol.BUOYS)
+    poller.refresh_feeds(protocol.BUOYS)
+    await poller.tick()
+    assert "series:41002" in source.calls
+    # the watchlist grows: only the buoy feed is made due, the others keep their schedule
+    store.config = Config(watchlist=WatchlistConfig(ndbc=("41002",), coops=()))
+    poller.extra_buoys.clear()
+    before = source.count("ndbc_latest")
+    assert await poller.tick() == []
+    poller.refresh_feeds(protocol.BUOYS)
+    assert [r.feed for r in await poller.tick()] == [protocol.BUOYS]
+    assert source.count("ndbc_latest") == before + 1
 
 
 @pytest.mark.parametrize("away", [False, True])
