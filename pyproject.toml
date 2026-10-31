@@ -67,6 +67,7 @@ packages = ["src/eyewall"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not uat'"  # the UAT suite takes minutes: run it with `pytest tests/uat -m uat`
 markers = [
     "live: hits the real NOAA endpoints; skipped unless EYEWALL_LIVE=1",
     "uat: user-journey tests that drive the whole app",
