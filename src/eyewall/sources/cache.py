@@ -5,11 +5,13 @@ the parsers knowing about it:
 
 - A GET whose URL is cached is sent with the saved `ETag` / `Last-Modified` as validators. A 304 comes back to the
   caller as the cached 200, so a feed that has not changed costs a header exchange and no body.
-- A 2xx answer replaces the cached copy.
-- When the network fails (no connection, a timeout) or the server answers 429 or 5xx, and a copy exists, the caller
-  gets the copy and the current `StaleMarker` is set, so the live source can say the feed is stale. A 429 or 5xx also
-  records the status and the server's Retry-After on the marker, so the poller can back off. With no copy the
-  failure propagates as usual.
+- A 2xx answer replaces the cached copy, unless it is an HTML page where the copy is not
+  (a 200 maintenance notice): then the copy answers, marked stale.
+  Writing also trims the oldest entries once the cache passes `MAX_TOTAL_BYTES`.
+- When the network fails (no connection, a timeout, a loss during the body) or the server answers 429 or 5xx, and a
+  copy exists, the caller gets the copy and the current `StaleMarker` is set, so the live source can say the feed is
+  stale. A 429 or 5xx also records the status and the server's Retry-After on the marker, so the poller can back off.
+  With no copy the failure propagates as usual.
 - The disk is touched from a worker thread, one await at a time, so the UI loop never waits on it. The body file is
   read only when it is used: after a 304 or when serving a copy.
 
@@ -39,6 +41,8 @@ from eyewall.net import MAX_BYTES_EXTENSION, FetchError, HttpError, RateLimited,
 
 log = logging.getLogger(__name__)
 MAX_BODY_BYTES = 32 * 1024 * 1024
+MAX_TOTAL_BYTES = 256 * 1024 * 1024  # the whole cache; the oldest entries go first
+TRIM_EVERY_BYTES = 16 * 1024 * 1024  # written since the last trim: a long session pays for what it adds
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "content-encoding")
 _FAILURE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
@@ -68,6 +72,7 @@ class Cache:
 
     def __init__(self, directory: Path | None = None) -> None:
         self.directory = directory if directory is not None else default_cache_dir()
+        self._written = 0
 
     def _paths(self, url: str) -> tuple[Path, Path]:
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
@@ -118,6 +123,41 @@ class Cache:
             self._write(meta_path, json.dumps(meta).encode("utf-8"))
         except OSError:
             return
+        self._written += len(body)
+        if self._written >= TRIM_EVERY_BYTES:
+            self._written = 0
+            self.trim(MAX_TOTAL_BYTES)
+
+    def trim(self, max_bytes: int) -> int:
+        """Delete the least recently refreshed entries until the bodies fit in `max_bytes`. Returns how many went."""
+        entries: list[tuple[float, int, Path]] = []
+        try:
+            bodies = list(self.directory.glob("*/*.bin"))
+        except OSError:
+            return 0
+        for body_path in bodies:
+            try:  # a file that vanished or cannot be read is skipped, not a reason to stop
+                size = body_path.stat().st_size
+                meta = body_path.with_suffix(".json")
+                entries.append((meta.stat().st_mtime if meta.exists() else 0.0, size, body_path))
+            except OSError:
+                continue
+        total = sum(size for _, size, _ in entries)
+        removed = 0
+        for _, size, body_path in sorted(entries):
+            if total <= max_bytes:
+                break
+            with contextlib.suppress(OSError):
+                body_path.with_suffix(".json").unlink()
+            try:
+                body_path.unlink()
+            except FileNotFoundError:
+                pass  # already gone: the space is free
+            except OSError:
+                continue  # in use (Windows): it still counts against the cap
+            total -= size
+            removed += 1
+        return removed
 
     @staticmethod
     def _write(path: Path, data: bytes) -> None:
@@ -159,7 +199,26 @@ class Cache:
                 with contextlib.suppress(OSError):
                     path.unlink()
             removed += 1
+        try:  # a body whose metadata file is gone (a write cut short, a half-deleted entry) is never read again
+            for body_path in self.directory.glob("*/*.bin"):
+                if not body_path.with_suffix(".json").exists():
+                    with contextlib.suppress(OSError):
+                        body_path.unlink()
+                    removed += 1
+        except OSError:
+            pass
         return removed
+
+
+def _is_page_over_data(entry: CacheEntry | None, response: httpx.Response) -> bool:
+    """True when a 2xx answer is an HTML page where the cached copy is something else: a 200 maintenance notice."""
+    if entry is None or not entry.headers.get("content-type"):
+        return False  # nothing to compare with: take the answer
+
+    def html(content_type: str | None) -> bool:
+        return (content_type or "").split(";")[0].strip().lower() in {"text/html", "application/xhtml+xml"}
+
+    return html(response.headers.get("content-type")) and not html(entry.headers.get("content-type"))
 
 
 @dataclass(slots=True)
@@ -209,13 +268,13 @@ class EnvTransport(httpx.AsyncBaseTransport):
     by HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and NO_PROXY, and on Windows and macOS the system proxy setting (httpx reads
     both through `urllib.request.getproxies`). A client given a transport of its own ignores them (httpx only reads the
     environment when it builds the transport itself), so the proxy routing lives in this inner client. A proxy address
-    httpx cannot use (an unknown scheme, or socks without the socksio package) is logged and skipped: the requests go
-    direct instead of the app failing to start. Redirects are left to the outer client."""
+    httpx cannot use (an unknown scheme, a malformed port, or socks without the socksio package) is logged and skipped:
+    the requests go direct instead of the app failing to start. Redirects are left to the outer client."""
 
     def __init__(self) -> None:
         try:
             self._client = httpx.AsyncClient(trust_env=True, follow_redirects=False)
-        except (ValueError, ImportError) as exc:
+        except (ValueError, ImportError, httpx.InvalidURL) as exc:
             log.warning("ignoring the configured proxy, requests go direct (%s)", type(exc).__name__)
             self._client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
 
@@ -301,7 +360,14 @@ class CachingTransport(httpx.AsyncBaseTransport):
             declared = response.headers.get("content-length", "")
             if declared.isdigit() and int(declared) > limit:
                 return response  # too big to cache or for this caller: pass it on untouched, nothing is read here
-            return await self._cache_or_pass(request, response, url, limit)
+            try:
+                return await self._cache_or_pass(request, response, url, limit, entry)
+            except httpx.TransportError:  # lost during the body: the copy answers
+                await response.aclose()
+                served = None if entry is None else await self._stale(request, entry)
+                if served is None:
+                    raise
+                return served
         if status in _FAILURE_STATUSES and entry is not None:
             served = await self._stale(request, entry, response)
             if served is not None:
@@ -310,7 +376,7 @@ class CachingTransport(httpx.AsyncBaseTransport):
         return response
 
     async def _cache_or_pass(
-        self, request: httpx.Request, response: httpx.Response, url: str, limit: int
+        self, request: httpx.Request, response: httpx.Response, url: str, limit: int, entry: CacheEntry | None
     ) -> httpx.Response:
         """Read a 2xx body into the cache, unless it passes `limit` (no declared length, then too much arrived): hand
         it on as a stream, uncached, so the transport never holds more than the limit and the caller decides."""
@@ -329,7 +395,13 @@ class CachingTransport(httpx.AsyncBaseTransport):
                 )
         await response.aclose()
         raw = b"".join(chunks)
-        await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
+        if entry is not None and _is_page_over_data(entry, response):
+            # A maintenance page where the copy is data: treat it like a 5xx and answer with the copy, marked stale.
+            served = await self._stale(request, entry)
+            if served is not None:
+                return served
+        else:
+            await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
         headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
         headers.append(("content-length", str(len(raw))))
         return httpx.Response(response.status_code, headers=headers, stream=httpx.ByteStream(raw), request=request)

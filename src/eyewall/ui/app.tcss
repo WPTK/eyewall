@@ -1,5 +1,4 @@
-/* eyewall layout. Widths: wide (110+) shows the panels beside the map; narrow folds them into tabs; compact (< 90)
-   hides the map until `m`. The screen carries the matching classes: narrow, compact, show-map, hide-map, full-map. */
+/* eyewall layout. The main screen's three sizes are described under "main screen" below. */
 
 Screen {
     background: $background;
@@ -29,37 +28,37 @@ TooSmallScreen {
     max-width: 100%;
 }
 
-/* ---- dashboard ---- */
+/* ---- chrome: the top bar and the footer, one row each on every screen ---- */
 
-#main {
+TopBar {
+    dock: top;
+    height: 1;
+    background: $panel;
+}
+
+FooterBar {
+    dock: bottom;
+    height: 1;
+    background: $panel;
+}
+
+/* ---- main screen ----
+   The map is the one element that grows. The screen carries a layout class (tier-small, tier-medium, tier-large) from
+   `ui.screens.main.tier_for`: small has no column and shows the strip under the map, the others show the column. */
+
+#lead {
+    height: auto;
+    max-height: 3;
+    padding: 0 1;
+}
+
+#body {
     height: 1fr;
-}
-
-#storms {
-    width: 36;
-    height: 100%;
-    border: round $primary 50%;
-    background: $surface;
-    padding: 0;
-}
-
-#storms:focus {
-    border: heavy $accent;
-}
-
-#storms > .option-list--option-highlighted {
-    background: $primary 30%;
-    text-style: underline;
 }
 
 #map-pane {
     width: 1fr;
     height: 100%;
-    border: round $primary 50%;
-}
-
-#map-pane:focus-within {
-    border: heavy $accent;
 }
 
 MapView {
@@ -71,192 +70,118 @@ MapView {
     color: $text-muted;
 }
 
-#side-stack {
-    width: 28%;
-    min-width: 44;
-    max-width: 64;
-    height: 100%;
-}
-
-#side-tabs {
+#side {
     display: none;
-    width: 38;
     height: 100%;
-}
-
-.panel {
-    height: auto;
-    min-height: 4;
-    max-height: 12;
-    border: round $primary 50%;
     padding: 0 1;
-    background: $surface;
+    border-left: solid $primary 50%;
 }
 
-.panel:focus {
-    border: heavy $accent;
-}
-
-.panel Static {
-    width: 100%;
+#strip {
+    display: none;
     height: auto;
-}
-
-/* The stack fits the screen: the dashboard sets each panel's height (`DashboardScreen.fit_stack`), sizing the warnings,
-   wind, surge and buoy panels to their text up to the cap below and giving the headline what is left. Each panel
-   scrolls inside itself when its text is longer. */
-#side-stack .headline {
-    min-height: 6;
-    max-height: 100%;
-}
-
-#side-stack .ww {
-    max-height: 9;
-}
-
-#side-stack .wind {
-    max-height: 15;
-}
-
-#side-stack .surge {
-    max-height: 5;
-}
-
-#side-tabs .panel {
-    max-height: 100%;
-    height: 100%;
-}
-
-#side-tabs Tab {
     padding: 0 1;
 }
 
-#side-tabs ContentSwitcher,
-#side-tabs TabPane {
+MainScreen.tier-medium #side {
+    display: block;
+    width: 34;
+}
+
+MainScreen.tier-large #side {
+    display: block;
+    width: 50;
+}
+
+MainScreen.tier-small #strip {
+    display: block;
+}
+
+MainScreen.full-map #side,
+MainScreen.full-map #strip {
+    display: none;
+}
+
+/* ---- storm and NHC text ---- */
+
+#storm-scroll, #text-scroll {
     height: 1fr;
-    padding: 0;
 }
 
-#side-tabs .panel {
+#storm-page {
+    padding: 0 1;
+}
+
+#text-tabs {
+    height: 2;
+}
+
+#text-head {
+    height: auto;
+    padding: 0 1;
+}
+
+#text-stale {
+    height: auto;
+    padding: 0 1;
+    background: $panel;
+}
+
+#text-body {
+    padding: 0 1;
+}
+
+/* ---- buoys and stations ---- */
+
+#buoys-tabs {
+    height: 2;
+}
+
+#buoys-head, #buoys-empty {
+    height: auto;
+    padding: 0 1;
+}
+
+#buoys-list {
+    height: 1fr;
     border: none;
-}
-
-#status, #detail-status, #outlook-status, #graphics-status {
-    dock: bottom;
-    height: 1;
-    background: $panel;
     padding: 0;
 }
 
-DashboardScreen.narrow #side-stack {
-    display: none;
+/* The highlighted row keeps its own text colours readable: a quiet band and bold, never the loud accent fill. */
+StationList > .option-list--option-highlighted,
+StationList:focus > .option-list--option-highlighted {
+    background: $panel-lighten-2;
+    text-style: bold;
 }
 
-DashboardScreen.narrow #side-tabs {
-    display: block;
+StationList > .option-list--option-hover,
+StationList > .option-list--option-hover-highlighted {
+    background: $panel-lighten-1;
 }
 
-DashboardScreen.narrow #storms {
-    width: 32;
+#station-lead, #station-follow {
+    height: auto;
+    padding: 0 1;
 }
 
-DashboardScreen.compact #map-pane {
-    display: none;
-}
-
-DashboardScreen.compact #side-tabs {
-    width: 1fr;
-}
-
-DashboardScreen.compact.show-map #map-pane {
-    display: block;
-}
-
-DashboardScreen.compact.show-map #side-tabs {
-    display: none;
-}
-
-DashboardScreen.hide-map #map-pane {
-    display: none;
-}
-
-DashboardScreen.hide-map #side-tabs {
-    width: 1fr;
-}
-
-DashboardScreen.hide-map #side-stack {
-    width: 1fr;
-}
-
-DashboardScreen.full-map #storms,
-DashboardScreen.full-map #side-stack,
-DashboardScreen.full-map #side-tabs {
-    display: none;
-}
-
-DashboardScreen.full-map #map-pane {
-    display: block;
-}
-
-/* ---- storm detail ---- */
-
-#detail-title {
-    height: 1;
+#station-about {
+    height: auto;
+    padding: 0 1;
     background: $panel;
 }
 
-#detail-tabs {
+#station-charts, #station-readings {
     height: 1fr;
 }
 
-.note {
-    height: auto;
-    min-height: 1;
-    padding: 0 1;
-}
-
-StormDetailScreen DataTable {
+#station-charts ChartView {
     height: 1fr;
+    min-height: 6;
 }
 
-.detail-text {
+#station-table {
     padding: 0 1;
-}
-
-/* ---- outlook ---- */
-
-#outlook-main {
-    height: 1fr;
-}
-
-#outlook-left {
-    width: 1fr;
-    height: 100%;
-    border: round $primary 50%;
-}
-
-#outlook-scroll {
-    height: auto;
-    max-height: 70%;
-    padding: 0 1;
-}
-
-#watchlist-title {
-    height: 1;
-    padding: 0 1;
-    text-style: bold;
-    color: $secondary;
-}
-
-#watchlist {
-    height: 1fr;
-    min-height: 5;
-}
-
-#outlook-map {
-    width: 1fr;
-    height: 100%;
-    border: round $primary 50%;
 }
 
 /* ---- alert log, help, layers ---- */
@@ -265,11 +190,11 @@ StormDetailScreen DataTable {
     height: 1fr;
 }
 
-HelpScreen, LayerMenu {
+HelpScreen, FeedsScreen, LayerMenu, MarkChooser {
     align: center middle;
 }
 
-#help-box {
+#help-box, #feeds-box {
     width: 78;
     max-width: 96%;
     height: auto;
@@ -279,6 +204,15 @@ HelpScreen, LayerMenu {
     padding: 0 2;
 }
 
+#chooser-box {
+    width: 60;
+    max-width: 96%;
+    height: auto;
+    max-height: 80%;
+    border: round $accent;
+    background: $panel;
+}
+
 #layer-box {
     width: 44;
     height: auto;
@@ -286,8 +220,8 @@ HelpScreen, LayerMenu {
     background: $panel;
 }
 
-/* Ten tabs fit in 80 columns: one space between labels. */
-StormDetailScreen Tab {
+/* The text tabs fit in 80 columns: one space between labels. */
+NhcTextScreen Tab, BuoysScreen Tab {
     padding: 0 1 0 0;
 }
 
@@ -315,93 +249,10 @@ SelectionList > .selection-list--button-selected {
     background: $surface;
 }
 
-/* ---- buoy detail ---- */
-
-#buoy-title {
-    height: 1;
-    background: $panel;
-}
-
-#buoy-body {
-    height: 1fr;
-}
-
-#buoy-charts {
-    width: 1fr;
-    height: 100%;
-}
-
-#buoy-info {
-    width: 50;
-    height: 100%;
-    border: round $primary 50%;
-    padding: 0 1;
-}
-
-BuoyDetailScreen.narrow #buoy-info {
-    display: none;
-}
-
-BuoyDetailScreen.narrow.show-info #buoy-info {
-    display: block;
-    width: 1fr;
-}
-
-BuoyDetailScreen.narrow.show-info #buoy-charts {
-    display: none;
-}
-
-#buoy-status, #watch-status, #alert-status {
-    dock: bottom;
-    height: 1;
-    background: $panel;
-}
-
-/* ---- watchlist ---- */
-
-#watch-main {
-    height: 1fr;
-}
-
-.watch-title {
-    height: 1;
-    background: $panel;
-}
-
-#watch-buoys {
-    height: auto;
-    max-height: 60%;
-}
-
-#watch-tides {
-    height: 1fr;
-}
-
 /* ---- station search and settings ---- */
 
-SearchScreen, SettingsScreen {
+SettingsScreen {
     align: center middle;
-}
-
-#search-box {
-    width: 76;
-    max-width: 96%;
-    height: 22;
-    max-height: 92%;
-    border: round $accent;
-    background: $panel;
-}
-
-#search-results {
-    height: 1fr;
-    background: $panel;
-    text-wrap: nowrap;
-    text-overflow: ellipsis;
-}
-
-#search-note {
-    height: 1;
-    padding: 0 1;
 }
 
 #settings-box {

@@ -211,3 +211,11 @@ def test_no_interval_can_be_set_below_the_documented_cadence():
         config, warnings = parse(f"[poll]\n{feed} = {low}\n")
         assert getattr(config.poll, feed) == low
         assert warnings == []
+
+
+def test_a_config_file_saved_with_a_byte_order_mark_still_loads(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_bytes("﻿[poll]\nstorms = 600\n".encode())
+    result = load_config(path)
+    assert result.config.poll.storms == 600
+    assert result.warnings == ()

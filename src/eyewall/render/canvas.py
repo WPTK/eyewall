@@ -87,11 +87,13 @@ _PATTERNS: dict[Shade, tuple[tuple[bool, ...], ...]] = {
 
 
 class Style(NamedTuple):
-    """How a run of text is drawn. Colors are hex strings such as '#ff4d4d'; None is the terminal default."""
+    """How a run of text is drawn. Colors are hex strings from the palette; None is the terminal default."""
 
     fg: str | None = None
     bg: str | None = None
     bold: bool = False
+    underline: bool = False
+    reverse: bool = False
 
 
 Run = tuple[str, Style]
@@ -408,11 +410,14 @@ class Canvas:
         col, row = math.floor(x) // self.dots_x, math.floor(y) // self.dots_y
         return (col, row) if 0 <= col < self.cols and 0 <= row < self.rows else None
 
-    def text_free(self, col: int, row: int, length: int) -> bool:
-        """Whether a label of this length fits on the canvas without covering another label or marker."""
+    def text_free(self, col: int, row: int, length: int, *, below: int | None = None) -> bool:
+        """Whether a label of this length fits on the canvas without covering another label or marker. With `below`,
+        the cells must also hold nothing drawn at that priority or higher, such as a track or a warning line."""
         if row < 0 or row >= self.rows or col < 0 or col + length > self.cols:
             return False
         start = row * self.cols + col
+        if below is not None and any(self._prio[i] >= below for i in range(start, start + length)):
+            return False
         return all(self._char[i] is None for i in range(start, start + length))
 
     def text(

@@ -123,6 +123,14 @@ def test_truncated_or_corrupted_zips_parse_or_raise_parse_error(parse, name, dat
         parse(damaged)
 
 
+def test_a_zip_directory_with_an_unsupported_version_is_a_parse_error():
+    """Issue 124: one changed byte made zipfile raise NotImplementedError (zip file version 6.4)."""
+    original = gis_bytes("gtwo_20250919.zip")
+    damaged = original[:30421] + bytes([64]) + original[30422:]
+    with contextlib.suppress(ParseError):
+        two.parse_gtwo_zip(damaged)
+
+
 @SETTINGS
 @given(page=st.text(max_size=400))
 def test_graphics_pages_of_any_text_do_not_crash(page):
@@ -146,3 +154,33 @@ def test_arbitrary_text_is_a_parse_error_or_a_result(text):
     for parse in (parse_tcm, parse_tcp, parse_tcd, parse_pws, parse_two, atcf.parse_bdeck):
         with contextlib.suppress(ParseError):
             parse(text)
+
+
+# ---- values that are numbers or dates but cannot be used --------------------------------------------------------
+
+
+def test_a_listing_row_with_an_impossible_date_keeps_the_file_and_loses_only_the_date():
+    html = '<a href="bal912026.dat">x</a> 2026-13-45 06:00 1K\n<a href="bal902026.dat">x</a> 2026-08-01 06:00 1K\n'
+    files = atcf.parse_btk_index(html)
+    assert [f.storm_id for f in files] == ["al912026", "al902026"]
+    assert files[0].modified is None and files[1].modified is not None
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_a_dbf_value_that_is_not_a_finite_number_reads_as_missing(value):
+    assert gis._number(value) is None
+    assert gis._int(value) is None
+    assert gis._ymdh(value) is None
+
+
+@pytest.mark.parametrize("text", ["9999-12-31T23:59:59-05:00", "0001-01-01T00:00:00+05:00"])
+def test_an_iso_time_that_overflows_utc_reads_as_missing(text):
+    from eyewall.providers.nhc.times import parse_iso
+
+    assert parse_iso(text) is None
+
+
+def test_a_header_time_that_overflows_utc_reads_as_missing():
+    from eyewall.providers.nhc.times import parse_header_time
+
+    assert parse_header_time("1100 PM EDT Dec 31 9999") is None

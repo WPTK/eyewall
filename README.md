@@ -3,15 +3,15 @@
 eyewall is a terminal app that tracks tropical cyclones in the Atlantic, East Pacific and Central Pacific. It reads free
 NOAA feeds, so it needs no account or key, and it shows the buoys and tide gauges near each storm next to the forecast.
 
-![The dashboard at 120x30: storm list, map with the forecast cone and track, and panels for the headline, warnings, wind, surge and nearest buoys](docs/images/dashboard.png)
+![The dashboard at 140x42: storm list, map with the forecast cone and track, and panels for the headline, warnings, wind, surge and nearest buoys](docs/images/dashboard.png)
 
 For each active storm you get the National Hurricane Center advisory and discussion, the forecast track and cone,
 watches and warnings, wind radii and NOAA's graphics. For the buoys and tide gauges along the storm's path you get the
 latest readings with pressure, wind and wave charts. When NOAA posts something new, eyewall tells you. With no storm
 active it shows the tropical weather outlook and a watchlist of stations you pick.
 
-eyewall is not an official source of warnings. For decisions about life or property, use the National Hurricane Center
-and your local National Weather Service office.
+eyewall is not an official forecast or warning. For decisions about life or property, follow the National Hurricane
+Center and your local emergency officials.
 
 ## Try it without a storm
 

@@ -15,11 +15,15 @@ from rich.text import Text
 from eyewall.clock import format_when, format_zulu
 from eyewall.models.forecast import ForecastAdvisory, ForecastFix
 from eyewall.models.wind import QuadrantRadii
-from eyewall.palette import WATCH_WARNING_COLORS, category_color, category_for_knots
-from eyewall.state.store import Store, StormState
+from eyewall.palette import (
+    DIM,
+    HEADING,
+    category_color,
+    category_for_knots,
+)
+from eyewall.state.store import StormState
 from eyewall.ui.format import advisory_age, collapse, movement_text
 from eyewall.ui.glyphs import UiGlyphs
-from eyewall.ui.theme import DIM
 from eyewall.units import MISSING, Preset
 
 Table = tuple[tuple[str, ...], list[tuple[str, ...]]]
@@ -170,7 +174,7 @@ def public_advisory(state: StormState, g: UiGlyphs) -> Text:
         out.append("\n" + collapse(headline) + "\n", style="bold")
     summary_ = public.summary
     if summary_.location_text:
-        out.append("\nSummary of information\n", style="bold #8fd3ff")
+        out.append("\nSummary of information\n", style=f"bold {HEADING}")
         out.append(collapse(summary_.location_text) + "\n")
         for about in summary_.about:
             out.append(f"{g.sep} {collapse(about)}\n", style=DIM)
@@ -178,16 +182,16 @@ def public_advisory(state: StormState, g: UiGlyphs) -> Text:
         out.append(f"Present movement {collapse(summary_.movement_text)}. " if summary_.movement_text else "")
         out.append(f"Pressure {summary_.pressure_mb} mb.\n" if summary_.pressure_mb else "\n")
     if public.watches_warnings.text:
-        out.append("\nWatches and warnings\n", style="bold #8fd3ff")
+        out.append("\nWatches and warnings\n", style=f"bold {HEADING}")
         out.append(public.watches_warnings.text.strip() + "\n")
     for title, body in public.hazards:
-        out.append(f"\n{collapse(title).title()}\n", style="bold #8fd3ff")
+        out.append(f"\n{collapse(title).title()}\n", style=f"bold {HEADING}")
         out.append(collapse(body) + "\n")
     if public.discussion:
-        out.append("\nDiscussion and outlook\n", style="bold #8fd3ff")
+        out.append("\nDiscussion and outlook\n", style=f"bold {HEADING}")
         out.append(collapse(public.discussion) + "\n")
     if public.key_messages:
-        out.append("\nKey messages\n", style="bold #8fd3ff")
+        out.append("\nKey messages\n", style=f"bold {HEADING}")
         for message in public.key_messages:
             out.append(f"{g.sep} {collapse(message)}\n")
     if public.next_advisory:
@@ -223,7 +227,7 @@ def forecast_advisory(state: StormState, preset: Preset) -> Text:
             out.append(f"{kt} kt winds extend (NE SE SW NW, nm): {fmt_radii(radii)}\n")
     if tcm.seas is not None:
         out.append(f"Seas {tcm.seas.height} {tcm.seas.unit.lower()} or more (nm): {fmt_radii(tcm.seas.radii)}\n")
-    out.append("\nForecast\n", style="bold #8fd3ff")
+    out.append("\nForecast\n", style=f"bold {HEADING}")
     for fix in tcm.fixes:
         row = _fix_row(fix, preset, None)
         out.append(f"{row[0]:>5} {row[1]:<14}")
@@ -245,7 +249,7 @@ def discussion(state: StormState, g: UiGlyphs) -> Text:
     for paragraph in tcd.paragraphs:
         out.append("\n" + collapse(paragraph) + "\n")
     if tcd.key_messages:
-        out.append("\nKey messages\n", style="bold #8fd3ff")
+        out.append("\nKey messages\n", style=f"bold {HEADING}")
         for message in tcd.key_messages:
             out.append(f"{g.sep} {collapse(message)}\n")
     if tcd.forecaster:
@@ -270,42 +274,6 @@ def probabilities_note(state: StormState) -> str:
     if state.advisories.wind_probabilities is None:
         return "No wind speed probabilities yet."
     return "Cumulative chance (percent) of winds of at least 34, 50 and 64 kt by hour; <1 is under one percent."
-
-
-def watches_warnings(store: Store, state: StormState, g: UiGlyphs) -> Text:
-    out = Text()
-    public = state.advisories.public
-    if public is not None:
-        blocks = public.watches_warnings
-        for area in blocks.in_effect:
-            color = WATCH_WARNING_COLORS.get(area.kind, "#9aa4b2") if area.kind else "#9aa4b2"
-            out.append(f"{g.chip} {collapse(area.label)}\n", style=f"bold {color}")
-            for place in area.areas:
-                out.append(f"    {collapse(place)}\n")
-        if not blocks.in_effect:
-            out.append("No coastal watches or warnings in effect.\n", style=DIM)
-        if blocks.changes:
-            out.append("\nChanges with this advisory\n", style="bold #8fd3ff")
-            for change in blocks.changes:
-                out.append(f"{g.sep} {collapse(change)}\n")
-    else:
-        out.append("The public advisory has not been fetched yet.\n", style=DIM)
-    gis = state.forecast_gis
-    if gis is not None and gis.watch_warnings:
-        kinds: dict[str, int] = {}
-        for segment in gis.watch_warnings:
-            kinds[segment.code] = kinds.get(segment.code, 0) + 1
-        out.append(
-            "\nCoast segments on the map: " + ", ".join(f"{k} x{n}" for k, n in sorted(kinds.items())) + "\n", style=DIM
-        )
-    if store.alerts.alerts:
-        out.append("\nNWS alerts\n", style="bold #8fd3ff")
-        for alert in store.alerts.alerts:
-            out.append(f"{alert.event}", style="bold")
-            out.append(f"  {collapse(alert.area_desc)}\n")
-            if alert.headline:
-                out.append(f"    {collapse(alert.headline)}\n", style=DIM)
-    return out
 
 
 HISTORY_COLUMNS = ("Time (Z)", "Lat", "Lon", "Wind", "Pressure", "Type", "Cat")

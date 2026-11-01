@@ -16,6 +16,7 @@ continues to 182), so every vertex is normalised on the way in.
 from __future__ import annotations
 
 import io
+import math
 import re
 import struct
 import zipfile
@@ -59,6 +60,16 @@ _READ_ERRORS = (
     RuntimeError,
 )
 
+_ZIP_OPEN_ERRORS = (
+    zipfile.BadZipFile,
+    NotImplementedError,
+    EOFError,
+    struct.error,
+    zlib.error,
+    OverflowError,
+    ValueError,
+    RuntimeError,
+)
 
 # The largest layer member read into memory. A real layer is well under 1 MB; the cap stops a zip bomb, and a layer
 # over it is dropped like any other unreadable layer.
@@ -84,7 +95,7 @@ class Feature:
 def _open_zip(data: bytes) -> zipfile.ZipFile:
     try:
         return zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile as exc:
+    except _ZIP_OPEN_ERRORS as exc:  # a damaged directory can raise more than BadZipFile
         raise ParseError(f"not a zip file: {exc}") from exc
 
 
@@ -172,7 +183,7 @@ def _number(value: Any, *, fill: float = 9999) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return None if number >= fill else number
+    return None if not math.isfinite(number) or number >= fill else number
 
 
 def _int(value: Any, *, fill: float = 9999) -> int | None:
@@ -188,6 +199,8 @@ def _text(value: Any) -> str | None:
 
 
 def _ymdh(value: Any) -> datetime | None:
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     digits = str(int(value)) if isinstance(value, float | int) else str(value or "").strip()
     if len(digits) < 10 or not digits[:10].isdigit():
         return None

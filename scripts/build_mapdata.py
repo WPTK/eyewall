@@ -24,6 +24,14 @@ Binary format, little-endian, read by eyewall.mapdata.loader:
     path    u8 kind  u32 point count  then point count * (i32 longitude, i32 latitude) in 1/units-per-degree degrees
 
 Ring paths are closed implicitly: the first point is not repeated at the end.
+
+places.bin holds the populated places that label the map (Natural Earth ne_10m_populated_places_simple, public domain),
+inside the same boxes, with scalerank 8 or better, sorted by (scalerank, descending pop_max, name) so the most
+important come first:
+
+    header  "EWPL"  u8 version (1)  u8 reserved  u16 reserved  u32 units per degree  u32 place count
+    place   i32 longitude  i32 latitude  u8 scalerank  u32 pop_max  u8 name length  name (UTF-8)
+            u8 ASCII name length (0 when it equals the name)  ASCII name
 """
 
 from __future__ import annotations
@@ -58,7 +66,11 @@ SOURCE_SHA256 = {
     "ne_10m_lakes": "2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9",
     "ne_10m_admin_0_boundary_lines_land": "74d9c16229c095fde65943a9919e337682f044bcebccb120764f38edf3b70f4a",
     "ne_10m_admin_1_states_provinces_lines": "1a1f30ccaaf4cc9c4bde34266f0b8cbb955d3a4cf254b756912255f2ec7c75b6",
+    "ne_10m_populated_places_simple": "fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f",
 }
+
+PLACES_SOURCE = "ne_10m_populated_places_simple"
+PLACES_MAX_RANK = 8  # scalerank 9 and 10 are villages the finest zoom does not label
 
 # The basins run from about 100 E eastward across the Pacific to 10 W, 5 S to 60 N. The data reaches MARGIN degrees
 # beyond that so the flat cut where the fill stops is outside any view a basin storm needs. The box wraps the
@@ -72,6 +84,8 @@ MAX_LINE_POINTS = 400  # longest stored polyline; longer ones are split, overlap
 UNITS = 10_000  # stored units per degree
 
 MAGIC = b"EWMD"
+PLACES_MAGIC = b"EWPL"
+PLACES_VERSION = 1
 FORMAT_VERSION = 2
 FLAG_RINGS = 1
 KIND_COUNTRY, KIND_STATE = 0, 1
@@ -365,6 +379,44 @@ def unpack(data: bytes) -> tuple[bool, list[tuple[int, list[tuple[int, int]]]]]:
     return bool(flags & FLAG_RINGS), paths
 
 
+_PLACES_HEADER = struct.Struct("<4sBBHII")
+_PLACE_FIXED = struct.Struct("<iiBI")
+
+Place = tuple[int, int, int, int, str, str]  # lon, lat (stored units), scalerank, pop_max, name, ASCII name
+
+
+def places_from(collection: dict) -> list[Place]:
+    """The places inside the map boxes with scalerank PLACES_MAX_RANK or better, most important first. Fields are read
+    by name; a feature without a name, a position or a scalerank is skipped."""
+    places: list[Place] = []
+    for feature in collection["features"]:
+        props = feature.get("properties") or {}
+        name, rank = props.get("name"), props.get("scalerank")
+        lon, lat = props.get("longitude"), props.get("latitude")
+        if not name or rank is None or lon is None or lat is None or rank > PLACES_MAX_RANK:
+            continue
+        if not any(w <= lon <= e and s <= lat <= n for w, s, e, n in BOXES):
+            continue
+        ascii_name = props.get("nameascii") or name
+        pop = int(props.get("pop_max") or 0)
+        ((x, y),) = quantize([(lon, lat)])
+        places.append((x, y, int(rank), pop, str(name), str(ascii_name)))
+    places.sort(key=lambda p: (p[2], -p[3], p[4], p[0], p[1]))
+    return places
+
+
+def pack_places(places: Sequence[Place]) -> bytes:
+    """The places.bin encoding described in the module docstring."""
+    out = bytearray(_PLACES_HEADER.pack(PLACES_MAGIC, PLACES_VERSION, 0, 0, UNITS, len(places)))
+    for x, y, rank, pop, name, ascii_name in places:
+        raw = name.encode("utf-8")
+        alt = b"" if ascii_name == name else ascii_name.encode("utf-8")
+        if len(raw) > 255 or len(alt) > 255:
+            raise ValueError(f"place name too long: {name!r}")
+        out += _PLACE_FIXED.pack(x, y, rank, min(pop, 0xFFFFFFFF)) + bytes([len(raw)]) + raw + bytes([len(alt)]) + alt
+    return bytes(out)
+
+
 # ----------------------------------------------------------------------------------------------------------- driver
 
 
@@ -401,6 +453,7 @@ def build(cache: Path, *, refresh: bool = False) -> dict[str, bytes]:
         outputs[f"{spec.stem}.bin"] = pack(
             convert(geometries, rings=spec.rings, tolerance=spec.tolerance, tile=spec.tile), rings=spec.rings
         )
+    outputs["places.bin"] = pack_places(places_from(json.loads(fetch(PLACES_SOURCE, cache, refresh=refresh))))
     outputs["ATTRIBUTION.md"] = attribution(outputs).encode()
     return outputs
 
@@ -410,6 +463,10 @@ def attribution(outputs: dict[str, bytes]) -> str:
         f"| `{spec.stem}.bin` | {spec.what} | `{', '.join(name for name, _ in spec.sources)}` "
         f"| {len(outputs[spec.stem + '.bin']):,} |"
         for spec in LAYERS
+    )
+    rows += (
+        f"\n| `places.bin` | populated places for map labels (scalerank {PLACES_MAX_RANK} or better) "
+        f"| `{PLACES_SOURCE}` | {len(outputs['places.bin']):,} |"
     )
     total = sum(len(data) for name, data in outputs.items() if name.endswith(".bin"))
     sources = "\n".join(f"- `{name}`: `{digest}`" for name, digest in SOURCE_SHA256.items())
@@ -423,6 +480,9 @@ The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvk
 commit `{MIRROR_REF}` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
 Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
 the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
+
+`places.bin` holds point features from the same mirror and commit (`ne_10m_populated_places_simple`), kept inside the
+same area and ordered by scalerank then population.
 
 | File | Content | Natural Earth source | Bytes |
 |---|---|---|---|

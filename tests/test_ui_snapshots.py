@@ -1,4 +1,5 @@
-"""SVG snapshots of the dashboard, one detail tab and the outlook over the saved replay and outlook payloads.
+"""SVG snapshots of the main screen (a storm, three sizes, and a quiet day) and the storm, text, buoys, station and settings screens
+over the saved replay and outlook payloads.
 
 Regenerate with `pytest tests/test_ui_snapshots.py --snapshot-update` after a deliberate layout change.
 """
@@ -7,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 
-from rich.text import Text
 from textual.pilot import Pilot
 
+from eyewall.ui.chrome import Health
 from tests.ui_support import into_the_storm, replay_app, scripted_app, settle
 
 
@@ -21,8 +22,9 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
         if storm:
             await into_the_storm(pilot)
             pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
-        # Feed ages and the poll countdown follow the wall clock; pin the bar so the picture is repeatable.
-        pilot.app.status_text = lambda width, screen: Text(" status bar pinned for the snapshot")  # type: ignore[attr-defined, method-assign]
+        # Feed ages and the replay clock follow the wall clock; pin the top bar's slot so the picture is repeatable.
+        pilot.app.health = lambda: Health("●", "data ok", "ok", "3m", "")  # type: ignore[attr-defined, method-assign]
+        pilot.app.top_bar_extras = lambda: [("pinned", None)]  # type: ignore[attr-defined, method-assign]
         pilot.app._for_screens("refresh_status")  # type: ignore[attr-defined]
         for key in keys:
             await pilot.press(key)
@@ -31,38 +33,42 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
     return run_before
 
 
-def test_dashboard_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+def test_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app))
 
 
-def test_forecast_tab_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
-    assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "2")))
+def test_main_screen_small_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(replay_app(), terminal_size=(80, 24), run_before=_ready(replay_app))
 
 
-def test_outlook_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
-    assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app, ("O",)))
+def test_main_screen_large_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(replay_app(), terminal_size=(200, 50), run_before=_ready(replay_app))
 
 
-def test_buoys_tab_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+def test_storm_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter",)))
+
+
+def test_quiet_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app))
+
+
+def test_nhc_text_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(
-        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "7"), storm=True)
+        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "t"), storm=True)
     )
 
 
-def test_tides_tab_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+def test_buoys_list_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(
-        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "8"), storm=True)
+        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "b"), storm=True)
     )
 
 
-def test_buoy_detail_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+def test_station_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(
-        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "7", "enter"), storm=True)
+        replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "b", "enter"), storm=True)
     )
-
-
-def test_watchlist_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
-    assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("w",), storm=True))
 
 
 def test_settings_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]

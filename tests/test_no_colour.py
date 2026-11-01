@@ -10,7 +10,7 @@ from rich.color import Color
 from textual.filter import Monochrome
 from textual.widget import Widget
 
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
+from eyewall.ui.screens.station import StationScreen
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.ui.widgets.gallery import ImageView
 from eyewall.ui.widgets.map_view import MapView
@@ -70,10 +70,10 @@ async def test_the_buoy_charts_survive_no_colour_and_a_resize() -> None:
     app = replay_app()
     async with running(app, (140, 45)) as pilot:
         await into_the_storm(pilot)
-        app.open_buoy("41002")
+        app.open_station("ndbc", "41002")
         for _ in range(50):
             await pilot.pause()
-            if isinstance(app.screen, BuoyDetailScreen):
+            if isinstance(app.screen, StationScreen):
                 break
         await settle(pilot)
         assert paint_everything(app) > 0

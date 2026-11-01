@@ -1,19 +1,25 @@
 name: Feed canary
 
-# Weekly check that the live NOAA feeds still parse. Catches silent format drift before users do. Each spot check
-# fetches every endpoint eyewall uses once, with the eyewall User-Agent and a pause between requests, and exits 1 when
-# a fetch or a parser fails. A failure opens one issue, or adds a comment to the one already open.
-# GitHub disables scheduled workflows after 60 days without repository activity; if the Monday run stops appearing, run
-# this workflow by hand (workflow_dispatch) to re-enable it.
+# Daily check that the live NOAA feeds still parse. Catches silent format drift before users do. Each spot check
+# fetches every endpoint eyewall uses once, with the eyewall User-Agent and a pause between requests, and runs it through
+# the real parsers. The scripts exit 0 (all fine), 1 (a format or parse failure: lines starting FAIL) or 2 (only outages:
+# a feed down, unreachable or empty: lines starting DOWN).
+#   Format failure: opens one issue labelled feed-drift, or comments on the one already open, straight away.
+#   Outage only:    a feed being down for a day is not a format change. The run still ends red so the history shows it,
+#                   but an issue (label feed-down, same one-issue rule) is raised only when the two runs before this one
+#                   failed too, so after three days in a row.
+# This workflow is scheduled or started by hand only, never from pull requests. GitHub disables scheduled workflows
+# after 60 days without repository activity; if the daily run stops appearing, run it by hand (workflow_dispatch).
 
 on:
   schedule:
-    - cron: "41 12 * * 1" # Mondays 12:41 UTC
+    - cron: "41 12 * * *" # daily 12:41 UTC
   workflow_dispatch:
 
 permissions:
   contents: read
   issues: write
+  actions: read # to read earlier runs of this workflow when counting repeated outages
 
 jobs:
   canary:
@@ -29,32 +35,65 @@ jobs:
       - run: python -m pip install -e .
 
       # Both checks always run, so one report names every drifted feed.
-      - name: NHC, CPHC and NWS endpoints
-        id: nhc
-        continue-on-error: true
-        run: python scripts/spot_check_nhc.py 2>&1 | tee "$RUNNER_TEMP/canary-nhc.txt"; exit "${PIPESTATUS[0]}"
-      - name: NDBC and CO-OPS endpoints
-        id: obs
-        continue-on-error: true
-        run: python scripts/spot_check_obs.py 2>&1 | tee "$RUNNER_TEMP/canary-obs.txt"; exit "${PIPESTATUS[0]}"
+      - name: Spot checks
+        id: check
+        run: |
+          code=0
+          for name in nhc obs; do
+            set +e
+            python "scripts/spot_check_$name.py" 2>&1 | tee "$RUNNER_TEMP/canary-$name.txt"
+            rc="${PIPESTATUS[0]}"
+            set -e
+            # 1 beats 2 beats 0; anything else (a crash) counts as a format failure.
+            [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || rc=1
+            if [ "$rc" -eq 1 ] || { [ "$rc" -eq 2 ] && [ "$code" -eq 0 ]; }; then code="$rc"; fi
+          done
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
-      - name: Open or update the drift issue
-        if: steps.nhc.outcome == 'failure' || steps.obs.outcome == 'failure'
+      - name: Decide whether to raise
+        id: decide
+        if: steps.check.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.check.outputs.code }}
+        run: |
+          if [ "$CODE" = 1 ]; then
+            echo "label=feed-drift" >> "$GITHUB_OUTPUT"
+            echo "title=Feed canary: a feed no longer parses" >> "$GITHUB_OUTPUT"
+            echo "raise=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "label=feed-down" >> "$GITHUB_OUTPUT"
+          echo "title=Feed canary: a feed has been down for days" >> "$GITHUB_OUTPUT"
+          # This run is still in progress, so the completed runs are the earlier ones, newest first. Only scheduled
+          # runs count and cancelled ones are skipped, so a manual rerun cannot advance the three-day clock.
+          bad="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow canary.yml --event schedule --status completed \
+            --limit 10 --json conclusion \
+            --jq '[.[] | select(.conclusion != "cancelled")][:2] | map(select(.conclusion != "success")) | length')"
+          echo "Earlier runs not successful (of the last 2 scheduled): $bad"
+          if [ "$bad" -ge 2 ]; then echo "raise=yes" >> "$GITHUB_OUTPUT"; else echo "raise=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Open or update the issue
+        if: steps.decide.outputs.raise == 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          NHC: ${{ steps.nhc.outcome }}
-          OBS: ${{ steps.obs.outcome }}
+          LABEL: ${{ steps.decide.outputs.label }}
+          TITLE: ${{ steps.decide.outputs.title }}
         run: |
           {
-            echo "Failing checks: $([ "$NHC" = failure ] && echo 'scripts/spot_check_nhc.py ')$([ "$OBS" = failure ] && echo 'scripts/spot_check_obs.py')"
+            if [ "$LABEL" = feed-down ]; then
+              echo "A feed has been down, unreachable or empty for at least three daily runs in a row. This is an outage, not a format change."
+            else
+              echo "A feed no longer parses the way eyewall expects."
+            fi
             echo
             for file in "$RUNNER_TEMP/canary-nhc.txt" "$RUNNER_TEMP/canary-obs.txt"; do
               [ -f "$file" ] || continue
-              if grep -qE '^FAIL|Traceback' "$file"; then
+              if grep -qE '^ *(FAIL|DOWN)|Traceback' "$file"; then
                 echo "From $(basename "$file") (matching lines):"
                 echo '```'
-                grep -E '^FAIL|Traceback' "$file" | tail -n 40
+                grep -E '^ *(FAIL|DOWN)|Traceback' "$file" | tail -n 40
                 echo '```'
               fi
               if grep -q '^Traceback' "$file"; then
@@ -66,14 +105,18 @@ jobs:
             done
             echo "Run: $RUN_URL"
           } > "$RUNNER_TEMP/body.md"
-          gh label create feed-drift --color D93F0B --description "NOAA feed drift" 2>/dev/null || true
-          number="$(gh issue list --label feed-drift --state open --json number --jq '.[0].number // empty')"
+          gh label create "$LABEL" --color D93F0B --description "NOAA feed canary" 2>/dev/null || true
+          number="$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$number" ]; then
             gh issue comment "$number" --body-file "$RUNNER_TEMP/body.md"
           else
-            gh issue create --label feed-drift --title "Feed canary failed" --body-file "$RUNNER_TEMP/body.md"
+            gh issue create --label "$LABEL" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
           fi
 
       - name: Fail the run when a check failed
-        if: steps.nhc.outcome == 'failure' || steps.obs.outcome == 'failure'
-        run: exit 1
+        if: steps.check.outputs.code != '0'
+        env:
+          CODE: ${{ steps.check.outputs.code }}
+        run: |
+          if [ "$CODE" = 2 ]; then echo "::warning::Only outages (feed down or empty); no format change seen."; fi
+          exit 1

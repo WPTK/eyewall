@@ -155,6 +155,8 @@ class FakeSource:
     datums: list[tuple[str, str]] = field(default_factory=list)
     bad_datum: set[str] = field(default_factory=set)
     fail_products: set[str] = field(default_factory=set)  # forecast_gis, radii_gis, track or graphics
+    cached_products: set[str] = field(default_factory=set)  # products the disk cache answers for
+    cache_hits: int = 0
     alert_result: AlertsResult = field(default_factory=AlertsResult)
 
     def now(self) -> datetime:
@@ -164,7 +166,10 @@ class FakeSource:
         return feed in self.cached
 
     def start_poll(self, feed: str) -> None:
-        return None
+        self.cache_hits = 0
+
+    def cache_answers(self, feed: str) -> int:
+        return self.cache_hits
 
     def count(self, name: str) -> int:
         return self.calls.count(name)
@@ -190,24 +195,28 @@ class FakeSource:
 
     async def forecast_gis(self, storm: Storm):
         self.calls.append("forecast_gis")
+        self.cache_hits += "forecast_gis" in self.cached_products
         if "forecast_gis" in self.fail_products:
             raise FetchError("fake://forecast_gis", "network down")
         return None
 
     async def radii_gis(self, storm: Storm):
         self.calls.append("radii_gis")
+        self.cache_hits += "radii_gis" in self.cached_products
         if "radii_gis" in self.fail_products:
             raise FetchError("fake://radii_gis", "network down")
         return None
 
     async def track(self, storm: Storm):
         self.calls.append("track")
+        self.cache_hits += "track" in self.cached_products
         if "track" in self.fail_products:
             raise FetchError("fake://track", "network down")
         return None
 
     async def graphics(self, storm: Storm) -> tuple[GraphicLink, ...]:
         self.calls.append("graphics")
+        self.cache_hits += "graphics" in self.cached_products
         if "graphics" in self.fail_products:
             raise FetchError("fake://graphics", "network down")
         return ()
@@ -231,7 +240,7 @@ class FakeSource:
         return self.alert_result
 
     async def ndbc_stations(self) -> tuple[Station, ...]:
-        self.calls.append("ndbc_stations")
+        self._call("ndbc_stations")
         return self.stations
 
     async def ndbc_latest(self) -> tuple[LatestObservation, ...]:
@@ -247,7 +256,7 @@ class FakeSource:
         return Parsed()
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
-        self.calls.append("coops_stations")
+        self._call("coops_stations")
         return self.tide_stations
 
     async def coops_series(self, station: TideStation, datum: str) -> TideSeries:

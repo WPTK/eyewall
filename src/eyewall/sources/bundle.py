@@ -102,7 +102,7 @@ def read_manifest(directory: Path) -> Manifest:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise BundleError(f"{directory}: no {MANIFEST} ({exc.strerror or exc})") from exc
-    except tomllib.TOMLDecodeError as exc:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
         raise BundleError(f"{path}: not valid TOML ({exc})") from exc
     try:
         graphics = tuple(
@@ -148,6 +148,7 @@ def write_manifest(directory: Path, manifest: Manifest) -> None:
 
 DEMO = "demo"
 DEMO_NAME = "erin2025"
+DEMO_TITLE = "Hurricane Erin (August 2025)"  # what the replay offer calls the bundled recording
 
 
 def demo_bundle_path() -> Path:

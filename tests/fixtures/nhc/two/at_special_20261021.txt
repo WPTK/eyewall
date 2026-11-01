@@ -1,0 +1,48 @@
+ABNT20 KNHC 211937
+TWOAT 
+
+Special Tropical Weather Outlook
+NWS National Hurricane Center Miami FL
+340 PM EDT Wed Oct 21 2026
+
+For the North Atlantic...Caribbean Sea and the Gulf of America:
+
+Special Outlook issued to raise formation probabilities for AL93
+
+Offshore of the East Coast of the United States (AL93):
+Updated: Shower and thunderstorm activity has become better 
+organized in association with a storm-force low pressure area 
+located a few hundred miles off the mid-Atlantic United States 
+coast. The system has continued to acquire subtropical 
+characteristics today and has become separated from fronts. If 
+these trends continue, a subtropical storm could form later this 
+afternoon or tonight while it accelerates northeastward.   
+
+Regardless of the status of the system, high winds, coastal 
+flooding, and dangerous surf are expected along portions of the U.S. 
+East Coast during the next few days. For more information, including 
+hurricane-force extratropical wind warnings, please consult 
+statements and warnings from local National Weather Service offices 
+and the Weather Prediction Center, along with the High Seas 
+Forecasts and the Storm Warnings issued by the National Weather 
+Service.
+* Formation chance through 48 hours...high...70 percent.
+* Formation chance through 7 days...high...70 percent.
+
+Subtropical Central Atlantic:
+A trough of low pressure located several hundred miles 
+east-southeast of Bermuda is producing a large area of disorganized 
+showers and thunderstorms.  Some development of this system is 
+possible during the next day or two while it moves slowly 
+north-northeastward. Upper-level winds are forecast to become too 
+strong for further development by the weekend.  
+* Formation chance through 48 hours...low...10 percent.
+* Formation chance through 7 days...low...10 percent.
+
+&&
+High Seas Forecasts issued by the National Weather Service can be 
+found under AWIPS header NFDHSFAT1, WMO header FZNT01 KWBC, and 
+online at ocean.weather.gov/shtml/NFDHSFAT1.php
+
+$$
+Forecaster Blake/Reinhart

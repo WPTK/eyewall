@@ -10,18 +10,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
+import sys
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
-from typing import Any
 
-from rich.text import Text
 from textual import events
 from textual.app import App
-from textual.binding import Binding
+from textual.command import CommandPalette
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
@@ -29,32 +28,37 @@ from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
 from eyewall.models.events import Event, Severity
 from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
+from eyewall.models.storm import Classification
 from eyewall.net import FetchError
-from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
+from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, FreshnessState, Poller, PollResult
 from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
 from eyewall.render.images import Depth, InlineBackend, inline_wanted, load_inline
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
+from eyewall.sources.bundle import DEMO, BundleError, resolve_bundle
 from eyewall.sources.protocol import DataSource
 from eyewall.sources.replay import ReplaySource
 from eyewall.state.alerts import AlertEngine
-from eyewall.state.store import Store
+from eyewall.state.store import Store, StormState
 from eyewall.ui import format as fmt
+from eyewall.ui import nav
+from eyewall.ui.chrome import ChromeScreen, FeedStatus, Health, ReplayStatus, health
 from eyewall.ui.glyphs import UiGlyphs, glyphs_for
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
-from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.buoys import BuoysScreen
+from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
-from eyewall.ui.screens.outlook import OutlookScreen
-from eyewall.ui.screens.search import SearchChoice, SearchScreen
+from eyewall.ui.screens.main import MainScreen
+from eyewall.ui.screens.nhc_text import NhcTextScreen
 from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.small import TooSmallScreen, too_small
-from eyewall.ui.screens.watchlist import WatchlistScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
+from eyewall.ui.widgets.map_view import MapView
 from eyewall.units import PRESETS, Preset, next_preset
 
 log = logging.getLogger(__name__)
@@ -71,28 +75,13 @@ FLOATER_TTL = 600.0  # seconds a NESDIS product listing is reused (its stills ar
 IMAGE_MEMORY = 48 * 1024 * 1024  # bytes of downloaded images kept in memory
 
 
-class EyewallApp(App[None]):
+class EyewallApp(App[bool]):
     CSS_PATH = "ui/app.tcss"
     TITLE = "eyewall"
-    ENABLE_COMMAND_PALETTE = False
+    ENABLE_COMMAND_PALETTE = True
+    COMMANDS = {nav.EyewallCommands}  # the menu lists eyewall's own actions, not Textual's theme and quit commands
 
-    BINDINGS = [
-        Binding("q", "quit", "Quit", show=False),
-        Binding("question_mark", "help", "Help", show=False),
-        Binding("g", "graphics", "Graphics", show=False),
-        Binding("O", "outlook", "Outlook", show=False),
-        Binding("A", "alerts", "Alerts", show=False),
-        Binding("r", "refresh", "Refresh", show=False),
-        Binding("u", "units", "Units", show=False),
-        Binding("slash", "search", "Find station", show=False),
-        Binding("w", "watchlist", "Watchlist", show=False),
-        Binding("S", "settings", "Settings", show=False),
-        Binding("space", "play_pause", "Pause", show=False),
-        Binding("less_than_sign", "speed(-1)", "Slower", show=False),
-        Binding("greater_than_sign", "speed(1)", "Faster", show=False),
-        Binding("left_square_bracket", "step(-1)", "Previous advisory", show=False),
-        Binding("right_square_bracket", "step(1)", "Next advisory", show=False),
-    ]
+    BINDINGS = nav.bindings("app", "replay")
 
     def __init__(
         self,
@@ -117,7 +106,7 @@ class EyewallApp(App[None]):
         self.config = config
         self.config_path = config_path
         self._launch_config = config
-        self._supl: dict[str, tuple[float, Parsed[SupplementalReading]]] = {}
+        self._supl: dict[str, tuple[float, Parsed[SupplementalReading] | FetchError | ParseError]] = {}
         self.inline = inline
         self._images: OrderedDict[tuple[str, str], bytes] = OrderedDict()
         self._floaters: dict[tuple[str, str], tuple[float, FloaterProduct | None]] = {}
@@ -145,6 +134,7 @@ class EyewallApp(App[None]):
         self._tick_lock = asyncio.Lock()
         self._reported: set[str] = set()
         self.replay_over = False
+        self.catalogs_task: asyncio.Future[bool] | None = None  # the menu's one fetch of the station catalogs
         engine = AlertEngine(config.alerts, state_dir)
         self.poller = Poller(
             source,
@@ -171,39 +161,33 @@ class EyewallApp(App[None]):
         enabled = self.config.basins.enabled
         return (self.basin_filter,) if self.basin_filter in enabled else enabled
 
-    def status_text(self, width: int, screen: Screen[Any]) -> Text:
-        feeds = [fmt.FeedStatus(f, self.poller.freshness(f), self.poller.active(f)) for f in protocol.FEEDS]
-        replay = None
-        if self.replay is not None:
-            adv = next((str(s.advisories.adv_num) for s in self.store.storms.values() if s.advisories.adv_num), None)
-            replay = fmt.ReplayStatus(
-                self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over
-            )
+    def feed_statuses(self) -> list[FeedStatus]:
+        return [FeedStatus(f, self.poller.freshness(f), self.poller.active(f)) for f in protocol.FEEDS]
 
-        def status(room: int) -> Text:
-            return fmt.status_bar(
-                feeds,
-                next_poll=self.poller.seconds_until_next(),
-                alert_count=len(self.alert_log),
-                replay=replay,
-                away=self.poller.away,
-                width=room,
-                g=self.glyphs,
-            )
+    def replay_status(self) -> ReplayStatus | None:
+        if self.replay is None:
+            return None
+        adv = next((str(s.advisories.adv_num) for s in self.store.storms.values() if s.advisories.adv_num), None)
+        return ReplayStatus(self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over)
 
-        if width >= 70:  # `? help` keeps its place, then the keys; the status degrades to the room left
-            return fmt.footer_row(status, self.footer_keys(screen), width)
-        return status(width)
+    def health(self) -> Health:
+        """What the top bar's health slot says now."""
+        return health(self.feed_statuses(), self.replay_status(), self.glyphs)
 
-    def footer_keys(self, screen: Screen[Any]) -> list[tuple[str, str]]:
-        """The keys that work where the focus is on `screen`: Textual's own active bindings, nearest widget first,
-        filtered to the ones marked `show` and not disabled by their widget's `check_action`."""
-        keys: dict[str, tuple[str, str]] = {}
-        for active in screen.active_bindings.values():
-            binding = active.binding
-            if binding.show and active.enabled and binding.description and binding.action not in keys:
-                keys[binding.action] = (binding.key_display or fmt.key_name(binding.key), binding.description)
-        return list(keys.values())
+    def top_bar_extras(self) -> list[tuple[str, str | None]]:
+        """What the top bar shows beside the breadcrumb when there is room, most important first: the alert
+        count, the idle marker, the replay time."""
+        extras: list[tuple[str, str | None]] = []
+        if self.alert_log:
+            count = len(self.alert_log)
+            extras.append((f"{count} alert" + ("" if count == 1 else "s"), "app:alerts"))
+        if self.poller.away:
+            extras.append(("idle", None))
+        replay = self.replay_status()
+        if replay is not None:  # the clock is the first to go when the bar is tight
+            when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")
+            extras.append((when, None))
+        return extras
 
     def on_descendant_focus(self) -> None:
         self._for_screens("refresh_status")
@@ -220,7 +204,7 @@ class EyewallApp(App[None]):
     # ---- lifecycle --------------------------------------------------------------------------------------------
 
     def get_default_screen(self) -> Screen[None]:
-        return DashboardScreen()
+        return MainScreen()
 
     def on_mount(self) -> None:
         self.register_theme(EYEWALL_THEME)
@@ -249,7 +233,7 @@ class EyewallApp(App[None]):
     def on_resize(self, event: events.Resize) -> None:
         if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
             self.push_screen(TooSmallScreen())
-        self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every footer follows a resize
+        self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every bar follows a resize
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
@@ -344,9 +328,89 @@ class EyewallApp(App[None]):
     def _modal_open(self) -> bool:
         return isinstance(self.screen, ModalScreen)
 
-    def open_detail(self, storm_id: str | None, tab: str | None = None) -> None:
-        if storm_id is not None and not isinstance(self.screen, StormDetailScreen):
-            self.push_screen(StormDetailScreen(storm_id, tab))
+    def _can_go_back(self) -> bool:
+        screen = self.screen
+        return isinstance(screen, ChromeScreen) and screen.can_go_back()
+
+    async def action_back(self) -> None:
+        """Esc: one step back out of the screen, a full-screen map or a mark. A dialog closes itself."""
+        if self._can_go_back():
+            self.screen.action_back()  # type: ignore[attr-defined]
+
+    def action_quit_top(self) -> None:
+        """`q`: quit, but only on the first screen, where Esc has nothing to go back to."""
+        if self.check_action(nav.QUIT, ()):
+            self.exit()
+
+    async def action_crumb(self, index: int) -> None:
+        """A breadcrumb was clicked: go back to that screen."""
+        chrome = [s for s in self.screen_stack if isinstance(s, ChromeScreen)]
+        if not 0 <= index < len(chrome):
+            return
+        target = chrome[index]
+        while self.screen is not target and len(self.screen_stack) > 1:
+            await self.pop_screen()
+
+    async def action_map(self) -> None:
+        """`m` from another screen: back to the first screen with its map showing."""
+        if self._modal_open():
+            return
+        while len(self.screen_stack) > 1:
+            await self.pop_screen()
+        root = self.screen
+        if isinstance(root, MainScreen):
+            root.show_map()
+
+    def action_feeds(self) -> None:
+        if not self._modal_open():
+            self.push_screen(FeedsScreen())
+
+    def storm_states(self) -> tuple[StormState, ...]:
+        """The storms of the basins in view, strongest first (a potential cyclone after the named storms)."""
+        shown = [
+            s
+            for s in self.store.storms.values()
+            if s.storm.basin is not None and s.storm.basin.value in self.basin_view
+        ]
+        shown.sort(key=lambda s: (s.storm.classification is Classification.PTC, -(s.storm.intensity_kt or 0)))
+        return tuple(shown)
+
+    def _can_open(self, kind: type[Screen[None]]) -> bool:
+        """False under a dialog, and when the top screen is already this kind (a repeated key opens nothing twice)."""
+        return not isinstance(self.screen, ModalScreen | kind)
+
+    def open_storm(self, storm_id: str | None) -> None:
+        if storm_id is not None and storm_id in self.store.storms and self._can_open(StormScreen):
+            self.selected = storm_id
+            self.push_screen(StormScreen(storm_id))
+
+    def open_text(self, storm_id: str | None, tab: str | None = None) -> None:
+        """The NHC text: a storm's products, or the outlook alone when there is no storm."""
+        if self._can_open(NhcTextScreen):
+            self.push_screen(NhcTextScreen(storm_id if storm_id in self.store.storms else None, tab))
+
+    def open_buoys(self, storm_id: str | None, tab: str | None = None) -> None:
+        """The stations near a storm and the ones you follow; just the latter when there is no storm."""
+        if self._can_open(BuoysScreen):
+            self.push_screen(BuoysScreen(storm_id if storm_id in self.store.storms else None, tab))
+
+    def open_station(self, kind: str, station_id: str) -> None:
+        screen = self.screen
+        if isinstance(screen, ModalScreen) or (
+            isinstance(screen, StationScreen) and screen.station_id == station_id.upper() and screen.kind == kind
+        ):
+            return
+        self.push_screen(StationScreen(kind, station_id))
+
+    async def show_on_map(self, lat: float, lon: float, label: str) -> None:
+        """`m` on a station: back to the map, centred on it."""
+        while len(self.screen_stack) > 1:
+            await self.pop_screen()
+        root = self.screen
+        if isinstance(root, MainScreen):
+            root.show_map()
+            root.map_view.center_on((lat, lon))
+            self.notify(f"{label} is at the centre of the map.", timeout=3)
 
     def open_graphics(self, storm_id: str | None) -> None:
         screen = self.screen
@@ -355,13 +419,16 @@ class EyewallApp(App[None]):
         elif not isinstance(screen, ModalScreen | GraphicsScreen):
             self.push_screen(GraphicsScreen(storm_id))
 
-    def open_buoy(self, station_id: str) -> None:
-        screen = self.screen
-        if isinstance(screen, ModalScreen) or (
-            isinstance(screen, BuoyDetailScreen) and screen.station_id == station_id.upper()
-        ):
-            return
-        self.push_screen(BuoyDetailScreen(station_id))
+    def on_map_view_mark_opened(self, message: MapView.MarkOpened) -> None:
+        """A mark on the map was opened: a storm opens its page, a buoy or a tide gauge its station page."""
+        message.stop()
+        mark = message.mark
+        if mark.kind == "storm":
+            self.open_storm(mark.id)
+        elif mark.kind == "buoy":
+            self.open_station("ndbc", mark.id)
+        else:
+            self.open_station("coops", mark.id)
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:
@@ -376,16 +443,12 @@ class EyewallApp(App[None]):
 
     def action_graphics(self) -> None:
         screen = self.screen
-        storm_id = getattr(screen, "storm_id", None) if isinstance(screen, StormDetailScreen) else self.selected
+        storm_id = getattr(screen, "storm_id", None) if isinstance(screen, StormScreen) else self.selected
         self.open_graphics(storm_id)
 
     def action_help(self) -> None:
         if not self._modal_open():
             self.push_screen(HelpScreen())
-
-    def action_outlook(self) -> None:
-        if not self._modal_open() and not isinstance(self.screen, OutlookScreen):
-            self.push_screen(OutlookScreen())
 
     def action_alerts(self) -> None:
         if not self._modal_open() and not isinstance(self.screen, AlertLogScreen):
@@ -397,28 +460,32 @@ class EyewallApp(App[None]):
             await self._tick()
         self.notify("Refreshing every feed.", timeout=3)
 
+    def replay_available(self) -> bool:
+        """True when `R` can start the bundled replay: this is live data, and it has nothing to show."""
+        if self.replay is not None or not self.store.storms_loaded or self.store.storms:
+            return False
+        # A failed or stale storm feed says nothing about whether there are storms: no offer on "no storms" then.
+        return self.poller.freshness(protocol.STORMS).state not in (FreshnessState.ERROR, FreshnessState.STALE)
+
+    def action_start_replay(self) -> None:
+        """End this app with a request for the replay; `run_app` starts it, so the live poller is closed first."""
+        if self.replay_available():
+            self.exit(True)
+
     def action_units(self) -> None:
         self.units = next_preset(self.units)
         self._for_screens("refresh_data")
         self.notify(f"Units: {self.units}", timeout=3)
 
-    def action_watchlist(self) -> None:
-        if not self._modal_open() and not isinstance(self.screen, WatchlistScreen):
-            self.push_screen(WatchlistScreen())
-
     def action_search(self) -> None:
-        if self._modal_open():
+        """`/`: the menu, with only buoys and tide gauges to find."""
+        if self._modal_open() or CommandPalette.is_open(self):  # type: ignore[arg-type]
             return
-
-        def picked(choice: SearchChoice | None) -> None:
-            if choice is None:
-                return
-            if choice.pin or choice.kind == "coops":  # a gauge has no page of its own, so opening it pins it
-                self.watch_in_background(choice.kind, choice.id, True)
-            else:
-                self.open_buoy(choice.id)
-
-        self.push_screen(SearchScreen(), picked)
+        self.push_screen(
+            CommandPalette(
+                providers=[nav.StationCommands], placeholder="Find a buoy or tide gauge by name or number..."
+            )
+        )
 
     def action_settings(self) -> None:
         if self._modal_open():
@@ -502,13 +569,16 @@ class EyewallApp(App[None]):
         self._file_broken = False
         return True
 
-    async def fetch_series(self, station_id: str) -> None:
-        """Fetch one buoy's series now, for a page that was just opened; the rest of the buoys feed is left alone."""
+    async def fetch_series(self, station_id: str) -> str | None:
+        """Fetch one buoy's series now, for a page that was just opened; the rest of the buoys feed is left alone.
+
+        Returns the failure as text, or None when the series arrived, so the page can say it could not load."""
         try:
             self.store.apply_series(await self.source.ndbc_series(station_id.upper()))
-        except (FetchError, ParseError):
-            return
+        except (FetchError, ParseError) as exc:
+            return str(exc) or type(exc).__name__
         self._for_screens("refresh_data")
+        return None
 
     async def fetch_tide(self, station_id: str) -> None:
         """Fetch one tide gauge now (it was just pinned), not every gauge."""
@@ -523,12 +593,19 @@ class EyewallApp(App[None]):
         self._for_screens("refresh_data")
 
     async def supplemental(self, station_id: str) -> Parsed[SupplementalReading]:
-        """A buoy's `.supl` file, remembered for SUPL_TTL seconds so reopening a page does not fetch it again."""
+        """A buoy's `.supl` file, remembered for SUPL_TTL seconds (a failure too, so a dead file is not asked for on
+        every poll). The one place the lifetime is decided; callers may ask as often as they like."""
         station_id = station_id.upper()
         kept = self._supl.get(station_id)
         if kept is not None and time.monotonic() - kept[0] < SUPL_TTL:
+            if isinstance(kept[1], (FetchError, ParseError)):
+                raise kept[1]
             return kept[1]
-        result = await self.source.ndbc_supplemental(station_id)
+        try:
+            result = await self.source.ndbc_supplemental(station_id)
+        except (FetchError, ParseError) as exc:
+            self._supl[station_id] = (time.monotonic(), exc)
+            raise
         self._supl[station_id] = (time.monotonic(), result)
         return result
 
@@ -575,15 +652,16 @@ class EyewallApp(App[None]):
         return found is not None and (kept is None or kept[1] != found)
 
     async def toggle_watch(self, kind: str, station_id: str) -> None:
-        """Pin a station to the watchlist, or unpin it when it is there already."""
+        """Follow a station, or stop following it when it is followed already."""
         station_id = station_id.upper()
         updated, watched = toggle_watch(self.config, kind, station_id)
         if watched and station_id not in watchlist_ids(updated, kind):
-            self.notify("The watchlist is full.", severity="warning", timeout=4)
+            self.notify(
+                "You follow as many stations as can be kept. Stop following one first.", severity="warning", timeout=4
+            )
             return
         self.apply_config(updated)
-        verb = "Pinned" if watched else "Removed"
-        self.notify(f"{verb} {station_id} {'to' if watched else 'from'} the watchlist.", timeout=3)
+        self.notify(f"Following {station_id}." if watched else f"Stopped following {station_id}.", timeout=3)
         if not watched:
             return
         if kind == "coops":
@@ -592,14 +670,14 @@ class EyewallApp(App[None]):
             self.poller.refresh_feeds(protocol.BUOYS)
 
     def watch_in_background(self, kind: str, station_id: str, wanted: bool) -> None:
-        """Pin or unpin from a key press. A failure is logged and shown as a toast, never an app crash."""
+        """Follow or unfollow from a key press. A failure is logged and shown as a toast, never an app crash."""
 
         async def work() -> None:
             try:
                 await self.set_watch(kind, station_id, wanted)
             except Exception as exc:
-                log.exception("could not %s %s", "pin" if wanted else "unpin", station_id)
-                self.notify(f"Could not change the watchlist: {exc}", severity="error", timeout=8)
+                log.exception("could not %s %s", "follow" if wanted else "unfollow", station_id)
+                self.notify(f"Could not change the stations you follow: {exc}", severity="error", timeout=8)
 
         self.run_worker(work(), exclusive=False, exit_on_error=False)
 
@@ -623,7 +701,18 @@ class EyewallApp(App[None]):
     # ---- replay transport -------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
-        return not (action in REPLAY_ACTIONS and self.replay is None)
+        if action in REPLAY_ACTIONS and self.replay is None:
+            return False
+        if action == "start_replay":
+            return self.replay_available()
+        if action == nav.BACK:
+            return self._can_go_back()
+        if action == nav.QUIT:
+            if isinstance(self.screen, TooSmallScreen):
+                return True  # nothing else works there, so q must
+            # The first screen only, and not inside its full-screen map, where Esc is the way out.
+            return len(self.screen_stack) == 1 and not self._can_go_back()
+        return True
 
     def action_play_pause(self) -> None:
         self.paused = not self.paused
@@ -660,7 +749,7 @@ def run_app(
     inline = (
         load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
     )
-    EyewallApp(
+    wants_replay = EyewallApp(
         config,
         source,
         inline=inline,
@@ -670,3 +759,18 @@ def run_app(
         file_config=file_config,
         config_file_broken=config_file_broken,
     ).run()
+    if wants_replay:  # `R` on a quiet day: the live app has closed its feeds, now the recording gets the terminal
+        try:
+            demo = ReplaySource(resolve_bundle(DEMO))
+        except BundleError as exc:
+            print(f"eyewall: {exc}", file=sys.stderr)
+            return
+        EyewallApp(
+            config,
+            demo,
+            inline=inline,
+            state_dir=None,  # a replay never reads or writes the real seen set
+            config_path=config_path,
+            file_config=file_config,
+            config_file_broken=config_file_broken,
+        ).run()

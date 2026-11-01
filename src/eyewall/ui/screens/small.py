@@ -16,7 +16,7 @@ def too_small(width: int, height: int) -> bool:
 
 class TooSmallScreen(Screen[None]):
     def compose(self) -> ComposeResult:
-        yield Static("Needs at least {}x{}".format(*MIN_SIZE), id="too-small")
+        yield Static("Needs at least {}x{}   (q quit)".format(*MIN_SIZE), id="too-small")
 
     def on_resize(self, event: events.Resize) -> None:
         if self.is_current and not too_small(*event.size):

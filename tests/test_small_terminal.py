@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from eyewall.ui.screens.dashboard import DashboardScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.screens.small import TooSmallScreen
 from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app, settle
 
@@ -27,18 +27,18 @@ async def test_the_notice_names_the_size() -> None:
         assert NOTICE in screen_text(app)
 
 
-async def test_the_dashboard_returns_when_enlarged_and_again_after_shrinking() -> None:
+async def test_the_main_screen_returns_when_enlarged_and_again_after_shrinking() -> None:
     app = replay_app()
     async with running(app, (40, 12)) as pilot:
         await into_the_storm(pilot)
         assert isinstance(app.screen, TooSmallScreen)
         await pilot.resize_terminal(80, 24)
         await settle(pilot)
-        assert isinstance(app.screen, DashboardScreen)
-        assert "ERIN" in screen_text(app)
+        assert isinstance(app.screen, MainScreen)
+        assert "Erin" in screen_text(app)
         await pilot.resize_terminal(50, 14)
         await settle(pilot)
         assert isinstance(app.screen, TooSmallScreen)
         await pilot.resize_terminal(60, 16)
         await settle(pilot)
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)

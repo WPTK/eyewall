@@ -1,4 +1,4 @@
-"""Outlook, alert log, watchlist, station search, help, settings and the quiet-day state."""
+"""Outlook, alert log, followed stations, station menu, help, settings and the quiet-day state."""
 
 from __future__ import annotations
 
@@ -6,25 +6,12 @@ from textual.widgets import Input, Switch
 
 from eyewall.config import load_config
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
+from eyewall.ui.screens.buoys import BuoysScreen
 from eyewall.ui.screens.help import HelpScreen
-from eyewall.ui.screens.outlook import OutlookScreen
-from eyewall.ui.screens.search import SearchScreen
 from eyewall.ui.screens.settings import SettingsScreen
-from eyewall.ui.screens.watchlist import WatchlistScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.widgets.station_list import StationList
 from tests.ui_support import replay_app, scripted_app
-
-
-async def test_outlook_screen(journey, size) -> None:
-    async with journey(size) as j:
-        await j.keys("O")
-        assert isinstance(j.screen, OutlookScreen)
-        j.see("Tropical weather outlook", "Watchlist")
-        await j.shot("outlook")
-        await j.keys("plus", "minus", "f")
-        await j.shot("outlook-map-fitted")
-        await j.keys("O")
-        assert not isinstance(j.screen, OutlookScreen)
 
 
 async def test_alert_log(journey, size) -> None:
@@ -37,54 +24,48 @@ async def test_alert_log(journey, size) -> None:
         assert not isinstance(j.screen, AlertLogScreen)
 
 
-async def test_watchlist_add_remove_and_open(journey, size) -> None:
+async def test_follow_unfollow_and_open_from_your_stations(journey, size) -> None:
     async with journey(size) as j:
         app = j.app
-        await j.keys("w")
-        assert isinstance(j.screen, WatchlistScreen)
-        j.see("Buoys (", "Tide gauges (")
-        await j.shot("watchlist")
-        await j.keys("tab")
-        await j.shot("watchlist-tide-table")
-        await j.keys("tab", "a")
-        assert isinstance(j.screen, SearchScreen)
-        await j.shot("add-search", footer=False)
-        await j.keys(*"41002")
-        j.see("41002")
-        await j.keys("enter")
+        await j.keys("enter", "b")
+        assert isinstance(j.screen, BuoysScreen)
+        stations = j.screen.query_one(StationList)
+        stations.highlighted = [r.key for r in stations.rows].index("ndbc:41002")
+        await j.keys("f")
         await j.settle()
         assert "41002" in app.config.watchlist.ndbc
-        await j.shot("added")
-        table = j.screen.query_one("#watch-buoys")
-        table.move_cursor(row=table.row_count - 1)
-        await j.settle()
-        await j.keys("d")
+        await j.keys("tab")
+        await j.shot("your-stations")
+        assert [r.key for r in j.screen.query_one(StationList).rows] == ["ndbc:41002"]
+        await j.keys("enter")
+        assert isinstance(j.screen, StationScreen)
+        await j.shot("opened-from-your-stations")
+        await j.keys("escape", "f")
         await j.settle()
         assert "41002" not in app.config.watchlist.ndbc
-        await j.shot("removed")
-        await j.keys("enter")
-        assert isinstance(j.screen, BuoyDetailScreen)
-        await j.shot("opened-from-watchlist")
+        await j.shot("unfollowed")
 
 
-async def test_station_search_opens_a_buoy(journey, size) -> None:
+async def test_station_menu_opens_a_buoy(journey, size) -> None:
     async with journey(size) as j:
         await j.keys("slash")
-        assert isinstance(j.screen, SearchScreen)
+        await j.pilot.pause(0.3)
         await j.keys(*"41002")
+        await j.pilot.pause(0.6)
         j.see("41002")
         await j.shot("search-hit", footer=False)
         await j.keys("enter")
-        assert isinstance(j.screen, BuoyDetailScreen)
+        await j.settle()
+        assert isinstance(j.screen, StationScreen)
         await j.shot("search-opened")
 
 
-async def test_help_screen_closes_three_ways(journey, size) -> None:
+async def test_help_screen_closes_two_ways(journey, size) -> None:
     async with journey(size) as j:
-        for key in ("escape", "question_mark", "q"):
+        for key in ("escape", "question_mark"):
             await j.keys("question_mark")
             assert isinstance(j.screen, HelpScreen)
-            j.see("Dashboard", "Storm detail", "Anywhere", "Replay")
+            j.see("Map")  # the rest of the help is below, behind the scroll
             if key == "escape":
                 await j.shot("help", footer=False)
             await j.keys(key)
@@ -130,16 +111,12 @@ async def test_settings_edit_save_cancel_and_invalid(journey, size, tmp_path) ->
 
 async def test_quiet_day(size, journey) -> None:
     async with journey(size, app=scripted_app()) as j:
-        j.see("Area 1", "Atlantic, East Pacific: none")  # no storms: the outlook's area and the quiet basins
-        await j.shot("quiet-dashboard")
+        j.see("No tropical storms")  # no storms: the plain sentence, with the outlook and the replay offer under it
+        await j.shot("quiet-main")
         await j.keys("g")
         assert "Select a storm" in j.toasts()
-        await j.keys("O")
-        assert isinstance(j.screen, OutlookScreen)
-        j.see("Tropical weather outlook")
-        await j.shot("quiet-outlook")
-        await j.keys("escape", "b")
-        assert isinstance(j.screen, WatchlistScreen)  # no storm to look at, so b opens the watchlist
+        await j.keys("b")
+        assert isinstance(j.screen, BuoysScreen)  # no storm to look at, so b opens the watchlist
         await j.shot("quiet-watchlist")
         await j.keys("escape", "A")
         j.see("New tropical weather outlook")

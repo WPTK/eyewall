@@ -3,8 +3,9 @@
 Nothing here knows about NHC models or Textual. The UI adapts storm data to these dataclasses (positions in degrees,
 winds in knots, radii in nautical miles, rings as sequences of (lat, lon)) and calls render_map(). Layers are drawn in
 this order: land, coastline, borders, cone, outlook areas, surge lines, coastal watches and warnings, best track,
-forecast line, wind radii, tide gauges, buoys, forecast points, storm center, labels, cursor. Where two layers meet in
-one cell, the priority in canvas.Priority decides the color: track over warning over cone over coast.
+forecast line, wind radii, tide gauges, buoys, forecast points, storm center, labels, scale bar, place names,
+cursor. Where two layers meet in one cell, the priority in canvas.Priority decides the color: track over warning over
+cone over coast.
 """
 
 from __future__ import annotations
@@ -13,17 +14,29 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from eyewall.geo import destination
+from eyewall.geo import destination, haversine_nm
 from eyewall.palette import (
+    BUOY,
+    CONE_EDGE,
+    CONE_FILL,
+    CURSOR,
+    FORECAST_DASH,
+    MAP_LABEL,
     NEUTRAL,
-    WATCH_WARNING_COLORS,
+    RING_PATTERNS,
+    STALE,
+    TIDE_GAUGE,
+    WATCH_WARNING_CUES,
+    Pattern,
     WatchWarning,
     category_color,
     risk_color,
-    wind_band_color,
+    storm_force,
 )
 from eyewall.render.basemap import DEFAULT_STYLE, BasemapStyle, basemap_canvas, ensure_matches
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
+from eyewall.render.hits import Cell, Hits, Mark, MarkKind
+from eyewall.render.places import draw_places, draw_scale_bar
 from eyewall.render.projection import Bounds, LatLon, Viewport, bounds_of
 
 Ring = tuple[LatLon, ...]
@@ -75,8 +88,9 @@ class WindRadii:
 
 @dataclass(frozen=True)
 class StormScene:
-    """Everything the map draws for one storm."""
+    """Everything the map draws for one storm. id names it for the hit map."""
 
+    id: str = ""
     name: str | None = None
     center: TrackPoint | None = None
     best_track: tuple[TrackPoint, ...] = ()
@@ -121,13 +135,15 @@ class OutlookArea:
 
 @dataclass(frozen=True)
 class StationMark:
-    """A buoy or tide gauge. wind_kt colors a buoy by NHC's wind thresholds; stale draws it dim."""
+    """A buoy or tide gauge. wind_kt colors a buoy by NHC's wind thresholds; stale draws it dim. id is the station id,
+    which is also its label on the map; name is for the tooltip."""
 
     lat: float
     lon: float
     wind_kt: float | None = None
     stale: bool = False
-    label: str | None = None
+    id: str = ""
+    name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +155,7 @@ class MapScene:
     buoys: tuple[StationMark, ...] = ()
     tide_gauges: tuple[StationMark, ...] = ()
     cursor: LatLon | None = None
+    distance_unit: str = "nm"  # the unit of the scale bar: nm, mi or km, from the reader's units preset
 
 
 @dataclass(frozen=True)
@@ -158,6 +175,7 @@ class MapOptions:
     tide_gauges: bool = True
     labels: bool = True
     station_labels: bool = False
+    places: bool = True  # place names and the scale bar
 
 
 @dataclass(frozen=True)
@@ -165,16 +183,16 @@ class MapStyle:
     """Colors for the parts of the map that carry no meaning of their own. Meaningful colors come from palette."""
 
     basemap: BasemapStyle = DEFAULT_STYLE
-    cone_fill: str = "#66758a"
+    cone_fill: str = CONE_FILL
     cone_shade: Shade = Shade.SPARSE
-    cone_edge: str = "#e6edf5"
-    label: str = "#c9d3de"
-    buoy: str = "#8fd3ff"
-    tide_gauge: str = "#5eead4"
-    stale: str = "#566273"
-    cursor: str = "#ffffff"
-    forecast_dash: tuple[int, int] = (4, 2)
-    radii_dash: tuple[int, int] = (3, 3)
+    cone_edge: str = CONE_EDGE
+    label: str = MAP_LABEL
+    place: str = NEUTRAL
+    buoy: str = BUOY
+    tide_gauge: str = TIDE_GAUGE
+    stale: str = STALE
+    cursor: str = CURSOR
+    forecast_dash: Pattern = FORECAST_DASH
 
 
 DEFAULT_OPTIONS = MapOptions()
@@ -273,7 +291,8 @@ def _draw_segments(
     for kind in order:
         for segment in segments:
             if segment.kind is kind:
-                canvas.polyline(view.project_path(segment.points), WATCH_WARNING_COLORS[kind], prio, width=2)
+                cue = WATCH_WARNING_CUES[kind]
+                canvas.polyline(view.project_path(segment.points), cue.color, prio, dash=cue.pattern, width=2)
 
 
 def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapStyle) -> None:
@@ -303,8 +322,7 @@ def _draw_radii(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSty
             if quadrants is None or not any(quadrants):
                 continue
             outline = view.project_path(_radii_outline(radii.lat, radii.lon, quadrants))
-            color = wind_band_color(knots) or NEUTRAL
-            canvas.polyline(outline, color, Priority.RADII, dash=style.radii_dash if knots == 34 else None, closed=True)
+            canvas.polyline(outline, category_color(knots), Priority.RADII, dash=RING_PATTERNS[knots], closed=True)
 
 
 def _draw_stations(
@@ -315,15 +333,21 @@ def _draw_stations(
     base_color: str,
     style: MapStyle,
     labels: list[_Label] | None,
-) -> None:
+) -> list[tuple[StationMark, Cell]]:
+    """Draw the marks; return those that landed on the canvas with their cells."""
+    placed: list[tuple[StationMark, Cell]] = []
     for station in stations:
-        band = None if station.stale else wind_band_color(station.wind_kt)
+        band = None if station.stale or not storm_force(station.wind_kt) else category_color(station.wind_kt)
         color = style.stale if station.stale else band or base_color
         cell = canvas.marker(
             *view.to_dot(station.lat, station.lon), glyph, color, Priority.STATION, bold=band is not None
         )
-        if cell is not None and labels is not None and station.label:
-            labels.append(_Label(cell, station.label, style.stale if station.stale else style.label, False, False))
+        if cell is None:
+            continue
+        placed.append((station, cell))
+        if labels is not None and station.id:
+            labels.append(_Label(cell, station.id, style.stale if station.stale else style.label, False, False))
+    return placed
 
 
 def draw_scene(
@@ -332,8 +356,9 @@ def draw_scene(
     scene: MapScene,
     options: MapOptions = DEFAULT_OPTIONS,
     style: MapStyle = DEFAULT_MAP_STYLE,
-) -> None:
-    """Draw everything above the base map onto a canvas that already holds it (or is blank)."""
+) -> Hits:
+    """Draw everything above the base map onto a canvas that already holds it (or is blank). Returns where the storms,
+    buoys and gauges landed, for clicking and for stepping through them with the keyboard."""
     ensure_matches(canvas, viewport)
     glyphs = canvas.glyphs
     labels: list[_Label] = []  # drawn last, so a label never hides a marker
@@ -355,10 +380,15 @@ def draw_scene(
     if options.radii:
         for storm in scene.storms:
             _draw_radii(canvas, viewport, storm, style)
+    gauges: list[tuple[StationMark, Cell]] = []
+    buoys: list[tuple[StationMark, Cell]] = []
     if options.tide_gauges:
-        _draw_stations(canvas, viewport, scene.tide_gauges, glyphs.tide, style.tide_gauge, style, station_labels)
+        gauges = _draw_stations(
+            canvas, viewport, scene.tide_gauges, glyphs.tide, style.tide_gauge, style, station_labels
+        )
     if options.buoys:
-        _draw_stations(canvas, viewport, scene.buoys, glyphs.buoy, style.buoy, style, station_labels)
+        buoys = _draw_stations(canvas, viewport, scene.buoys, glyphs.buoy, style.buoy, style, station_labels)
+    storm_cells: list[tuple[StormScene, Cell]] = []
     for storm in scene.storms:
         if options.track:
             for point in storm.forecast:
@@ -375,13 +405,40 @@ def draw_scene(
                 Priority.MARKER + 1,
                 bold=True,
             )
-            if cell is not None and storm.name:
-                labels.insert(0, _Label(cell, storm.name, color, True, False))
+            if cell is not None:
+                storm_cells.append((storm, cell))
+                if storm.name:
+                    labels.insert(0, _Label(cell, storm.name, color, True, False))
     if options.labels:
         for label in [*labels, *point_labels]:
             _draw_label(canvas, label)
+    if options.places:  # last, so a place never takes room a storm or station label wants
+        draw_scale_bar(canvas, viewport, scene.distance_unit, style.label)
+        draw_places(canvas, viewport, style.place)
     if scene.cursor is not None:
         canvas.marker(*viewport.to_dot(*scene.cursor), glyphs.cursor, style.cursor, Priority.CURSOR, bold=True)
+    return _hits(storm_cells, buoys, gauges)
+
+
+def _hits(
+    storms: list[tuple[StormScene, Cell]],
+    buoys: list[tuple[StationMark, Cell]],
+    gauges: list[tuple[StationMark, Cell]],
+) -> Hits:
+    """The hit map. Where marks share a cell the one drawn last is on top: storms, then buoys, then gauges. The keyboard
+    visits the storms first, then the stations nearest a storm first."""
+    marks: list[tuple[Mark, Cell]] = [(Mark("storm", s.id), cell) for s, cell in storms if s.id]
+    stations: list[tuple[Mark, Cell, float]] = []
+    centers = [(s.center.lat, s.center.lon) for s, _ in storms if s.center is not None]
+    groups: tuple[tuple[MarkKind, list[tuple[StationMark, Cell]]], ...] = (("buoy", buoys), ("gauge", gauges))
+    for kind, group in groups:
+        for station, cell in group:
+            if station.id:
+                near = min((haversine_nm(c, (station.lat, station.lon)) for c in centers), default=0.0)
+                stations.append((Mark(kind, station.id), cell, near))
+    drawn = [*marks, *((m, c) for m, c, _ in stations)]
+    order = [m for m, _ in marks] + [m for m, _, _ in sorted(stations, key=lambda e: e[2])]
+    return Hits(tuple(drawn), tuple(order))
 
 
 def render_map(
@@ -392,11 +449,21 @@ def render_map(
     style: MapStyle = DEFAULT_MAP_STYLE,
 ) -> Canvas:
     """The finished map: the cached base map for this viewport with the scene drawn over it."""
+    return render_map_hits(viewport, scene, mode, options, style)[0]
+
+
+def render_map_hits(
+    viewport: Viewport,
+    scene: MapScene = EMPTY_SCENE,
+    mode: Mode = Mode.BRAILLE,
+    options: MapOptions = DEFAULT_OPTIONS,
+    style: MapStyle = DEFAULT_MAP_STYLE,
+) -> tuple[Canvas, Hits]:
+    """The finished map and the hit map of its marks."""
     canvas = basemap_canvas(
         viewport, mode, land=options.land, coast=options.coast, borders=options.borders, style=style.basemap
     )
-    draw_scene(canvas, viewport, scene, options, style)
-    return canvas
+    return canvas, draw_scene(canvas, viewport, scene, options, style)
 
 
 def scene_bounds(scene: MapScene) -> Bounds | None:
