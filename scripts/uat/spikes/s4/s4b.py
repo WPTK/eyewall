@@ -168,9 +168,8 @@ def launch():
 def ax_rect():
     """content rect from Accessibility: text area of the terminal window (points)."""
     paths = [
-        "text area 1 of scroll area 1 of splitter group 1 of window 1",
-        "text area 1 of scroll area 1 of splitter group 1 of group 1 of window 1",
         "scroll area 1 of splitter group 1 of window 1",
+        "scroll area 1 of splitter group 1 of group 1 of window 1",
     ]
     for p in paths:
         rc, o = osa('tell application "System Events" to tell process "' + OWNER + '" to get {position, size} of ' + p)
@@ -237,25 +236,26 @@ def main():
     RES["ax_path"], RES["ax_rect"] = path, ar
     models = [naive]
     if ar:
-        models.append(Model("ax_textarea", ar[0], ar[1], ar[2] / cols, ar[3] / rows))
+        models.append(Model("ax_scrollarea", ar[0], ar[1], ar[2] / cols, ar[3] / rows))
     # ---- pixel boundary sweep (ground truth) ----
     mid_r = rows // 2
     mid_c = cols // 2
     rowy = naive.y0 + (mid_r + 0.5) * naive.ch
     colx = naive.x0 + (mid_c + 0.5) * naive.cw
     xs = {}
-    for k in (1, cols // 2, cols - 1):
+    for k in (1, cols // 2, cols - 2):
         g = naive.x0 + k * naive.cw
-        xs[k] = find_boundary("x", rowy, g - 30, g + 30, k)
+        xs[k] = find_boundary("x", rowy, g - 16, g + 16, k)
     ys = {}
     for k in (1, rows // 2, rows - 1):
         g = naive.y0 + k * naive.ch
-        ys[k] = find_boundary("y", colx, g - 30, g + 30, k)
+        ys[k] = find_boundary("y", colx, g - 16, g + 16, k)
     RES["sweep_x_boundaries"], RES["sweep_y_boundaries"] = xs, ys
     save()
     if None in xs.values() or None in ys.values():
         RES["sweep_failed"] = True
         save()
+        gestures(naive, cols, rows)
         return
     ks = sorted(xs)
     cw = (xs[ks[-1]] - xs[ks[0]]) / (ks[-1] - ks[0])
@@ -265,7 +265,7 @@ def main():
     y0 = ys[ks[0]] - ks[0] * ch
     RES["fit"] = {"x0": x0, "y0": y0, "cw": cw, "ch": ch,
                   "x0_minus_window_x": x0 - x, "y0_minus_window_y": y0 - y,
-                  "content_right_gap": (x + w) - (x0 + cols * cw), "content_bottom_gap": (y + h) - (y0 + rows * ch)}
+                  "content_right_gap_incl_scrollbar": (x + w) - (x0 + cols * cw), "content_bottom_gap": (y + h) - (y0 + rows * ch)}
     # integer-boundary resolution means true boundary is within [b-1, b]; use b - 0.5 offset on the fit origin
     fit = Model("fit_sweep", x0 - 0.5, y0 - 0.5, cw, ch)
     models.append(fit)
