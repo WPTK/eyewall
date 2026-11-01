@@ -192,3 +192,14 @@ async def test_an_outlook_area_leaves_out_the_panels_with_nothing_to_show(size) 
         assert "Select a storm" not in screen_text(app)
         if size[0] >= 110:
             assert panels["headline"].region.height <= panels["headline"].body.outer_size.height + 2  # no empty band
+
+
+async def test_the_wind_radii_rows_name_their_quadrants_without_a_header_line() -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        wind = _stack(app)["wind"]
+        shown = str(wind.body.render()).splitlines()[: wind.size.height]
+        rows = [line for line in shown if line.split()[:1] and line.split()[0].isdigit() and "NE" in line]
+        assert rows and all("NW" in line and line.rstrip().endswith("nm") for line in rows)
+        assert not any(line.startswith("Radii") for line in shown)

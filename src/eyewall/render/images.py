@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import logging
 import math
 import sys
 from collections import OrderedDict
@@ -516,6 +517,11 @@ def load_inline(mode: str = "auto") -> InlineBackend | None:
     stdout = sys.__stdout__
     if stdout is None or not stdout.isatty():
         return None
+    # A probe the terminal does not answer is logged by the library as a warning with a traceback, which with no log
+    # handler configured lands on stderr ahead of the TUI. A handler on its logger keeps it there only while we import.
+    library_log = logging.getLogger("textual_image")
+    quiet = logging.NullHandler()
+    library_log.addHandler(quiet)
     try:
         from textual_image.renderable import Image as Renderable
         from textual_image.renderable.sixel import Image as SixelRenderable
@@ -523,6 +529,8 @@ def load_inline(mode: str = "auto") -> InlineBackend | None:
         from textual_image.widget import Image as Widget
     except Exception:  # a probe or import failure must never stop the app from starting
         return None
+    finally:
+        library_log.removeHandler(quiet)
     if Renderable is SixelRenderable:
         return InlineBackend("sixel", Widget)
     if Renderable is TgpRenderable:
