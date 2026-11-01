@@ -83,7 +83,7 @@ def test_a_group_that_loses_every_block_still_says_how_many_are_left() -> None:
     head = heading("WATCHES AND WARNINGS", "ww")
     first = block(14, 1, group="ww", section="ww", noun=NOUN, more="open:x")
     second = block(3, 4, group="ww", section="ww", noun=NOUN, more="open:x")
-    lines = fit_blocks([card, head, first, second], 18, 40, ">")
+    lines = fit_blocks([card, head, first, second], 18, ">")
     text = [line.text.plain for line in lines]
     assert "WATCHES AND WARNINGS" in text
     assert any("2 watches and warnings >" in t for t in text), text
@@ -92,7 +92,7 @@ def test_a_group_that_loses_every_block_still_says_how_many_are_left() -> None:
 
 
 def test_a_kept_group_counts_the_blocks_it_lost() -> None:
-    lines = fit_blocks([block(2, 0, group="g", more="do:x"), block(2, 3, group="g", more="do:x")], 3, 20, ">")
+    lines = fit_blocks([block(2, 0, group="g", more="do:x"), block(2, 3, group="g", more="do:x")], 3, ">")
     assert lines[-1].text.plain.strip() == "+1 more >"
 
 
@@ -233,7 +233,7 @@ async def test_retained_storms_are_marked_stale_when_the_feed_stops() -> None:
         assert "stale" not in panel_text(app)
         view = replace(app.screen._view(), storms_old=True, storms_age=900.0)  # type: ignore[attr-defined]
         assert "Storm data is not updating (storms feed failing, last update 15m00s ago)" in lead_text(view).plain
-        lines = fit_blocks(side_blocks(view, 34), 60, 34)
+        lines = fit_blocks(side_blocks(view, 34), 60)
         assert "stale" in " ".join(line.text.plain for line in lines)
 
 

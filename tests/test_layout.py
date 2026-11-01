@@ -78,4 +78,4 @@ async def test_a_quiet_main_screen_says_the_outlook_once() -> None:
         flat = " ".join(screen_text(app).split())
         assert flat.count("NHC is watching 1 area") == 1
         assert "No tropical storms in the Atlantic" in flat
-        assert "start the replay" in flat and "YOUR STATIONS" in flat
+        assert "start the replay" in flat and "Your stations" in flat

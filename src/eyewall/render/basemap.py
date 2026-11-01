@@ -2,29 +2,31 @@
 
 Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except basin-scale views (0.3
 degrees per dot or coarser), where a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
-State and province lines appear with the detailed data. The raster for a viewport is kept, because a map that only
-gains a cursor or a new advisory should not redraw the coast.
+Borders, and the state and province lines with them, appear with the detailed data only. Land is a flat background
+tint of the cells inside it, so the coast stays a crisp line and no fill dots speckle the map. The raster for a
+viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache, lru_cache
 
 from eyewall.mapdata.loader import KIND_STATE, MapLayer, MapPath, load_layer
 from eyewall.palette import BORDER, COAST, LAND, STATE_LINE
-from eyewall.render.canvas import Canvas, Mode, Priority, Shade
+from eyewall.render.canvas import Canvas, Dot, Mode, Priority
 from eyewall.render.projection import Bounds, Viewport
 
 # Degrees per dot at which the map switches from the detailed data to the coarse copy. A 120 by 40 cell view of the Gulf
 # of Mexico and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
 DETAIL_SWITCH = 0.3
+MIN_LAKE_CELLS = 3  # at basin scale a lake narrower than this, in cells, is left out
 
 
 @dataclass(frozen=True)
 class BasemapStyle:
     land: str = LAND
-    land_shade: Shade = Shade.LIGHT
     coast: str = COAST
     border: str = BORDER
     state: str = STATE_LINE
@@ -63,6 +65,12 @@ def _visible(name: str, viewport: Viewport) -> list[MapPath]:
     return [path for bounds, path in _indexed(name)[1] if view.intersects(bounds)]
 
 
+def _cells_across(ring: Sequence[Dot], canvas: Canvas) -> float:
+    """The longer side of a ring's bounding box, in cells."""
+    xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+    return max((max(xs) - min(xs)) / canvas.dots_x, (max(ys) - min(ys)) / canvas.dots_y)
+
+
 def draw_basemap(
     canvas: Canvas,
     viewport: Viewport,
@@ -76,24 +84,24 @@ def draw_basemap(
     ensure_matches(canvas, viewport)
     fine = is_detailed(viewport)
     suffix = "" if fine else "_lo"
+    # Lakes are rings inside the land, so the even-odd fill leaves them as holes. At basin scale only the lakes a few
+    # cells across are kept: the rest would be dark pinpricks and stray dots in the land.
+    lakes = (
+        [viewport.project_path(path.points) for path in _visible("lakes" + suffix, viewport)] if land or coast else []
+    )
+    if not fine:
+        lakes = [ring for ring in lakes if _cells_across(ring, canvas) >= MIN_LAKE_CELLS]
     if land:
-        # Lakes are rings inside the land, so the even-odd fill leaves them as holes.
-        rings = [
-            viewport.project_path(path.points)
-            for name in ("land" + suffix, "lakes" + suffix)
-            for path in _visible(name, viewport)
-        ]
-        canvas.fill_polygon(rings, style.land, Priority.LAND, style.land_shade)
+        canvas.tint_polygon(
+            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes, style.land
+        )
     if coast:
         for path in _visible("coast" + suffix, viewport):
             canvas.polyline(viewport.project_path(path.points), style.coast, Priority.COAST)
-        for path in _visible("lakes" + suffix, viewport):
-            dots = viewport.project_path(path.points)
-            canvas.polyline([*dots, dots[0]], style.coast, Priority.COAST)
-    if borders:
+        for ring in lakes:
+            canvas.polyline([*ring, ring[0]], style.coast, Priority.COAST)
+    if borders and fine:  # at basin scale a border is a few dots wide: noise, not information
         for path in _visible("borders", viewport):
-            if path.kind == KIND_STATE and not fine:
-                continue
             color = style.state if path.kind == KIND_STATE else style.border
             canvas.polyline(viewport.project_path(path.points), color, Priority.BORDER)
 

@@ -31,7 +31,6 @@
 - UAT P3: a watch or warning's place text has an odd hanging indent in the narrow side column.
 - UAT P3: the lead sentence at 120x30 can end with an orphan line ("at 15 kt.").
 - UAT P3: the Outlook tab of the NHC text screen is headed "NHC text (reformatted)", which means nothing for an outlook; also "No outlook for the enabled basins." in the replay.
-- UAT P3: land is a dot-density mask, so coastlines are hard to read at some zooms; the city names do the work.
 - UAT not verified: the hover tooltip on a mark (needs a real terminal) and the main screen with two storms (no two-storm fixture).
 - UAT P3: the map legend drops the 64 kt ring entry at 100x40.
 - UAT P3: the offline main screen leaves its right column blank.

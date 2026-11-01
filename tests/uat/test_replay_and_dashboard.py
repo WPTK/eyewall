@@ -88,7 +88,7 @@ async def test_main_screen_panels(journey, size) -> None:
     async with journey(size) as j:
         j.see("Hurricane Erin")
         if size[0] >= 100 and size[1] >= 30:
-            j.see("NAMED STORMS", "WATCHES AND WARNINGS")
+            j.see("Named storms", "Watches and warnings")
         else:
             j.see("Erin")
         await j.shot("main")

@@ -172,6 +172,11 @@ class MainScreen(ChromeScreen):
         self.tier = Tier.SMALL
         self.states: tuple[StormState, ...] = ()
 
+    @property
+    def quiet(self) -> bool:
+        """Nothing is active and the map is not full screen: the footer lists only what there is to do."""
+        return not self.states and not self._full_map
+
     # ---- layout -----------------------------------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
@@ -233,7 +238,7 @@ class MainScreen(ChromeScreen):
             points = adapt.storm_scene(state).near_extent()
             if points:
                 return points
-        return adapt.basin_points(eye.basin_view)
+        return adapt.quiet_points(adapt.outlook_areas(eye.store.outlook), eye.basin_view)
 
     # ---- actions ----------------------------------------------------------------------------------------------
 

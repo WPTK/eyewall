@@ -65,7 +65,7 @@ def areas_block(view: View, width: int, *, priority: int) -> list[Block]:
     sentences = outlook_text(view)
     if not sentences:
         return []
-    title = "ALSO WATCHING" if view.states else "AREAS NHC IS WATCHING"
+    title = "Also watching" if view.states else "Areas NHC is watching"
     out = [heading(title, "areas")]
     for text in sentences:  # one block per area, so a short column keeps the first and counts the rest
         lines = wrapped(text, width, prefix="  ", action=SHOW_OUTLOOK)
@@ -79,9 +79,9 @@ def stations_block(view: View, width: int, *, priority: int) -> list[Block]:
         return []
     lines = (
         *wrapped(text, width, prefix="  ", action=SHOW_BUOYS),
-        link(view, "open the list", width, SHOW_BUOYS, key="b"),
+        link(view, "open the list", SHOW_BUOYS, key="b"),
     )
-    return [heading("YOUR STATIONS", "stations"), Block(lines, priority, section="stations")]
+    return [heading("Your stations", "stations"), Block(lines, priority, section="stations")]
 
 
 def near_block(view: View, width: int, *, priority: int) -> list[Block]:
@@ -97,9 +97,9 @@ def near_block(view: View, width: int, *, priority: int) -> list[Block]:
     text = f"{' and '.join(parts)} near {name}."
     lines = (
         *wrapped(text, width, prefix="  ", action=SHOW_BUOYS),
-        link(view, "open the list", width, SHOW_BUOYS, key="b"),
+        link(view, "open the list", SHOW_BUOYS, key="b"),
     )
-    return [heading(f"NEAR {name.upper()}", "near"), Block(lines, priority, section="near")]
+    return [heading(f"Near {name}", "near"), Block(lines, priority, section="near")]
 
 
 def replay_block(view: View, width: int, *, priority: int) -> list[Block]:
@@ -108,9 +108,9 @@ def replay_block(view: View, width: int, *, priority: int) -> list[Block]:
     text = f"Replay {view.replay_offer} on these same screens."
     lines = (
         *wrapped(text, width, prefix="  ", action=START_REPLAY),
-        link(view, "start the replay", width, START_REPLAY, key="R"),
+        link(view, "start the replay", START_REPLAY, key="R"),
     )
-    return [heading("SEE IT WITH A STORM", "replay"), Block(lines, priority, section="replay")]
+    return [heading("See it with a storm", "replay"), Block(lines, priority, section="replay")]
 
 
 def quiet_strip(view: View, width: int) -> list[Block]:

@@ -26,8 +26,9 @@ def _a(percent: int) -> str:
 
 
 def _chances(area: _Area) -> str:
+    """The 7 day chance first: it is the one the map labels the area with."""
     if area.p2 is not None and area.p7 is not None:
-        return f"{_a(area.p2)} {area.p2}% chance it forms within 2 days and {area.p7}% within 7 days"
+        return f"{_a(area.p7)} {area.p7}% chance it forms within 7 days, and {area.p2}% within 2 days"
     if area.p2 is not None:
         return f"{_a(area.p2)} {area.p2}% chance it forms within 2 days"
     if area.p7 is not None:
@@ -66,7 +67,7 @@ def area_count(outlook: Outlook | None, enabled: Sequence[str]) -> int:
 
 
 def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str]) -> list[Words]:
-    """`NHC is watching 1 area: a 30% chance it forms within 2 days and 70% within 7 days.`
+    """`NHC is watching 1 area: a 70% chance it forms within 7 days, and 30% within 2 days.`
 
     With several areas, a lead sentence and one line each. With none, the outlook's own summary as issued.
     """

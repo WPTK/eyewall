@@ -39,6 +39,16 @@ def basin_points(basins: tuple[str, ...]) -> list[LatLon]:
     return points
 
 
+def quiet_points(areas: tuple[L.OutlookArea, ...], basins: tuple[str, ...]) -> list[LatLon]:
+    """What the map fits when no storm is selected: the first enabled basin (the Atlantic unless the reader chose
+    another or switched it off), widened to take in every outlook area, so a quiet day shows one basin and the
+    places NHC is watching rather than the whole hemisphere."""
+    points = list(BASIN_BOUNDS.get(basins[0] if basins else "AL", BASIN_BOUNDS["AL"]))
+    for area in areas:
+        points.extend(p for ring in area.rings for p in ring)
+    return points
+
+
 def _quadrants(radii: QuadrantRadii | None) -> L.QuadrantRadii | None:
     if radii is None:
         return None

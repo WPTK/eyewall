@@ -34,8 +34,9 @@ class Key:
     `keys` is Textual's comma list. `label` is the footer word. `help` is the help sentence: empty merges the key into
     the next row that has one (so `j k Enter` is one row), None leaves it out of the help because another entry
     documents the same key. `shown` replaces the spelled keys in the footer and help (`+/-`). `footer` puts it in the
-    footer when its binding is active. `menu` is its title in the command palette, empty for none. `bind` is False for
-    an entry the owner binds itself because its actions differ (the tab digits)."""
+    footer when its binding is active. `busy` keeps it out of the footer on a quiet main screen (no storm, so nothing to
+    zoom to, fit or read): it stays in the help and the menu. `menu` is its title in the command palette, empty for
+    none. `bind` is False for an entry the owner binds itself because its actions differ (the tab digits)."""
 
     scope: str
     keys: str
@@ -44,6 +45,7 @@ class Key:
     help: str | None = ""
     shown: str = ""
     footer: bool = False
+    busy: bool = False
     menu: str = ""
     bind: bool = True
     priority: bool = False
@@ -95,6 +97,7 @@ KEYS: tuple[Key, ...] = (
         "NHC text",
         "the National Hurricane Center's text for the storm (the outlook when there is none)",
         footer=True,
+        busy=True,
         menu="Open the NHC text",
     ),
     K(
@@ -123,19 +126,19 @@ KEYS: tuple[Key, ...] = (
     K("main", "n", "mark(1)", "next mark", None),
     K("main", "N", "mark(-1)", "previous mark", None),
     # ---- the map ----
-    K("map", "plus,equals_sign", "zoom_in", "zoom", "zoom in", shown="+/-", footer=True),
+    K("map", "plus,equals_sign", "zoom_in", "zoom", "zoom in", shown="+/-", footer=True, busy=True),
     K("map", "minus", "zoom_out", "zoom out", "zoom out"),
     K("map", "left", "pan(-1, 0)", "pan left"),
     K("map", "right", "pan(1, 0)", "pan right"),
     K("map", "up", "pan(0, -1)", "pan up"),
     K("map", "down", "pan(0, 1)", "pan down", "pan the map (or drag it)"),
-    K("map", "f", "screen.fit", "fit", "fit the storm", footer=True),
+    K("map", "f", "screen.fit", "fit", "fit the storm", footer=True, busy=True),
     K("map", "n", "mark(1)", "next mark"),
     K("map", "N", "mark(-1)", "previous mark", "next or previous storm, buoy or gauge"),
     K("map", "enter", "open_mark", "open", "open the marked storm, buoy or gauge (or click it)", footer=True),
     K("map", "escape", "clear_mark", "clear", "clear the mark"),
-    K("main_map", "c", "screen.center", "center", "center on the storm", footer=True),
-    K("main_map", "l", "screen.layers", "layers", "map layers", footer=True),
+    K("main_map", "c", "screen.center", "center", "center on the storm", footer=True, busy=True),
+    K("main_map", "l", "screen.layers", "layers", "map layers", footer=True, busy=True),
     # ---- storm ----
     K("storm", "b", "buoys", "buoys", "buoys and tide gauges near this storm", footer=True),
     K("storm", "t", "text", "text", "the NHC text: advisory, discussion, forecast, wind chances", footer=True),
