@@ -9,8 +9,8 @@ commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), at the 1:10 mill
 Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
 the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
 
-`places.bin` holds point features from the same mirror
-and commit (`ne_10m_populated_places_simple`), kept inside the same area and ordered by scalerank then population.
+`places.bin` holds point features from the same mirror and commit (`ne_10m_populated_places_simple`), kept inside the
+same area and ordered by scalerank then population.
 
 | File | Content | Natural Earth source | Bytes |
 |---|---|---|---|

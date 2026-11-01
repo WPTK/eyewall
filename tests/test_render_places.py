@@ -1,6 +1,7 @@
 """Place names and the scale bar: the data file, the build step, the ranking by zoom, collisions and the bar."""
 
 import importlib.util
+import math
 import struct
 import sys
 from pathlib import Path
@@ -121,6 +122,41 @@ def test_places_round_trip_through_the_binary_format_including_non_ascii_names(b
     assert parsed[0].lat == pytest.approx(25.7753) and parsed[0].lon == pytest.approx(-80.2089)
 
 
+def test_a_places_file_out_of_rank_order_is_refused(build):
+    unsorted = [(0, 0, 5, 10, "A", "A"), (1, 1, 2, 10, "B", "B")]
+    with pytest.raises(ValueError, match="ordered"):
+        parse_places(build.pack_places(unsorted))
+
+
+def test_a_missing_or_damaged_places_file_loses_the_labels_but_the_map_still_draws(monkeypatch):
+    good = (DATA_DIR / "places.bin").read_bytes()
+
+    class Fake:
+        def __init__(self, data):
+            self.data = data
+
+        def joinpath(self, name):
+            return self
+
+        def read_bytes(self):
+            if self.data is None:
+                raise FileNotFoundError("places.bin")
+            return self.data
+
+    view = Viewport(25.5, -80.0, 0.04, 100, 30)
+    for data in (good[:3000], None, b"EWPL"):
+        monkeypatch.setattr(loader.resources, "files", lambda _pkg, data=data: Fake(data))
+        load_places.cache_clear()
+        try:
+            assert load_places() == ()
+            text = render_map(view, MapScene(distance_unit="km"), options=NO_BASE).to_text()
+        finally:
+            monkeypatch.undo()
+            load_places.cache_clear()
+        assert "Miami" not in text and " km" in text.splitlines()[-1]  # no labels, but the map and bar are drawn
+    assert len(load_places()) > 1_500
+
+
 def test_a_damaged_places_file_is_refused():
     good = (DATA_DIR / "places.bin").read_bytes()
     for bad in (good[:10], good[:2000], b"EWMD" + good[4:], good[:4] + bytes([9]) + good[5:], b""):
@@ -226,6 +262,9 @@ def test_ascii_mode_prints_ascii_names_and_wide_characters_fall_back():
     uni, view = blank(60, 20, deg=0.05)
     P.draw_places(uni, view, NEUTRAL, places)
     assert "São Paulo" in uni.to_text() and "Tokyo" in uni.to_text() and "東京" not in uni.to_text()
+    wide = (place("東京", 30.0, -70.0, ascii_name="東京"),)  # no usable name: skipped, not misaligned
+    none, view2 = blank(60, 20, deg=0.05)
+    assert P.draw_places(none, view2, NEUTRAL, wide) == 0 and none.to_text().strip() == ""
     asc, aview = blank(60, 20, Mode.ASCII, deg=0.1)
     P.draw_places(asc, aview, NEUTRAL, places)
     assert "Sao Paulo" in asc.to_text() and "·" not in asc.to_text() and asc.to_text().isascii()
@@ -244,9 +283,41 @@ def test_place_labels_are_text_so_they_read_with_no_color():
 def test_the_scale_bar_length_matches_the_ground_distance_in_each_unit(unit):
     view = Viewport(30.0, -70.0, 0.05, 100, 30)
     distance, cells = P.scale_length(view, unit)
-    per_cell = {"nm": 1.0, "mi": 1.150779, "km": 1.852}[unit] * 60 * 0.05 * 2
-    assert distance > 0 and distance / 10 ** (len(str(distance)) - 1) in {1, 2, 5}
+    bottom = view.to_geo(view.width / 2.0, view.height - 2.0)[0]
+    squeeze = math.cos(math.radians(bottom)) / view.lon_scale
+    per_cell = {"nm": 1.0, "mi": 1.150779, "km": 1.852}[unit] * 60 * 0.05 * 2 * squeeze
+    assert distance > 0 and distance / 10 ** (len(str(int(distance))) - 1) in {1, 2, 5}
     assert cells == round(distance / per_cell) and P.SCALE_MIN_CELLS <= cells <= 100 // 3
+
+
+def test_the_scale_bar_is_measured_at_the_bottom_row_not_the_center_latitude():
+    # A basin-wide view centred at 40 N whose bottom row is near 10 N: a cell spans much more ground there.
+    view = Viewport(40.0, -60.0, 0.4, 120, 40)
+    bottom = view.to_geo(view.width / 2.0, view.height - 2.0)[0]
+    assert bottom < 15.0
+    distance, cells = P.scale_length(view, "nm")
+    real_per_cell = 2 * 0.4 * 60 * math.cos(math.radians(bottom)) / math.cos(math.radians(40.0))
+    assert cells == round(distance / real_per_cell)
+    assert abs(cells * real_per_cell - distance) / distance < 0.1
+    center_only = round(distance / (2 * 0.4 * 60))
+    assert cells != center_only  # the center-latitude figure would have drawn the bar too long
+
+
+def test_the_scale_bar_picks_the_round_distance_with_the_smallest_rounding_error():
+    for deg in (0.03, 0.05, 0.07, 0.11, 0.2, 0.4, 0.9):
+        view = Viewport(30.0, -70.0, deg, 100, 30)
+        distance, cells = P.scale_length(view, "nm")
+        per_cell = (
+            2 * deg * 60 * math.cos(math.radians(view.to_geo(view.width / 2.0, view.height - 2.0)[0])) / view.lon_scale
+        )
+        best = min(
+            abs(round(d / per_cell) * per_cell - d) / d
+            for step in (1, 2, 5)
+            for power in range(-1, 6)
+            for d in (step * 10.0**power,)
+            if P.SCALE_MIN_CELLS <= round(d / per_cell) <= P.SCALE_MAX_CELLS
+        )
+        assert abs(cells * per_cell - distance) / distance == pytest.approx(best)
 
 
 def test_the_scale_bar_names_its_unit_from_the_preset():

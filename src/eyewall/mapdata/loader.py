@@ -135,13 +135,19 @@ def parse_places(data: bytes) -> tuple[Place, ...]:
             offset += 1 + m
             if offset > len(data):
                 raise ValueError("places file is truncated")
+            if places and rank < places[-1].scalerank:
+                raise ValueError("places file is not ordered by scalerank")
             places.append(Place(lat / scale, lon / scale, rank, pop, name, alt))
-    except (struct.error, IndexError) as exc:
+    except (struct.error, IndexError, UnicodeDecodeError) as exc:
         raise ValueError("places file is truncated") from exc
     return tuple(places)
 
 
 @cache
 def load_places() -> tuple[Place, ...]:
-    """Every place in the vendored places.bin, read once, then kept."""
-    return parse_places(resources.files("eyewall.mapdata").joinpath("places.bin").read_bytes())
+    """Every place in the vendored places.bin, read once, then kept. A missing or damaged file gives no places, so the
+    map loses its labels but still draws."""
+    try:
+        return parse_places(resources.files("eyewall.mapdata").joinpath("places.bin").read_bytes())
+    except (ValueError, OSError):
+        return ()
