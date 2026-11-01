@@ -11,12 +11,14 @@ the app owns `app` and `replay`.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from textual.binding import Binding
-from textual.command import DiscoveryHit, Hit, Provider
+from textual.command import CommandPalette, DiscoveryHit, Hit, Provider
+from textual.screen import ModalScreen
 
 from eyewall.ui import format as fmt
 from eyewall.ui import stations as st
@@ -281,9 +283,16 @@ class EyewallCommands(Provider):
 
         return run
 
+    def _blocked(self) -> bool:
+        """A dialog is open under the menu: its commands would be refused or stack over it, so none are offered."""
+        below = [s for s in self.eye.screen_stack if not isinstance(s, CommandPalette)]
+        return bool(below) and isinstance(below[-1], ModalScreen)
+
     def _commands(self) -> list[tuple[str, Callable[[], Any], str]]:
         app = self.eye
         found: list[tuple[str, Callable[[], Any], str]] = []
+        if self._blocked():
+            return found
         for entry in KEYS:
             if entry.menu and entry.scope in ("app", "replay") and app.check_action(entry.action.split("(")[0], ()):
                 found.append((entry.menu, self._runner(entry.action), f"{footer_name(entry)}  {entry.help or ''}"))
@@ -304,11 +313,13 @@ class EyewallCommands(Provider):
             if score > 0:
                 yield Hit(score, matcher.highlight(title), command, text=title, help=help_text)
         app = self.eye
-        if len(query.strip()) < 2:
+        if len(query.strip()) < 2 or self._blocked():
             return
-        if not (app.store.stations and app.store.tide_stations) and not app.catalogs_asked:
-            app.catalogs_asked = True  # once: a failed fetch is not repeated on every keystroke
-            await app.ensure_catalogs()
+        if not (app.store.stations and app.store.tide_stations):
+            if app.catalogs_task is None:  # one fetch for the session: a failure is not repeated on every keystroke
+                app.catalogs_task = asyncio.ensure_future(app.ensure_catalogs())
+            # Each keystroke cancels the previous search; the shield keeps that from cancelling the shared fetch.
+            await asyncio.shield(app.catalogs_task)
         for rank, hit in enumerate(st.search_stations(app.store, query, limit=12)):
             kind = st.KIND_LABELS[hit.kind]
             title = f"{kind.title()} {hit.id} {' '.join(hit.name.split())}".strip()

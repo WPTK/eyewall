@@ -131,7 +131,7 @@ class EyewallApp(App[None]):
         self._tick_lock = asyncio.Lock()
         self._reported: set[str] = set()
         self.replay_over = False
-        self.catalogs_asked = False  # the menu asked for the station catalogs once; a failure is not retried per key
+        self.catalogs_task: asyncio.Future[bool] | None = None  # the menu's one fetch of the station catalogs
         engine = AlertEngine(config.alerts, state_dir)
         self.poller = Poller(
             source,
@@ -172,18 +172,18 @@ class EyewallApp(App[None]):
         return health(self.feed_statuses(), self.replay_status(), self.glyphs)
 
     def top_bar_extras(self) -> list[tuple[str, str | None]]:
-        """What the top bar shows beside the breadcrumb when there is room, most important first: the replay time, the
-        alert count, the idle marker."""
+        """What the top bar shows beside the breadcrumb when there is room, most important first: the alert
+        count, the idle marker, the replay time."""
         extras: list[tuple[str, str | None]] = []
-        replay = self.replay_status()
-        if replay is not None:
-            when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")
-            extras.append((when, None))
         if self.alert_log:
             count = len(self.alert_log)
             extras.append((f"{count} alert" + ("" if count == 1 else "s"), "app:alerts"))
         if self.poller.away:
             extras.append(("idle", None))
+        replay = self.replay_status()
+        if replay is not None:  # the clock is the first to go when the bar is tight
+            when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")
+            extras.append((when, None))
         return extras
 
     def on_descendant_focus(self) -> None:
@@ -677,7 +677,10 @@ class EyewallApp(App[None]):
         if action == nav.BACK:
             return self._can_go_back()
         if action == nav.QUIT:
-            return len(self.screen_stack) == 1  # the first screen only; Ctrl+Q quits from anywhere
+            if isinstance(self.screen, TooSmallScreen):
+                return True  # nothing else works there, so q must
+            # The first screen only, and not inside its full-screen map, where Esc is the way out.
+            return len(self.screen_stack) == 1 and not self._can_go_back()
         if action == "command_palette":
             return not isinstance(self.screen, SearchScreen)  # there Ctrl+P pins the station, as the search says
         return True

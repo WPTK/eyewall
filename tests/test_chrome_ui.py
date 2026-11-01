@@ -234,3 +234,81 @@ async def test_the_palette_hides_replay_commands_on_a_live_source() -> None:
         await pilot.pause(0.6)
         text = "\n".join(s.text for s in app.screen._compositor.render_strips())
         assert "Replay slower" not in text
+
+
+# ---- review follow-ups ------------------------------------------------------------------------------------------
+
+
+async def test_a_cancelled_search_does_not_cancel_the_catalog_fetch() -> None:
+    import asyncio
+
+    from eyewall.ui.nav import EyewallCommands
+
+    app = scripted_app()
+    async with running(app, (120, 30)):
+        calls: list[int] = []
+        finished: list[int] = []
+
+        async def slow() -> bool:
+            calls.append(1)
+            await asyncio.sleep(0.3)
+            finished.append(1)
+            return False
+
+        app.ensure_catalogs = slow  # type: ignore[method-assign]
+        app.store.stations.clear()
+        provider = EyewallCommands(app.screen, None)
+
+        async def drain(query: str) -> None:
+            async for _ in provider.search(query):
+                pass
+
+        first = asyncio.ensure_future(drain("41"))
+        await asyncio.sleep(0.05)
+        first.cancel()  # the next keystroke
+        await drain("410")
+        assert calls == [1] and finished == [1]  # one fetch, run to the end
+
+
+async def test_the_alert_count_outranks_the_replay_clock_at_80_columns_on_a_deep_screen() -> None:
+    app = replay_app()
+    async with running(app, (80, 24)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter")
+        app.open_buoy(next(iter(app.store.stations)))
+        app.alert_log = [object()] * 3  # type: ignore[list-item]
+        await settle(pilot)
+        app._for_screens("refresh_status")
+        await settle(pilot)
+        assert isinstance(app.screen, BuoyDetailScreen)
+        assert "3 alerts" in top(app)
+
+
+async def test_q_quits_from_the_too_small_screen() -> None:
+    app = replay_app()
+    async with running(app, (40, 12)) as pilot:
+        await settle(pilot)
+        assert "q quit" in "\n".join(s.text for s in app.screen._compositor.render_strips())
+        await press(pilot, "q")
+        assert app._exit
+
+
+async def test_the_palette_offers_no_commands_while_a_dialog_is_open() -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "D")
+        assert isinstance(app.screen, FeedsScreen)
+        await press(pilot, "ctrl+p")
+        await pilot.pause(0.6)
+        text = "\n".join(s.text for s in app.screen._compositor.render_strips())
+        assert "Open the watchlist" not in text and "Go to the map" not in text
+
+
+async def test_q_does_nothing_inside_the_full_screen_map_and_the_footer_agrees() -> None:
+    app = replay_app()
+    async with running(app, (140, 45)) as pilot:
+        await press(pilot, "M")
+        assert "q quit" not in bottom(app)
+        await press(pilot, "q")
+        assert not app._exit
