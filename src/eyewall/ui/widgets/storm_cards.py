@@ -25,7 +25,7 @@ def storm_mark(view: View) -> str:
     return (ASCII_GLYPHS if view.ascii else UNICODE_GLYPHS).center
 
 
-def _stale_line(state: StormState, view: View, width: int, action: str) -> list[Line]:
+def age_line(state: StormState, view: View, width: int, action: str) -> list[Line]:
     """`Updated 12m ago.`, with the stale mark and the word when the advisory is old."""
     _age, old = advisory_age(state.storm, view.now)
     old = old or view.storms_old  # the feed itself has stopped: what is shown is the last it said
@@ -67,7 +67,7 @@ def card(state: StormState, view: View, width: int, *, selected: bool, lead: boo
         size = storm_words.size_sentence(state, view.preset)
         if size is not None:
             lines += wrapped(size.text, width, prefix="  ", action=action)
-    lines += _stale_line(state, view, width, action)
+    lines += age_line(state, view, width, action)
     nxt = storm_words.next_advisory(state)
     if nxt is not None:
         lines += wrapped(nxt.text, width, style=DIM, prefix="  ", action=action)
@@ -145,4 +145,4 @@ def _position(view: View) -> int:
     return 1 + next((i for i, s in enumerate(view.states) if s is view.chosen), 0)
 
 
-__all__ = ["card", "card_blocks", "strip_line"]
+__all__ = ["age_line", "card", "card_blocks", "strip_line"]

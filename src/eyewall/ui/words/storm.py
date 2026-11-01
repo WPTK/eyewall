@@ -16,6 +16,7 @@ from eyewall.models.advisory import PublicAdvisory
 from eyewall.models.forecast import ForecastAdvisory, ForecastFix
 from eyewall.models.storm import Classification, Storm
 from eyewall.models.watches import WatchWarningArea
+from eyewall.models.wind import WindProbabilities
 from eyewall.palette import Category, WatchWarning, category_for_knots
 from eyewall.state.store import StormState
 from eyewall.ui.format import BASIN_NAMES, advisory_age, collapse
@@ -180,8 +181,8 @@ def storm_lead(state: StormState, preset: Preset) -> Words:
     return Words(f"{head}{',' if category else ''} is {' and '.join(clauses)}.", tuple(sources))
 
 
-def storm_wind(state: StormState, preset: Preset, *, with_knots: bool = False) -> Words | None:
-    """`Maximum sustained winds are 140 mph.` With `with_knots`, knots follow in brackets."""
+def wind_value(state: StormState, preset: Preset, *, with_knots: bool = False) -> Words | None:
+    """`140 mph`; with `with_knots`, knots follow in brackets (`140 mph (120 kt)`). None when no wind is known."""
     storm, public = state.storm, current_public(state)
     mph = public.summary.max_wind_mph if public is not None else None
     kt = storm.intensity_kt
@@ -200,7 +201,35 @@ def storm_wind(state: StormState, preset: Preset, *, with_knots: bool = False) -
         return None
     if with_knots and preset.wind != "kt" and kt is not None:
         text += f" ({round(kt)} kt)"
-    return Words(f"Maximum sustained winds are {text}.", tuple(sources))
+    return Words(text, tuple(sources))
+
+
+def storm_wind(state: StormState, preset: Preset, *, with_knots: bool = False) -> Words | None:
+    """`Maximum sustained winds are 140 mph.` With `with_knots`, knots follow in brackets."""
+    value = wind_value(state, preset, with_knots=with_knots)
+    return None if value is None else Words(f"Maximum sustained winds are {value.text}.", value.sources)
+
+
+def where_lines(state: StormState, preset: Preset) -> list[Words]:
+    """`695 mi SW of Bermuda`: the places NHC names in the advisory, nearest first (two at most)."""
+    public = current_public(state)
+    abouts = parse_abouts(public.summary.about)[:2] if public is not None else []
+    return [
+        Words(
+            f"{distance_text(preset, mi=a.miles, km=a.km)} {a.direction} of {a.place}",
+            (f"{_BASE}.public.summary.about[{index}]",),
+        )
+        for index, a in abouts
+    ]
+
+
+def moving_text(state: StormState, preset: Preset) -> Words | None:
+    """`northwest at 10 mph`-style movement as the lead says it (`NW at 10 mph`, `nearly stationary`)."""
+    moving = _movement(state, preset)
+    if moving is None:
+        return None
+    text = moving[0].removeprefix("moving ")
+    return Words(text, tuple(moving[1]))
 
 
 def updated(storm: Storm, now: datetime) -> Words:
@@ -354,6 +383,11 @@ def _reach(preset: Preset, nm: int | None) -> str:
     return distance_text(preset, nm=nm) if nm is not None else ""
 
 
+def _threshold(preset: Preset, kt: int) -> str:
+    value = kt if preset.wind == "kt" else _THRESHOLDS[kt].get(preset.wind) or round5(convert(kt, "kt", preset.wind))
+    return f"{value}+ {LABELS[preset.wind]}"
+
+
 def size_sentence(state: StormState, preset: Preset) -> Words | None:
     """`Tropical-storm-force winds (39+ mph) reach up to 140 mi from the centre; hurricane-force (74+ mph) to 45 mi.`
 
@@ -363,20 +397,14 @@ def size_sentence(state: StormState, preset: Preset) -> Words | None:
     if tcm is None or tcm.radii.kt34 is None or tcm.radii.kt34.largest is None:
         return None
 
-    def threshold(kt: int) -> str:
-        value = (
-            kt if preset.wind == "kt" else _THRESHOLDS[kt].get(preset.wind) or round5(convert(kt, "kt", preset.wind))
-        )
-        return f"{value}+ {LABELS[preset.wind]}"
-
     sources = [f"{_BASE}.forecast.radii.kt34"]
     text = (
-        f"Tropical-storm-force winds ({threshold(34)}) reach up to {_reach(preset, tcm.radii.kt34.largest)} "
+        f"Tropical-storm-force winds ({_threshold(preset, 34)}) reach up to {_reach(preset, tcm.radii.kt34.largest)} "
         "from the centre"
     )
     hurricane = tcm.radii.kt64
     if hurricane is not None and hurricane.largest:
-        text += f"; hurricane-force ({threshold(64)}) to {_reach(preset, hurricane.largest)}"
+        text += f"; hurricane-force ({_threshold(preset, 64)}) to {_reach(preset, hurricane.largest)}"
         sources.append(f"{_BASE}.forecast.radii.kt64")
     return Words(text + ".", tuple(sources))
 
@@ -439,3 +467,55 @@ def strongest(state: StormState, preset: Preset, tz: tzinfo | None) -> Words | N
     if last_is_peak:
         return Words(f"{head}, strengthening through the forecast.", tuple(sources))
     return Words(f"{head}, then {'weakening' if last_kt < peak_kt - _HOLD_KT else 'holding'}.", tuple(sources))
+
+
+# ------------------------------------------------------------------------------------------------------ wind chances
+
+
+def current_chances(state: StormState) -> WindProbabilities | None:
+    """The wind probability table, when its advisory number matches the feed's (the same guard as the forecast)."""
+    pws, number = state.advisories.wind_probabilities, state.storm.adv_num
+    if pws is None:
+        return None
+    if number is None or pws.adv_num is None or pws.adv_num.number == number.number:
+        return pws
+    return None
+
+
+def wind_chances(state: StormState, preset: Preset, *, limit: int = 3) -> Words | None:
+    """`Chance of tropical-storm-force wind (39+ mph) within 5 days: Bermuda 46%, Cape Hatteras 31%, Nassau 9%.`
+
+    The places with the best chance first, the percentages as NOAA gave them; None when the table is missing, not for
+    this advisory, or every place is under one percent.
+    """
+    pws = current_chances(state)
+    if pws is None or not pws.forecast_hours:
+        return None
+    found: list[tuple[int, str]] = []
+    for row in pws.rows:
+        if row.threshold_kt != 34:
+            continue
+        last = next((c.cumulative for c in reversed(row.cells) if c is not None), None)
+        if last:
+            found.append((last, row.location.title()))
+    if not found:
+        return None
+    found.sort(key=lambda item: (-item[0], item[1]))
+    days = max(1, round(max(pws.forecast_hours) / 24))
+    top = ", ".join(f"{name} {percent}%" for percent, name in found[:limit])
+    span = f"{days} day" if days == 1 else f"{days} days"
+    return Words(
+        f"Chance of tropical-storm-force wind ({_threshold(preset, 34)}) within {span}: {top}.",
+        (f"{_BASE}.wind_probabilities.rows",),
+    )
+
+
+def changes_this_advisory(state: StormState) -> list[Words]:
+    """The lines NHC lists under `Changes with this advisory`, as it wrote them."""
+    public = current_public(state)
+    if public is None:
+        return []
+    return [
+        Words(collapse(change), (f"{_BASE}.public.watches_warnings.changes[{i}]",))
+        for i, change in enumerate(public.watches_warnings.changes)
+    ]
