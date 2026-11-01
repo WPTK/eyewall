@@ -4,6 +4,7 @@ import json
 import re
 import os
 import select
+import signal
 import sys
 import termios
 import time
@@ -25,6 +26,14 @@ sys.stdout.write("\x1b[2J\x1b[H\x1b[?1000h\x1b[?1006h")
 sys.stdout.write(f"RAWPROBE cols={cols} rows={rows}\r\n")
 sys.stdout.flush()
 w({"event": "ready", "cols": cols, "rows": rows})
+
+
+def winch(*_a):
+    c, r = os.get_terminal_size()
+    w({"event": "resize", "cols": c, "rows": r})
+
+
+signal.signal(signal.SIGWINCH, winch)
 end = time.time() + 30
 rel = 0
 acc = b""

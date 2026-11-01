@@ -3,9 +3,9 @@
 . "$(dirname "$0")/common.sh"
 PY="$(readlink -f "$HOME/s4venv/bin/python")"
 CLICK="$(command -v cliclick)"
-clients_path=(/opt/hca/hosted-compute-agent /opt/hca/start_hca.sh /usr/bin/osascript /bin/bash /bin/sh /usr/bin/python3 "$PY" "$CLICK" /usr/sbin/screencapture \
+clients_path=(/System/Library/CoreServices/RemoteManagement/ScreensharingAgent.bundle/Contents/MacOS/ScreensharingAgent /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/MacOS/ARDAgent /usr/sbin/screensharingd /opt/hca/hosted-compute-agent /opt/hca/start_hca.sh /usr/bin/osascript /bin/bash /bin/sh /usr/bin/python3 "$PY" "$CLICK" /usr/sbin/screencapture \
   /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal /Applications/iTerm.app/Contents/MacOS/iTerm2)
-clients_bundle=(com.apple.Terminal com.googlecode.iterm2 com.apple.systemevents)
+clients_bundle=(com.apple.Terminal com.googlecode.iterm2 com.apple.systemevents com.apple.screensharing.agent com.apple.RemoteDesktopAgent com.apple.screensharing)
 for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
   echo "== writing $db"
   for svc in kTCCServiceAccessibility kTCCServiceScreenCapture kTCCServicePostEvent kTCCServiceListenEvent; do

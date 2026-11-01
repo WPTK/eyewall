@@ -200,9 +200,10 @@ def main():
     if not ready:
         shot("00_launch_failed")
         return
-    cols, rows = ready[0]["cols"], ready[0]["rows"]
-    time.sleep(1.5)
+    time.sleep(3.0)
     activate()
+    sz = [e for e in jl(LOGR) if "cols" in e][-1]
+    cols, rows = sz["cols"], sz["rows"]
     wid, b = window()
     step("find window id/bounds via Quartz", bool(wid), wid=wid, bounds=b)
     if not wid:
@@ -275,6 +276,9 @@ def main():
     lay = app_ready[0]
     time.sleep(1)
     wid, b = window()
+    off = (geo.dx, geo.dy)
+    geo = Geo(b, lay["size"][0], lay["size"][1])
+    geo.dx, geo.dy = off
     activate()
     shot("02_app_initial")
 
@@ -311,8 +315,10 @@ def main():
         x, y = geo.px(c0, r0)
         n = len(jl(LOGA))
         inject_click(be, x, y)
-        got = wait_for(lambda: [e for e in jl(LOGA)[n:] if e.get("kind") == "list_selected"], 5)
-        step(f"click on list row via {be}", bool(got), intended_cell=[c0, r0], selected=got[0]["item"] if got else None)
+        got = wait_for(lambda: [e for e in jl(LOGA)[n:] if e.get("kind") in ("list_selected", "list_highlighted")], 5)
+        md = [(e["x"], e["y"]) for e in jl(LOGA)[n:] if e.get("kind") == "mouse_down"]
+        step(f"click on list row via {be}", bool(got), intended_cell=[c0, r0], app_saw_mouse_down=md,
+             events=[(e["kind"], e["item"]) for e in got or []])
         if got:
             break
 

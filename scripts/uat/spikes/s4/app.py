@@ -30,7 +30,7 @@ class S4(App):
         yield Label("label=ready", id="status")
         yield Button("Click me", id="btn")
         yield Label("count=0", id="counter")
-        yield ListView(*[ListItem(Label(f"item-{c}")) for c in "ABCDE"], id="lst")
+        yield ListView(*[ListItem(Label(f"item-{c}"), name=f"item-{c}") for c in "ABCDE"], id="lst")
         yield Label("sel=none", id="sel")
 
     def on_mount(self) -> None:
@@ -62,8 +62,11 @@ class S4(App):
         self.query_one("#counter", Label).update(f"count={self.count}")
         emit("button", count=self.count)
 
+    def on_list_view_highlighted(self, event) -> None:
+        emit("list_highlighted", item=event.item.name if event.item else None)
+
     def on_list_view_selected(self, event) -> None:
-        t = str(event.item.query_one(Label).renderable)
+        t = event.item.name
         self.query_one("#sel", Label).update(f"sel={t}")
         emit("list_selected", item=t)
 
