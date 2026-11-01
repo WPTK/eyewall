@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import importlib.resources
 import sys
 from collections.abc import Sequence
@@ -187,4 +188,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         build_parser().error("--until needs --headless")
     if args.headless:
         return _headless(args, config)
+    if warnings and sys.stdin.isatty() and sys.stderr.isatty():
+        # The full-screen app covers stderr at once, and the settings behind these warnings are in effect as defaults.
+        with contextlib.suppress(EOFError):
+            input("eyewall: press Enter to start with these settings ")
     return _run_app(args, config, loaded)

@@ -19,7 +19,7 @@ from eyewall.models.forecast import ForecastGis
 from eyewall.models.graphics import FloaterProduct, GraphicLink
 from eyewall.models.obs import LatestObservation, Observation, ObservationSeries, Station, TideSeries, TideStation
 from eyewall.models.outlook import Outlook
-from eyewall.models.storm import CurrentStorms, Storm
+from eyewall.models.storm import AdvNum, CurrentStorms, Storm
 from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.models.wind import WindRadiiGis
@@ -126,12 +126,14 @@ class Store:
                 events += ev.watch_warning_events(state.storm, previous, advisories, now)
                 events += ev.discussion_events(state.storm, previous, advisories, now)
             changes["advisories"] = advisories
-            # The cone and the wind radii belong to one advisory; never show the previous advisory's next to this text.
-            current = None if advisories.forecast is None else advisories.forecast.adv_num
-            if current is not None:
-                if state.forecast_gis is not None and state.forecast_gis.adv_num not in (None, current):
+            # The cone and the wind radii belong to one advisory; never show an older advisory's next to newer text.
+            # Judged by base number against the newest product, so a retry that merges in the previous forecast, or an
+            # intermediate advisory (GIS 30A beside forecast 30), does not throw away a current cone.
+            newest = ev.fetched_adv(advisories)
+            if newest is not None:
+                if state.forecast_gis is not None and _older(state.forecast_gis.adv_num, newest):
                     changes["forecast_gis"] = None
-                if state.radii_gis is not None and state.radii_gis.adv_num not in (None, current):
+                if state.radii_gis is not None and _older(state.radii_gis.adv_num, newest):
                     changes["radii_gis"] = None
         if forecast_gis is not None:
             changes["forecast_gis"] = forecast_gis
@@ -299,6 +301,11 @@ def _is_older(new: AdvisorySet, old: AdvisorySet) -> bool:
     return earlier and not later
 
 
+def _older(adv_num: AdvNum | None, newest: AdvNum) -> bool:
+    """True when a product's advisory number is from an earlier advisory than `newest`; the suffix does not count."""
+    return adv_num is not None and adv_num.number < newest.number
+
+
 def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:
     """A product that did not come back (tgftp lags one at a time) keeps the previous one instead of wiping it."""
     return AdvisorySet(
@@ -340,17 +347,18 @@ def track_fixes(state: StormState, now: datetime | None = None) -> list[TrackFix
 def track_from(state: StormState, center: LatLon, now: datetime | None) -> tuple[LatLon, list[TrackFix]]:
     """Where the storm is at `now` and the forecast fixes still ahead of it, hours counted from now.
 
-    The center is the position at the advisory time. Once `now` is later, the storm is placed by interpolating along
-    the center and the fixes already passed, so the path from here on does not cut across the real track. When every
-    fix is past the storm sits at the last one with nothing ahead (an ETA of 0, not a dropped station). Without `now`
-    the center and `track_fixes(state)` are returned unchanged.
+    The center is the position at the storm's last update. Once `now` is later, the storm is placed by interpolating
+    along the center and the fixes already passed, so the path from here on does not cut across the real track.
+    When every fix is past the storm sits at the last one with nothing ahead (an ETA of 0, not a dropped station).
+    Without `now` the center and `track_fixes(state)` are returned unchanged.
     """
     ahead = track_fixes(state, now)
     if now is None:
         return center, ahead
     tcm = state.advisories.forecast
     if tcm is not None:
-        origin = tcm.issued
+        # The center is the feed's position, valid at its last update, which can be later than the TCM that is held.
+        origin = max(tcm.issued, state.storm.last_update or tcm.issued)
         stamped = [(f.valid, (f.lat, f.lon)) for f in tcm.fixes if f.lat is not None and f.lon is not None]
     elif state.forecast_gis is not None and state.storm.last_update is not None:
         origin = state.storm.last_update

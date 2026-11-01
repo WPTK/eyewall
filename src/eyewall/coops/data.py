@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from eyewall.models.obs import Parsed, Prediction, TidePressure, TideWind, WaterLevelReading
+from eyewall.providers.base import ParseError
 
 DATAGETTER_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 APPLICATION = "eyewall"
@@ -105,10 +106,10 @@ def _records[T](
 ) -> Parsed[T]:
     try:
         payload = json.loads(text)
-    except ValueError:
-        return Parsed(message="invalid CO-OPS JSON")
+    except ValueError as exc:  # an HTML page or a cut-off body is not an answer: raise, so no caller stores it as one
+        raise ParseError("invalid CO-OPS JSON") from exc
     if not isinstance(payload, dict):
-        return Parsed(message="unexpected CO-OPS payload")
+        raise ParseError("unexpected CO-OPS payload")
     error = payload.get("error")
     if isinstance(error, dict):
         return Parsed(message=str(error.get("message") or "CO-OPS reported an error").strip())

@@ -5,7 +5,8 @@ the parsers knowing about it:
 
 - A GET whose URL is cached is sent with the saved `ETag` / `Last-Modified` as validators. A 304 comes back to the
   caller as the cached 200, so a feed that has not changed costs a header exchange and no body.
-- A 2xx answer replaces the cached copy.
+- A 2xx answer replaces the cached copy, unless it is an HTML page where the copy is not (a 200 maintenance notice).
+  Writing also trims the oldest entries once the cache passes `MAX_TOTAL_BYTES`.
 - When the network fails (no connection, a timeout, a loss during the body) or the server answers 429 or 5xx, and a
   copy exists, the caller gets the copy and the current `StaleMarker` is set, so the live source can say the feed is
   stale. A 429 or 5xx also records the status and the server's Retry-After on the marker, so the poller can back off.
@@ -39,6 +40,8 @@ from eyewall.net import MAX_BYTES_EXTENSION, FetchError, HttpError, RateLimited,
 
 log = logging.getLogger(__name__)
 MAX_BODY_BYTES = 32 * 1024 * 1024
+MAX_TOTAL_BYTES = 256 * 1024 * 1024  # the whole cache; the oldest entries go first
+TRIM_EVERY_BYTES = 16 * 1024 * 1024  # written since the last trim: a long session pays for what it adds
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "content-encoding")
 _FAILURE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
@@ -68,6 +71,7 @@ class Cache:
 
     def __init__(self, directory: Path | None = None) -> None:
         self.directory = directory if directory is not None else default_cache_dir()
+        self._written = 0
 
     def _paths(self, url: str) -> tuple[Path, Path]:
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
@@ -118,6 +122,32 @@ class Cache:
             self._write(meta_path, json.dumps(meta).encode("utf-8"))
         except OSError:
             return
+        self._written += len(body)
+        if self._written >= TRIM_EVERY_BYTES:
+            self._written = 0
+            self.trim(MAX_TOTAL_BYTES)
+
+    def trim(self, max_bytes: int) -> int:
+        """Delete the least recently refreshed entries until the bodies fit in `max_bytes`. Returns how many went."""
+        entries: list[tuple[float, int, Path]] = []
+        try:
+            for body_path in self.directory.glob("*/*.bin"):
+                stat = body_path.stat()
+                meta = body_path.with_suffix(".json")
+                entries.append((meta.stat().st_mtime if meta.exists() else 0.0, stat.st_size, body_path))
+        except OSError:
+            return 0
+        total = sum(size for _, size, _ in entries)
+        removed = 0
+        for _, size, body_path in sorted(entries):
+            if total <= max_bytes:
+                break
+            for path in (body_path.with_suffix(".json"), body_path):
+                with contextlib.suppress(OSError):
+                    path.unlink()
+            total -= size
+            removed += 1
+        return removed
 
     @staticmethod
     def _write(path: Path, data: bytes) -> None:
@@ -168,6 +198,17 @@ class Cache:
         except OSError:
             pass
         return removed
+
+
+def _is_page_over_data(entry: CacheEntry | None, response: httpx.Response) -> bool:
+    """True when a 2xx answer is an HTML page where the cached copy is something else: a 200 maintenance notice."""
+    if entry is None:
+        return False
+
+    def html(content_type: str | None) -> bool:
+        return (content_type or "").split(";")[0].strip().lower() in {"text/html", "application/xhtml+xml"}
+
+    return html(response.headers.get("content-type")) and not html(entry.headers.get("content-type"))
 
 
 @dataclass(slots=True)
@@ -310,7 +351,7 @@ class CachingTransport(httpx.AsyncBaseTransport):
             if declared.isdigit() and int(declared) > limit:
                 return response  # too big to cache or for this caller: pass it on untouched, nothing is read here
             try:
-                return await self._cache_or_pass(request, response, url, limit)
+                return await self._cache_or_pass(request, response, url, limit, entry)
             except httpx.TransportError:  # lost during the body: the copy answers
                 await response.aclose()
                 served = None if entry is None else await self._stale(request, entry)
@@ -325,7 +366,7 @@ class CachingTransport(httpx.AsyncBaseTransport):
         return response
 
     async def _cache_or_pass(
-        self, request: httpx.Request, response: httpx.Response, url: str, limit: int
+        self, request: httpx.Request, response: httpx.Response, url: str, limit: int, entry: CacheEntry | None
     ) -> httpx.Response:
         """Read a 2xx body into the cache, unless it passes `limit` (no declared length, then too much arrived): hand
         it on as a stream, uncached, so the transport never holds more than the limit and the caller decides."""
@@ -344,7 +385,8 @@ class CachingTransport(httpx.AsyncBaseTransport):
                 )
         await response.aclose()
         raw = b"".join(chunks)
-        await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
+        if not _is_page_over_data(entry, response):  # a maintenance page must not replace the good copy
+            await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
         headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
         headers.append(("content-length", str(len(raw))))
         return httpx.Response(response.status_code, headers=headers, stream=httpx.ByteStream(raw), request=request)

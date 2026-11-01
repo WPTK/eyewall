@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import os
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -10,6 +11,7 @@ import pytest
 
 from eyewall.clock import VirtualClock
 from eyewall.net import FetchError, TooLarge, fetch_bytes
+from eyewall.providers.base import ParseError
 from eyewall.sources import bundle, protocol
 from eyewall.sources.bundle import BundleError, resolve_bundle
 from eyewall.sources.cache import Cache, CachingTransport, watch_stale
@@ -330,6 +332,46 @@ async def test_a_refused_prediction_request_leaves_the_water_level_alone(tmp_pat
     assert series.predictions.message
 
 
+class JunkTides(Tides):
+    """The water level and the predictions come back as an HTML page with status 200."""
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("product") in ("water_level", "predictions"):
+            self.urls.append(str(request.url))
+            return httpx.Response(200, content=b"<html>maintenance</html>", request=request)
+        return await super().handle_async_request(request)
+
+
+async def test_a_junk_200_for_the_water_level_is_a_failure_not_an_empty_gauge(tmp_path):
+    with pytest.raises(ParseError):
+        await _gauge(tmp_path, JunkTides(predictions=True))
+
+
+async def test_a_junk_200_for_predictions_is_not_remembered_for_the_day(tmp_path):
+    from eyewall.models.obs import TideStation
+
+    feeds = Tides(predictions=True)
+    source = LiveSource(cache_dir=tmp_path, transport=feeds, clock=VirtualClock(NOW))
+    gauge = TideStation("8651370", "Duck", 36.18, -75.75)
+    try:
+        real = source.coops
+        original = real._get
+        flip = {"junk": True}
+
+        async def _get(params):
+            if flip["junk"] and params.get("product") == "predictions":
+                return "<html>x</html>"
+            return await original(params)
+
+        real._get = _get  # type: ignore[method-assign]
+        first = await source.coops_series(gauge, "MLLW")
+        assert first.predictions.items == () and first.water_level.items
+        flip["junk"] = False
+        assert (await source.coops_series(gauge, "MLLW")).predictions.items  # asked again at once, not at midnight
+    finally:
+        await source.aclose()
+
+
 async def test_series_requests_are_conditional_once_the_first_answer_is_cached(tmp_path):
     seen: list[httpx.Headers] = []
 
@@ -424,3 +466,44 @@ async def test_a_streamed_body_over_the_cap_with_no_declared_length_passes_throu
     async with client:
         assert len((await client.get("https://example.test/c")).content) == 3000
     assert cache.load("https://example.test/c") is None
+
+
+async def test_an_html_page_with_status_200_does_not_replace_the_cached_data(tmp_path):
+    class Page(httpx.AsyncBaseTransport):
+        html = False
+
+        async def handle_async_request(self, request):
+            kind = "text/html" if self.html else "application/json"
+            return httpx.Response(
+                200, headers={"Content-Type": kind}, content=b"<html>down</html>" if self.html else b"{}"
+            )
+
+    origin = Page()
+    cache = Cache(tmp_path)
+    transport = CachingTransport(cache, origin)
+    await fetch(transport)
+    origin.html = True
+    assert (await fetch(transport)).content == b"<html>down</html>"  # the caller still sees the answer
+    assert cache.load(URL).body == b"{}"  # but the copy that serves an outage is the good one
+
+
+def test_trim_deletes_the_least_recently_refreshed_entries_first(tmp_path):
+    cache = Cache(tmp_path)
+    for n in range(4):
+        cache.store(f"https://x/{n}", b"0123456789", httpx.Headers(), NOW)
+        os.utime(cache._paths(f"https://x/{n}")[0], (n + 1, n + 1))
+    assert cache.trim(25) == 2
+    assert [cache.load(f"https://x/{n}") is not None for n in range(4)] == [False, False, True, True]
+
+
+def test_writing_past_the_threshold_trims_the_cache(tmp_path, monkeypatch):
+    from eyewall.sources import cache as cache_module
+
+    monkeypatch.setattr(cache_module, "TRIM_EVERY_BYTES", 15)
+    cache = Cache(tmp_path)
+    trims = []
+    monkeypatch.setattr(cache, "trim", lambda cap: trims.append(cap) or 0)
+    cache.store("https://x/a", b"0123456789", httpx.Headers(), NOW)
+    assert trims == []
+    cache.store("https://x/b", b"0123456789", httpx.Headers(), NOW)
+    assert trims == [cache_module.MAX_TOTAL_BYTES]
