@@ -465,3 +465,22 @@ async def test_fetch_image_does_not_retry_a_404_or_a_redirect_to_another_host() 
         with pytest.raises(ImageError, match="NOAA"):
             await fetch_image(client, "https://www.nhc.noaa.gov/away2.png", sleep=_no_sleep)
     assert gone.call_count == 1 and _SLEPT == []
+
+
+@respx.mock
+async def test_fetch_image_honours_an_http_date_retry_after() -> None:
+    from datetime import UTC, datetime, timedelta
+    from email.utils import format_datetime
+
+    _SLEPT.clear()
+    url = "https://www.nhc.noaa.gov/dated.png"
+    when = format_datetime(datetime.now(UTC) + timedelta(seconds=10), usegmt=True)
+    respx.get(url).mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": when}),
+            httpx.Response(200, content=png(Image.new("RGB", (2, 2)))),
+        ]
+    )
+    async with new_client() as client:
+        await fetch_image(client, url, sleep=_no_sleep)
+    assert 5.0 <= _SLEPT[0] <= 10.0

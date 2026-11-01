@@ -33,7 +33,17 @@ import httpx
 from PIL import Image as PILImage
 from PIL import ImageChops, ImageFilter, ImageOps
 
-from eyewall.net import MAX_BYTES_EXTENSION, HttpError, NetworkError, RateLimited, TooLarge
+from eyewall.net import (
+    MAX_BYTES_EXTENSION,
+    RETRIES,
+    HttpError,
+    NetworkError,
+    RateLimited,
+    TooLarge,
+    drain_body,
+    retry_after_seconds,
+    retry_delay,
+)
 from eyewall.render.canvas import Mode, Run, Style
 from eyewall.urls import is_noaa_url
 
@@ -86,29 +96,6 @@ def check_image_bytes(url: str, data: bytes, max_bytes: int = MAX_IMAGE_BYTES) -
 
 
 MAX_REDIRECTS = 5
-RETRIES = 2
-BACKOFF_SECONDS = 1.0
-MAX_RETRY_AFTER = 30.0
-ERROR_BODY_LIMIT = 64 * 1024
-
-
-def _retry_after(response: httpx.Response) -> float | None:
-    try:
-        return max(0.0, float(response.headers["Retry-After"]))
-    except (KeyError, ValueError):
-        return None
-
-
-async def _drain(response: httpx.Response) -> None:
-    """Read a small error body to its end so the connection goes back to the pool; a big one is dropped."""
-    size = 0
-    try:
-        async for chunk in response.aiter_bytes():
-            size += len(chunk)
-            if size > ERROR_BODY_LIMIT:
-                return
-    except httpx.TransportError:
-        return
 
 
 async def fetch_image(
@@ -137,15 +124,15 @@ async def fetch_image(
             ) as response:
                 status = response.status_code
                 if response.is_redirect and (location := response.headers.get("Location")):
-                    await _drain(response)
+                    await drain_body(response)
                     hops += 1
                     if hops > MAX_REDIRECTS:
                         raise ImageError(f"{url}: too many redirects")
                     url = urljoin(url, location)
                     continue
                 if not response.is_success:
-                    retry_after = _retry_after(response)
-                    await _drain(response)
+                    retry_after = retry_after_seconds(response)
+                    await drain_body(response)
                 else:
                     declared = response.headers.get("Content-Length", "")
                     if declared.isdigit() and int(declared) > max_bytes:
@@ -163,12 +150,12 @@ async def fetch_image(
         except httpx.TransportError as exc:
             if attempt >= RETRIES:
                 raise NetworkError(url, str(exc) or type(exc).__name__) from exc
-            await sleep(BACKOFF_SECONDS * 2**attempt)
+            await sleep(retry_delay(None, attempt))
             attempt += 1
             continue
         if (status != 429 and status < 500) or attempt >= RETRIES:
             raise RateLimited(url, retry_after) if status == 429 else HttpError(url, status)
-        await sleep(min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else BACKOFF_SECONDS * 2**attempt)
+        await sleep(retry_delay(retry_after, attempt))
         attempt += 1
 
 
