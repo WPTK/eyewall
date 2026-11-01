@@ -93,6 +93,7 @@ def storm_scene(state: StormState) -> L.StormScene:
                 ),
             )
     return L.StormScene(
+        id=storm.id,
         name=storm.name,
         center=center,
         best_track=best,
@@ -133,16 +134,16 @@ def _tide_mark(store: Store, gauge: TideStation, now: datetime) -> L.StationMark
     """A gauge colored by its own wind where it has an anemometer, dim when its newest water level is old."""
     series = store.tide_series.get(gauge.id)
     if series is None:
-        return L.StationMark(gauge.lat, gauge.lon, None, False, gauge.id)
+        return L.StationMark(gauge.lat, gauge.lon, None, False, gauge.id, gauge.name)
     age = tide_age(series, now)
     stale = age is None or age > TIDE_SILENT_AFTER
     wind = tide_wind(series, now)
-    return L.StationMark(gauge.lat, gauge.lon, None if wind is None else wind.speed_kt, stale, gauge.id)
+    return L.StationMark(gauge.lat, gauge.lon, None if wind is None else wind.speed_kt, stale, gauge.id, gauge.name)
 
 
 def _buoy_mark(store: Store, station: Station, now: datetime) -> L.StationMark:
     wind, stale = _wind_kt_of(store, station.id, now)
-    return L.StationMark(station.lat, station.lon, wind, stale, station.id)
+    return L.StationMark(station.lat, station.lon, wind, stale, station.id, station.name)
 
 
 def station_marks(

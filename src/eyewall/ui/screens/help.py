@@ -21,6 +21,7 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("1 2 3 a", "Atlantic, East Pacific, Central Pacific, all"),
             ("m  M", "map on or off; full-screen map"),
             ("+ -  arrows  c f", "zoom, pan, center on the storm, fit the storm"),
+            ("n  N  Enter", "map: next or previous storm, buoy or gauge; open it (or click it)"),
             ("l  b  g", "map layers; buoys; graphics"),
         ),
     ),

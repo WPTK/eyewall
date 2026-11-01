@@ -42,3 +42,11 @@ def rich_style(style: CanvasStyle) -> RichStyle:
         underline=style.underline or None,
         reverse=style.reverse or None,
     )
+
+
+def reverse_cell(strip: Strip, col: int) -> Strip:
+    """The strip with one cell in reverse video: the focus ring on a mark. Reverse survives `NO_COLOR`."""
+    before, cell, after = strip.divide([col, col + 1, strip.cell_length])
+    return Strip(
+        [*before, *(Segment(seg.text, (seg.style or PLAIN) + RichStyle(reverse=True)) for seg in cell), *after]
+    )

@@ -61,6 +61,8 @@ class DashboardScreen(Screen[None]):
         Binding("minus", "zoom_out", "Zoom out", show=False),
         Binding("c", "center", "Center storm", show=False),
         Binding("f", "fit", "Fit storm", show=False),
+        Binding("n", "mark(1)", "Next mark", show=False),
+        Binding("N", "mark(-1)", "Previous mark", show=False),
     ]
 
     def __init__(self) -> None:
@@ -258,3 +260,6 @@ class DashboardScreen(Screen[None]):
 
     def action_fit(self) -> None:
         self.map_view.fit()
+
+    def action_mark(self, step: int) -> None:
+        self.map_view.action_mark(step)

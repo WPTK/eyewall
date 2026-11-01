@@ -55,6 +55,7 @@ from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.small import TooSmallScreen, too_small
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
+from eyewall.ui.widgets.map_view import MapView
 from eyewall.units import PRESETS, Preset, next_preset
 
 log = logging.getLogger(__name__)
@@ -362,6 +363,30 @@ class EyewallApp(App[None]):
         ):
             return
         self.push_screen(BuoyDetailScreen(station_id))
+
+    def on_map_view_mark_opened(self, message: MapView.MarkOpened) -> None:
+        """A mark on the map was opened: a storm opens its detail, a buoy its page, a gauge is pinned (it has no page
+        of its own yet)."""
+        message.stop()
+        mark = message.mark
+        if mark.kind == "storm":
+            if mark.id in self.store.storms:
+                self.open_detail(mark.id)
+        elif mark.kind == "buoy":
+            self.open_buoy(mark.id)
+        elif not self._modal_open():
+            self.notify(self.gauge_summary(mark.id), timeout=6)  # pinning is a deliberate act, not a side effect
+
+    def gauge_summary(self, gauge_id: str) -> str:
+        """One line for a gauge clicked on the map: its name and newest water level."""
+        gauge = next((g for g in self.store.tide_stations if g.id.upper() == gauge_id.upper()), None)
+        head = f"Gauge {gauge_id}" + (f" {gauge.name}" if gauge is not None else "")
+        series = self.store.tide_series.get(gauge_id) or self.store.tide_series.get(gauge_id.upper())
+        latest = series.water_level.items[0] if series is not None and series.water_level.items else None
+        if latest is None or latest.level_ft is None:
+            return f"{head}: no water level yet."
+        level = self.preset.fmt_length(latest.level_ft, "ft")
+        return f"{head}: water level {level} above {series.datum if series is not None else 'datum'}."
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:
