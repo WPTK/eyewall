@@ -285,3 +285,29 @@ def test_a_stale_station_carries_a_word_and_a_glyph_so_colour_is_never_the_only_
     for ascii_, glyph in ((False, cue.glyph), (True, cue.ascii_glyph)):
         text = station_view.stale_text(None, ascii_, "No report for 3h.")  # type: ignore[arg-type]
         assert text.startswith(f"{glyph} {cue.word.capitalize()}:") and "No report for 3h." in text
+
+
+@pytest.mark.parametrize("size", SIZES, ids=IDS)
+async def test_the_station_page_has_a_clickable_follow_control_and_the_footer_says_follow(size) -> None:
+    app = replay_app()
+    async with running(app, size) as pilot:
+        await into_the_storm(pilot)
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
+        assert "f follow" in screen_text(app).splitlines()[-1]
+        assert "Not following" in flat(app)
+        await pilot.click("#station-follow", offset=(3, 0))
+        await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
+        await settle(pilot)
+        assert "Following this station" in flat(app)
+        await pilot.click("#station-follow", offset=(3, 0))
+        await wait_until(pilot, lambda: "41002" not in app.config.watchlist.ndbc)
+
+
+@pytest.mark.parametrize("size", SIZES, ids=IDS)
+async def test_the_list_footer_says_follow(size) -> None:
+    app = replay_app()
+    async with running(app, size) as pilot:
+        await into_the_storm(pilot)
+        await press(pilot, "enter", "b")
+        assert "f follow" in screen_text(app).splitlines()[-1]

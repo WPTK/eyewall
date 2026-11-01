@@ -371,6 +371,10 @@ class EyewallCommands(Provider):
             score = matcher.match(title)
             if score > 0:
                 yield Hit(score, matcher.highlight(title), command, text=title, help=help_text)
+        if self._blocked():
+            return
+        async for hit in StationCommands.station_hits(self.eye, query):
+            yield hit
 
 
 class StationCommands(Provider):
@@ -393,7 +397,12 @@ class StationCommands(Provider):
             yield DiscoveryHit(title, self._opener(kind, station_id), help="you follow this station")
 
     async def search(self, query: str) -> AsyncIterator[Hit]:
-        app = self.eye
+        async for hit in self.station_hits(self.eye, query):
+            yield hit
+
+    @staticmethod
+    async def station_hits(app: EyewallApp, query: str) -> AsyncIterator[Hit]:
+        """Stations whose name or number match: shared by `/` and the main menu (Ctrl+P)."""
         if len(query.strip()) < 2:
             return
         if not (app.store.stations and app.store.tide_stations):
@@ -404,7 +413,11 @@ class StationCommands(Provider):
         for rank, hit in enumerate(st.search_stations(app.store, query, limit=12)):
             title = f"{KIND_WORDS[hit.kind]} {hit.id} {' '.join(hit.name.split())}".strip()
             yield Hit(
-                max(0.05, 0.6 - rank * 0.01), title, self._opener(hit.kind, hit.id), text=title, help=hit.detail or None
+                max(0.05, 0.6 - rank * 0.01),
+                title,
+                lambda kind=hit.kind, sid=hit.id: app.open_station(kind, sid),
+                text=title,
+                help=hit.detail or None,
             )
 
 

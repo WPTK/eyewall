@@ -123,6 +123,14 @@ def test_truncated_or_corrupted_zips_parse_or_raise_parse_error(parse, name, dat
         parse(damaged)
 
 
+def test_a_zip_directory_with_an_unsupported_version_is_a_parse_error():
+    """Issue 124: one changed byte made zipfile raise NotImplementedError (zip file version 6.4)."""
+    original = gis_bytes("gtwo_20250919.zip")
+    damaged = original[:30421] + bytes([64]) + original[30422:]
+    with contextlib.suppress(ParseError):
+        two.parse_gtwo_zip(damaged)
+
+
 @SETTINGS
 @given(page=st.text(max_size=400))
 def test_graphics_pages_of_any_text_do_not_crash(page):

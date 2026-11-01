@@ -60,6 +60,16 @@ _READ_ERRORS = (
     RuntimeError,
 )
 
+_ZIP_OPEN_ERRORS = (
+    zipfile.BadZipFile,
+    NotImplementedError,
+    EOFError,
+    struct.error,
+    zlib.error,
+    OverflowError,
+    ValueError,
+    RuntimeError,
+)
 
 # The largest layer member read into memory. A real layer is well under 1 MB; the cap stops a zip bomb, and a layer
 # over it is dropped like any other unreadable layer.
@@ -85,7 +95,7 @@ class Feature:
 def _open_zip(data: bytes) -> zipfile.ZipFile:
     try:
         return zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile as exc:
+    except _ZIP_OPEN_ERRORS as exc:  # a damaged directory can raise more than BadZipFile
         raise ParseError(f"not a zip file: {exc}") from exc
 
 

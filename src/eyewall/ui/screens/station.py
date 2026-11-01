@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import cast
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.events import Resize
@@ -36,6 +37,14 @@ BUOY_CHARTS = ("pressure", "wind", "wave")
 GAUGE_CHARTS = ("level", "gwind", "gpressure")
 
 SMALL_HEIGHT = 30  # rows under which the lead drops the third trend and the extremes line
+
+
+class FollowLine(Static):
+    """The follow state in words, and a control: a click does what `f` does."""
+
+    async def on_click(self, event: events.Click) -> None:
+        event.stop()
+        await self.screen.run_action("follow")
 
 
 class StationScreen(ChromeScreen):
@@ -66,6 +75,7 @@ class StationScreen(ChromeScreen):
     def compose(self) -> ComposeResult:
         yield TopBar()
         yield Static("", id="station-lead")
+        yield FollowLine("", id="station-follow")
         yield Static("", id="station-about")
         with VerticalScroll(id="station-charts"):
             for name in (*BUOY_CHARTS, *GAUGE_CHARTS):
@@ -246,18 +256,19 @@ class StationScreen(ChromeScreen):
         if not self.is_attached:
             return
         paragraphs = self._lead()
-        follow = (
-            "You follow this station. Press f to stop."
-            if self._followed()
-            else "You do not follow this station. Press f to follow it."
-        )
-        paragraphs.append((follow, DIM))
         lead = Text()
         for index, (text, style) in enumerate(paragraphs):
             if index:
                 lead.append("\n")
             lead.append(text, style=style)
         self.query_one("#station-lead", Static).update(lead)
+        mark = "*" if self._followed() else "-"
+        words_ = (
+            "Following this station. Click here or press f to stop."
+            if self._followed()
+            else "Not following. Click here or press f to follow this station."
+        )
+        self.query_one("#station-follow", Static).update(Text(f"{mark} {words_}", style="bold underline"))
         about = self.query_one("#station-about", Static)
         about.display = self.about
         if self.about:

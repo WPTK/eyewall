@@ -160,7 +160,7 @@ StationList > .option-list--option-hover-highlighted {
     background: $panel-lighten-1;
 }
 
-#station-lead {
+#station-lead, #station-follow {
     height: auto;
     padding: 0 1;
 }

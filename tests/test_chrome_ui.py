@@ -206,7 +206,7 @@ async def test_the_palette_lists_every_screen_and_action_before_anything_is_type
         assert "Change theme" not in text  # Textual's own commands are not offered
 
 
-async def test_the_menu_finds_a_storm_and_the_slash_menu_a_station() -> None:
+async def test_the_menu_finds_a_storm_and_a_station() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
@@ -214,6 +214,17 @@ async def test_the_menu_finds_a_storm_and_the_slash_menu_a_station() -> None:
         await pilot.press("enter")
         await wait_until(pilot, lambda: isinstance(app.screen, StormScreen))
         await press(pilot, "escape")
+        station = next(iter(app.store.stations))
+        await palette(pilot, station)
+        await pilot.press("enter")
+        await wait_until(pilot, lambda: isinstance(app.screen, StationScreen))
+        assert app.screen.station_id == station.upper()  # type: ignore[attr-defined]
+
+
+async def test_the_slash_menu_is_an_extra_that_finds_only_stations() -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
         station = next(iter(app.store.stations))
         await press(pilot, "slash")
         await pilot.pause(0.3)
