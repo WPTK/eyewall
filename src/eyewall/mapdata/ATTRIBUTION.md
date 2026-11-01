@@ -9,6 +9,9 @@ commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), at the 1:10 mill
 Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
 the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
 
+`places.bin` holds point features from the same mirror
+and commit (`ne_10m_populated_places_simple`), kept inside the same area and ordered by scalerank then population.
+
 | File | Content | Natural Earth source | Bytes |
 |---|---|---|---|
 | `coast.bin` | 10 m coastline with minor islands | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 1,220,538 |
@@ -18,8 +21,9 @@ the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-t
 | `coast_lo.bin` | coarse coastline for whole-basin views | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 305,705 |
 | `land_lo.bin` | coarse land polygons for whole-basin views | `ne_10m_land` | 293,949 |
 | `lakes_lo.bin` | coarse lakes for whole-basin views | `ne_10m_lakes` | 87,507 |
+| `places.bin` | populated places for map labels (scalerank 8 or better) | `ne_10m_populated_places_simple` | 69,138 |
 
-Total: 4,320,992 bytes. The format is described at the top of `scripts/build_mapdata.py`.
+Total: 4,390,130 bytes. The format is described at the top of `scripts/build_mapdata.py`.
 
 ## Rebuilding
 
@@ -33,3 +37,4 @@ SHA-256 digests:
 - `ne_10m_lakes`: `2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9`
 - `ne_10m_admin_0_boundary_lines_land`: `74d9c16229c095fde65943a9919e337682f044bcebccb120764f38edf3b70f4a`
 - `ne_10m_admin_1_states_provinces_lines`: `1a1f30ccaaf4cc9c4bde34266f0b8cbb955d3a4cf254b756912255f2ec7c75b6`
+- `ne_10m_populated_places_simple`: `fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f`

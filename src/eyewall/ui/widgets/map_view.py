@@ -53,6 +53,7 @@ LAYER_NAMES: dict[str, str] = {
     "buoys": "Buoys",
     "tide_gauges": "Tide gauges",
     "labels": "Storm and point labels",
+    "places": "Place names and scale bar",
     "station_labels": "Station labels",
 }
 
@@ -148,11 +149,16 @@ class MapView(Widget, can_focus=True):
 
     # ---- drawing ----------------------------------------------------------------------------------------------
 
+    def _distance_unit(self) -> str:
+        """The distance unit of the reader's units preset, for the scale bar."""
+        preset = getattr(self.app, "preset", None)
+        return preset.distance if preset is not None else "nm"
+
     def _build(self) -> list[Strip]:
         view = self._ensure_viewport()
         if view is None:
             return []
-        scene = replace(self.scene, cursor=self.cursor)
+        scene = replace(self.scene, cursor=self.cursor, distance_unit=self._distance_unit())
         canvas = render_map(view, scene, self.mode, self.options, DEFAULT_MAP_STYLE)
         return canvas_strips(canvas, view.cols)
 
