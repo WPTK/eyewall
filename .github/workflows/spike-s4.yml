@@ -1,8 +1,7 @@
 name: Spike S4 (macOS real input)
 
 on:
-  push:
-    branches: ['spike/s4-*']
+  workflow_dispatch:
 
 permissions:
   contents: read

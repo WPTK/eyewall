@@ -1,0 +1,53 @@
+name: Spike S4b (macOS click calibration, gestures, hidpi)
+
+on:
+  push:
+    branches: ['spike/s4-*']
+
+permissions:
+  contents: read
+
+jobs:
+  s4b:
+    name: ${{ matrix.os }} / ${{ matrix.term }} / ${{ matrix.variant }}${{ matrix.rep }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-15, macos-15-intel]
+        term: [Terminal, iTerm2]
+        variant: [std]
+        rep: [1, 2, 3]
+        include:
+          - {os: macos-26, term: Terminal, variant: hidpi, rep: 1}
+          - {os: macos-15, term: Terminal, variant: hidpi, rep: 1}
+          - {os: macos-15-intel, term: Terminal, variant: hidpi, rep: 1}
+          - {os: macos-26, term: iTerm2, variant: hidpi, rep: 1}
+    env:
+      S4: ${{ github.workspace }}/scripts/uat/spikes/s4
+      OUT: ${{ github.workspace }}/out
+      RUNS: '20'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install tools
+        run: bash "$S4/setup.sh" ${{ matrix.term == 'iTerm2' && 'iterm' || 'tcc' }}
+        continue-on-error: true
+      - name: Run
+        run: bash "$S4/method_b.sh" ${{ matrix.term }} ${{ matrix.variant }}
+        continue-on-error: true
+        timeout-minutes: 35
+      - name: Final screen
+        if: always()
+        run: screencapture -x "$OUT/final_screen.png" || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: s4b-${{ matrix.os }}-${{ matrix.term }}-${{ matrix.variant }}${{ matrix.rep }}
+          path: out/
+          if-no-files-found: warn
