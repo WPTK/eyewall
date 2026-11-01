@@ -424,3 +424,9 @@ async def test_a_streamed_body_over_the_cap_with_no_declared_length_passes_throu
     async with client:
         assert len((await client.get("https://example.test/c")).content) == 3000
     assert cache.load("https://example.test/c") is None
+
+
+def test_a_recording_manifest_that_is_not_utf8_is_a_bundle_error_not_a_traceback(tmp_path):
+    (tmp_path / bundle.MANIFEST).write_bytes(b"name = '\xff\xfe'\n")
+    with pytest.raises(BundleError):
+        bundle.read_manifest(tmp_path)

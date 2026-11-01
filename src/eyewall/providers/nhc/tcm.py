@@ -79,9 +79,12 @@ def split_kind_and_name(title: str) -> tuple[str, str | None]:
     """`HURRICANE ERIN` to (`HURRICANE`, `ERIN`); `Remnants Of Vance` to (`REMNANTS OF`, `Vance`).
 
     The kind comes back upper case whatever the product's case; the name keeps its case. A title that starts with no
-    known kind comes back whole as the kind, with no name.
+    known kind comes back whole as the kind, with no name. A trailing `Special` (a special advisory) is not part of
+    the name.
     """
     text = " ".join(title.split())
+    if text.upper().endswith(" SPECIAL"):  # `Hurricane Erin Special Advisory Number 12`
+        text = text[: -len(" SPECIAL")]
     upper = text.upper()
     for kind in _KINDS:
         if upper == kind:

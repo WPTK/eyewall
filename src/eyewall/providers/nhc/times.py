@@ -55,7 +55,7 @@ def parse_iso(text: object) -> datetime | None:
         return None
     try:
         return parse_utc(text)
-    except ValueError:
+    except (ValueError, OverflowError):
         return None
 
 
@@ -79,9 +79,10 @@ def parse_header_time(text: str) -> datetime | None:
         local = datetime(int(match["year"]), month, int(match["day"]), hour % 24, minute, tzinfo=UTC)
     except ValueError:
         return None
-    if hour == 24:
-        local += timedelta(days=1)
-    return local - timedelta(hours=offset)
+    try:
+        return local + timedelta(days=1 if hour == 24 else 0) - timedelta(hours=offset)
+    except OverflowError:
+        return None
 
 
 def resolve_day_time(day: int, hour: int, minute: int, reference: datetime) -> datetime | None:
