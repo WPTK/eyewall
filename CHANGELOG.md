@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.9.0] - 2026-11-01
+
+### Changed
+
+- **Breaking:** Replace the dashboard, its tabs and the detail, buoy, watchlist, search and outlook screens with a map-first main screen and four plain-language screens: Storm, NHC text, Buoys and gauges, and Station ([`112b873`](https://github.com/WPTK/eyewall/commit/112b873), [#121](https://github.com/WPTK/eyewall/pull/121); [`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- **Breaking:** Rebind the keys to one table: `Esc` goes back, `q` quits from the first screen only, `m` goes to the map, `f` follows a station instead of pinning it, and `w` is gone ([`8ceacab`](https://github.com/WPTK/eyewall/commit/8ceacab), [#120](https://github.com/WPTK/eyewall/pull/120); [`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Show the main screen as the map at every size, with a one-line storm summary at 80x24 and a column of storm cards, warnings, outlook areas and nearby stations from 100x30 ([`112b873`](https://github.com/WPTK/eyewall/commit/112b873), [#121](https://github.com/WPTK/eyewall/pull/121))
+- Open a storm, buoy or tide gauge from a click on the map, a card or a list row, with the same page as the key ([`6c85034`](https://github.com/WPTK/eyewall/commit/6c85034), [#119](https://github.com/WPTK/eyewall/pull/119); [`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Replace the status bar with a top bar holding a breadcrumb and a feed-health slot that shows a word, a glyph and the data age, and a footer that always ends with `? help` ([`8ceacab`](https://github.com/WPTK/eyewall/commit/8ceacab), [#120](https://github.com/WPTK/eyewall/pull/120))
+- Colour wind the same everywhere and draw the 34, 50 and 64 kt rings and the warning, watch and surge lines with different patterns, so no cue depends on colour alone ([`cb806d9`](https://github.com/WPTK/eyewall/commit/cb806d9), [#117](https://github.com/WPTK/eyewall/pull/117))
+- Show station and storm data at its real age instead of as current, and mark cut text with an ellipsis ([`be44d83`](https://github.com/WPTK/eyewall/commit/be44d83), [#53](https://github.com/WPTK/eyewall/pull/53))
+- Handle feed failures and stale advisories without hiding them, so a failed answer no longer replaces good data and headless mode exits 1 when every feed failed ([`3bd2b00`](https://github.com/WPTK/eyewall/commit/3bd2b00), [#52](https://github.com/WPTK/eyewall/pull/52))
+- Add the not-an-official-source wording to the help screen ([`51ed87d`](https://github.com/WPTK/eyewall/commit/51ed87d), [#90](https://github.com/WPTK/eyewall/pull/90))
+- Ship the Linux and macOS binaries as `eyewall-<platform>.tar.gz` archives that keep the executable bit; Windows keeps the bare exe ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Pin the standalone binaries' dependencies in `scripts/binary-constraints.txt`, with `scripts/update_constraints.py` to refresh them ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Rewrite the README around the redesigned screens, keys and `--summary`, and move contributor guidance into `docs/development.md` and install notes into `docs/install.md` ([`bbdff09`](https://github.com/WPTK/eyewall/commit/bbdff09), [#46](https://github.com/WPTK/eyewall/pull/46); [`c92dc90`](https://github.com/WPTK/eyewall/commit/c92dc90), [#56](https://github.com/WPTK/eyewall/pull/56))
+- Bound test runs, split feed outages from format drift in the daily canary and enable Dependabot ([`d72818f`](https://github.com/WPTK/eyewall/commit/d72818f), [#92](https://github.com/WPTK/eyewall/pull/92))
+- Call the picture screen Pictures everywhere, in the crumb, help, command palette and empty message, instead of Graphics ([`5655bf5`](https://github.com/WPTK/eyewall/commit/5655bf5), [#128](https://github.com/WPTK/eyewall/pull/128))
+
+### Added
+
+- Add `eyewall --summary`, which prints the current storms, warnings, nearby buoy and tide gauge reports and the outlook once as plain sentences ([`3105094`](https://github.com/WPTK/eyewall/commit/3105094), [#115](https://github.com/WPTK/eyewall/pull/115))
+- Add plain-language sentences for storms, outlooks, buoys and tide gauges, in knots, mph or km/h ([`3105094`](https://github.com/WPTK/eyewall/commit/3105094), [#115](https://github.com/WPTK/eyewall/pull/115))
+- Add the Storm screen with a lead sentence, NHC's watches and warnings in its own words, what they mean, wind, size, forecast, chance of strong wind, and the next advisory and data age ([`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Add the NHC text screen with tabs for each product, an issued and advisory header and a banner when the text is stale ([`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Add the Buoys and gauges screen with Near the storm and Your stations tabs, follow, sort and find, and the Station screen with trends, 24, 48 and 72 hour charts and a table of readings ([`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Add the command palette (`Ctrl+P`) listing every screen, action, storm and station, and a feed list (`D`, or a click on the health slot) ([`8ceacab`](https://github.com/WPTK/eyewall/commit/8ceacab), [#120](https://github.com/WPTK/eyewall/pull/120))
+- Add place names and a scale bar to the map ([`863e5b0`](https://github.com/WPTK/eyewall/commit/863e5b0), [#118](https://github.com/WPTK/eyewall/pull/118))
+- Add hover names, drag to pan and `n`, `N` and `Enter` stepping to the map's marks ([`6c85034`](https://github.com/WPTK/eyewall/commit/6c85034), [#119](https://github.com/WPTK/eyewall/pull/119))
+- Keep bold, underline and reverse video on the map and charts when `NO_COLOR` is set ([`cb806d9`](https://github.com/WPTK/eyewall/commit/cb806d9), [#117](https://github.com/WPTK/eyewall/pull/117))
+- Add `Tab` on the Station screen to show the next chart when the screen is too short for all of them ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Add the last traceback to the feed canary issue ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Strip control characters from feed text, and show notifications without interpreting markup ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+
+### Removed
+
+- Remove the dashboard, outlook dialog, storm list, watchlist, search and detail screens and the panels they used ([`112b873`](https://github.com/WPTK/eyewall/commit/112b873), [#121](https://github.com/WPTK/eyewall/pull/121); [`37f89de`](https://github.com/WPTK/eyewall/commit/37f89de), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Remove the separate buoy wind colour bands ([`cb806d9`](https://github.com/WPTK/eyewall/commit/cb806d9), [#117](https://github.com/WPTK/eyewall/pull/117))
+
+### Fixed
+
+- Fix a corrupt NHC zip raising `NotImplementedError` instead of a parse error ([`ec6c656`](https://github.com/WPTK/eyewall/commit/ec6c656), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Fix the alert log order, which followed arrival instead of the time of each event ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the map legend, which did not name the marked storm or station and put each line sample after its label ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix station charts not fitting short screens and chart legends cut mid-name ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix feed failures shown as raw error text; the feed list and the main screen now say in plain words why, and when the next try is ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the offline wording on the main screen and feed list, which now says the saved copy is shown because the network is not answering ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the Pictures layout: hide the list when there is one picture, keep the keys working there and drop recording paths ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the dim purple surge warning heading under `NO_COLOR` ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the track line leaving a gap when the storm center is newer than the last best-track fix ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix a watchlisted tide gauge missing from the CO-OPS catalog showing "waiting" instead of "unknown" ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix duplicate storm ids in the CurrentStorms feed and uncapped shapefile zip members ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
+- Fix a crash with `NO_COLOR` set on the graphics gallery, buoy charts and map ([`7b88fea`](https://github.com/WPTK/eyewall/commit/7b88fea), [#39](https://github.com/WPTK/eyewall/pull/39))
+- Fix the replay's missing-supplemental-file message wording ([`e6f342e`](https://github.com/WPTK/eyewall/commit/e6f342e), [#45](https://github.com/WPTK/eyewall/pull/45))
+- Fix a bad or truncated response from NOAA stopping new-storm events and product fetches for good ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix failed cone, wind radii, best track and graphics fetches never being retried, and an old cone showing next to a new advisory ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix the tide gauge cap applying per storm, the refresh key polling without a gap, and poll intervals allowed below the documented cadences ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix rate limiting (429, 5xx) answered from the cache not slowing the poller, and `Retry-After` being ignored ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix one hung host stalling every feed, and disk cache reads and writes blocking the interface ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` being ignored ([`1224df8`](https://github.com/WPTK/eyewall/commit/1224df8), [#38](https://github.com/WPTK/eyewall/pull/38))
+- Fix downloads buffering a whole body before the size check; images over the limit are now abandoned at the first byte past it ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix the first GIF frame being decoded on the event loop when a loop opens ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix repeated requests for the same NESDIS listing across panels and storms ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix feeds all polling at once after coming back from away mode ([`b13b12f`](https://github.com/WPTK/eyewall/commit/b13b12f), [#32](https://github.com/WPTK/eyewall/pull/32))
+- Fix the open-link key starting a console browser or blocking the app ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix image downloads and graphics links accepting non-NOAA hosts, http, and redirects that leave NOAA ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix a replay bundle with a bad manifest or storm id giving a traceback or reading outside the bundle ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix the 3 hour pressure change showing a reading from a silent barometer ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix stepping back in a replay popping false watch and warning toasts ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix headless live mode waiting a full interval when a feed is due ([`67a991c`](https://github.com/WPTK/eyewall/commit/67a991c), [#35](https://github.com/WPTK/eyewall/pull/35))
+- Fix an older advisory's intensity shown as current, hours to closest-approach counting from the advisory time, and tide gauge readings from hours ago shown as current ([`be44d83`](https://github.com/WPTK/eyewall/commit/be44d83), [#53](https://github.com/WPTK/eyewall/pull/53))
+- Fix expired NWS alerts staying in the watches and warnings, and nearby buoy selection including stations that report no weather ([`be44d83`](https://github.com/WPTK/eyewall/commit/be44d83), [#53](https://github.com/WPTK/eyewall/pull/53))
+- Fix the api.weather.gov advisory fallback never being asked when tgftp serves the previous advisory, and advisory text staying on the previous advisory ([`3bd2b00`](https://github.com/WPTK/eyewall/commit/3bd2b00), [#52](https://github.com/WPTK/eyewall/pull/52))
+- Fix a second storm getting no tide gauge or buoy data when the first filled the caps, and a special tropical weather outlook not being read ([`3bd2b00`](https://github.com/WPTK/eyewall/commit/3bd2b00), [#52](https://github.com/WPTK/eyewall/pull/52))
+- Fix refreshes, watchlist changes and return from away mode ignoring a feed's `Retry-After` or backoff, and `Retry-After` given as an HTTP date ([`b111d67`](https://github.com/WPTK/eyewall/commit/b111d67), [#93](https://github.com/WPTK/eyewall/pull/93); [`51ed87d`](https://github.com/WPTK/eyewall/commit/51ed87d), [#90](https://github.com/WPTK/eyewall/pull/90))
+- Fix a config file with a byte order mark discarding all settings, and a malformed proxy port crashing startup ([`b111d67`](https://github.com/WPTK/eyewall/commit/b111d67), [#93](https://github.com/WPTK/eyewall/pull/93))
+- Fix the cone and wind radii vanishing when advisory text is retried, and buoy threshold alerts being skipped when a buoy file came from the cache ([`7154d82`](https://github.com/WPTK/eyewall/commit/7154d82), [#102](https://github.com/WPTK/eyewall/pull/102))
+- Fix a junk answer from CO-OPS or a junk 200 page blanking good data or replacing a cached feed, and the disk cache growing without a limit ([`7154d82`](https://github.com/WPTK/eyewall/commit/7154d82), [#102](https://github.com/WPTK/eyewall/pull/102))
+- Fix `NO_COLOR` alert log warning rows, which were the faintest; they are now bold and start with `!` ([`aa92cd6`](https://github.com/WPTK/eyewall/commit/aa92cd6), [#130](https://github.com/WPTK/eyewall/pull/130))
+- Fix the buoy and tide gauge wind charts, which now scale to the data instead of a fixed axis up to 100 ([`aa92cd6`](https://github.com/WPTK/eyewall/commit/aa92cd6), [#130](https://github.com/WPTK/eyewall/pull/130))
+- Fix a stale cached picture shown as the new advisory's, and the NHC text Public tab showing the previous advisory as current ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+- Fix wind and wave trend sentences using readings older than 2 hours, and the movement speed mixing advisories ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+- Fix `--summary` leaving out that watches and warnings are not yet read for the latest advisory ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+
 ## [0.8.5] - 2026-10-31
 
 ### Changed
@@ -65,6 +149,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.9.0]: https://github.com/WPTK/eyewall/releases/tag/v0.9.0
 [0.8.5]: https://github.com/WPTK/eyewall/releases/tag/v0.8.5
 [0.8.4]: https://github.com/WPTK/eyewall/releases/tag/v0.8.4
 [0.8.3]: https://github.com/WPTK/eyewall/releases/tag/v0.8.3

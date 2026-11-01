@@ -264,7 +264,7 @@ def test_cli_headless_rejects_a_bad_until() -> None:
 
 
 def test_sizes_are_the_agreed_ones() -> None:
-    assert SIZES == [(80, 24), (120, 30)] and EXTRA_SIZES == [(100, 50), (200, 50), (280, 70)]
+    assert SIZES == [(80, 24), (100, 40), (120, 30)] and EXTRA_SIZES == [(100, 50), (200, 50), (280, 70)]
 
 
 async def test_no_colour_mode_does_not_crash(journey, monkeypatch) -> None:
