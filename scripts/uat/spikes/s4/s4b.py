@@ -80,6 +80,8 @@ def mouse(kind, x, y, button=Quartz.kCGMouseButtonLeft, flags=0):
     ev = Quartz.CGEventCreateMouseEvent(None, kind, (x, y), button)
     if flags:
         Quartz.CGEventSetFlags(ev, flags)
+    # successive clicks at nearby points are otherwise treated as double/triple clicks and not forwarded
+    Quartz.CGEventSetIntegerValueField(ev, Quartz.kCGMouseEventClickState, 1)
     post(ev)
 
 
@@ -106,7 +108,7 @@ def mark():
     return len(events())
 
 
-def new_bytes(m, wait=0.8):
+def new_bytes(m, wait=0.6):
     """bytes received since mark m; returns once an SGR release arrived (or timeout)."""
     end = time.time() + wait
     data = b""
@@ -142,7 +144,7 @@ def launch():
         sh("open -a iTerm")
         time.sleep(6)
         script = NL.join(['tell application id "com.googlecode.iterm2"', "activate",
-                          "if (count of windows) is 0 then create window with default profile",
+                          "close every window", "delay 1", "create window with default profile",
                           'tell current session of current window to write text "exec /bin/bash ' + inner + '"',
                           "set bounds of current window to {40, 60, 900, 660}", "end tell"])
     rc, o = sh(["osascript", "-e", script], timeout=40)
