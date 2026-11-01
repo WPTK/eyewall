@@ -204,6 +204,7 @@ class MapView(Widget, can_focus=True):
     def _build(self) -> list[Strip]:
         view = self._ensure_viewport()
         if view is None:
+            self._hits = EMPTY_HITS
             return []
         scene = replace(self.scene, cursor=self.cursor, distance_unit=self._distance_unit())
         canvas, self._hits = render_map_hits(view, scene, self.mode, self.options, DEFAULT_MAP_STYLE)
@@ -288,7 +289,9 @@ class MapView(Widget, can_focus=True):
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
         if self._press is None:
-            self.tooltip = self._tooltip_at(event.x, event.y)
+            tip = self._tooltip_at(event.x, event.y)
+            if tip != self.tooltip:
+                self.tooltip = tip
             return
         dx, dy = event.screen_x - self._press[0], event.screen_y - self._press[1]
         if dx or dy:

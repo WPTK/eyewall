@@ -135,15 +135,45 @@ async def test_escape_leaves_the_chooser_without_opening_anything() -> None:
         assert view.focused_mark is None
 
 
-async def test_clicking_a_gauge_pins_it_as_the_search_does() -> None:
+async def test_clicking_a_gauge_says_what_it_reads_and_changes_nothing() -> None:
     async with running(replay_app(), (200, 50)) as pilot:
         view = await map_of(pilot)
         mark, cell = alone(view, "gauge")
+        before = pilot.app.config  # type: ignore[attr-defined]
+        shown = len(pilot.app._notifications)
         await pilot.click(MapView, offset=cell)
         await settle(pilot)
-        await pilot.pause(0.5)
-        assert mark.id.upper() in {g.upper() for g in pilot.app.config.watchlist.coops}  # type: ignore[attr-defined]
+        await pilot.pause(0.3)
+        notes = list(pilot.app._notifications)[shown:]
+        assert len(notes) == 1 and f"Gauge {mark.id}" in notes[0].message
+        assert pilot.app.config is before  # type: ignore[attr-defined]  # nothing was pinned
         assert isinstance(pilot.app.screen, DashboardScreen)
+
+
+async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click() -> None:
+    async with running(replay_app(), (120, 30)) as pilot:
+        view = await map_of(pilot)
+        mark, (col, row) = alone(view, "buoy")
+        await pilot.mouse_down(MapView, offset=(col, row))
+        await pilot.hover(MapView, offset=(col + 3, row + 2))
+        await pilot.mouse_up(MapView, offset=(col + 3, row + 2))
+        await settle(pilot)
+        view._dragged = True  # as if the release had produced no Click event
+        _, (col, row) = alone(view, "buoy")
+        await pilot.click(MapView, offset=(col, row))
+        await settle(pilot)
+        assert isinstance(pilot.app.screen, BuoyDetailScreen)
+
+
+async def test_a_map_with_no_room_has_no_marks_and_clicks_nothing() -> None:
+    async with running(replay_app(), (80, 24)) as pilot:
+        await into_the_storm(pilot)
+        view = pilot.app.screen.query_one(MapView)
+        assert view.size.width < 1
+        assert view.hits.drawn == () and view.hits.order == ()
+        view.action_mark(1)
+        view.action_open_mark()
+        assert view.focused_mark is None and isinstance(pilot.app.screen, DashboardScreen)
 
 
 @pytest.mark.parametrize("size", SIZES)

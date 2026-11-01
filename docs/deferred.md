@@ -6,6 +6,6 @@
 - Places: NHC reference points (the "about" places in the advisory, such as Bermuda or Cape Hatteras) are not placed on the map yet. They need the advisory parsed into a bearing and distance, placed with `geo.destination`, and passed through the adapter in `ui/adapt.py`. The click work (marks and hit map) did not need them, so they stay parked.
 - Places: the map key under the map does not mention place names or the scale bar; add them when the key is rebuilt with the new main screen.
 - Places: the PyInstaller binary size was not re-measured; `places.bin` adds 69,138 bytes (about 50 KB compressed), 1.6% of the 4.3 MB of map data.
-- Map marks: forecast points, outlook areas and place names are not clickable; only storms, buoys and gauges are. A gauge click pins it (as the search does) until the station screens are reworked.
+- Map marks: forecast points, outlook areas and place names are not clickable; only storms, buoys and gauges are. A gauge click only shows a toast with its newest water level (it has no page yet); pinning from the map waits for PR8's station screen.
 - Map marks: `n`/`N` step through the marks that are on screen only; marks panned out of view are skipped until the map is moved or refitted.
 - Map marks: the map key and the footer do not mention `n`/`N`/`enter` or the click; add them when the chrome is rebuilt (the help screen lists them).

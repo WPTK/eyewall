@@ -375,7 +375,18 @@ class EyewallApp(App[None]):
         elif mark.kind == "buoy":
             self.open_buoy(mark.id)
         elif not self._modal_open():
-            self.watch_in_background("coops", mark.id, True)
+            self.notify(self.gauge_summary(mark.id), timeout=6)  # pinning is a deliberate act, not a side effect
+
+    def gauge_summary(self, gauge_id: str) -> str:
+        """One line for a gauge clicked on the map: its name and newest water level."""
+        gauge = next((g for g in self.store.tide_stations if g.id.upper() == gauge_id.upper()), None)
+        head = f"Gauge {gauge_id}" + (f" {gauge.name}" if gauge is not None else "")
+        series = self.store.tide_series.get(gauge_id) or self.store.tide_series.get(gauge_id.upper())
+        latest = series.water_level.items[0] if series is not None and series.water_level.items else None
+        if latest is None or latest.level_ft is None:
+            return f"{head}: no water level yet."
+        level = self.preset.fmt_length(latest.level_ft, "ft")
+        return f"{head}: water level {level} above {series.datum if series is not None else 'datum'}."
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:
