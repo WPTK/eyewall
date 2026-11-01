@@ -86,7 +86,7 @@ $env:EYEWALL_EXE = "dist\eyewall.exe"     # a build from scriptsuild_exe.ps1, o
 
 Without `EYEWALL_EXE` the suite downloads the release asset `eyewall-windows-x86_64.exe` of `EYEWALL_RELEASE` (default
 `v0.9.0`) into an empty temp directory. The tests are marked `realinput` and do not run in the default suite or in CI;
-`tests/realinput/test_helpers.py` (the harness's own tests, no exe needed) does. The run takes about 20 minutes. Results
+`tests/realinput/test_helpers.py` (the harness's own tests, no exe needed) does. The walkthrough alone takes about 12 minutes; the whole real-input run has not been timed yet. Results
 go to `EYEWALL_REAL_RESULTS` (default: the temp directory). Every walkthrough item prints PASS, FAIL, XFAIL or SKIP with the
 assertion that decided it. A defect found by the run is filed as an issue and listed in `tests/realinput/known.py`; its
 item is then expected to fail and the run fails when it starts passing, so the entry has to be deleted with the fix.

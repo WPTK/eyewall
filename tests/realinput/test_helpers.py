@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import socket
 
-import pyte
+import pytest
 
-from .app import help_tokens, parse_crumb, parse_footer, parse_help, sense_violations
-from .netproxy import Proxy
-from .walk import header_clock
+pyte = pytest.importorskip("pyte")
+
+from .app import help_tokens, parse_crumb, parse_footer, parse_help, sense_violations  # noqa: E402
+from .netproxy import Proxy  # noqa: E402
+from .walk import header_clock  # noqa: E402
 
 FOOTER = " +/- zoom  f fit  enter open  b buoys  t NHC text" + " " * 40 + "? help  ^p menu  q quit"
 
