@@ -56,6 +56,8 @@ is nearly certain about, so a report means a real leftover.
   `? help`) and saved as an SVG screenshot. Run it with `python -m pytest tests/uat -m uat`, or with
   `python scripts/uat.py [OUT_DIR]`, which also renders each screenshot to PNG through Edge (default directory: a new
   temporary one, never the repository). Set `EYEWALL_UAT_OUT` to choose where `pytest` writes the SVG files.
+- `python scripts/screenshots.py` rewrites the README pictures in `docs/images`. It clears `NO_COLOR` (set in some shells and
+  agent sessions, it turns Textual monochrome) and fails if a picture has no chromatic colour.
 - `textual_image.renderable` and `textual_image.widget` send terminal queries when imported with stdout on a TTY. Import
   them lazily, only where images are drawn.
 
