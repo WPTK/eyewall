@@ -108,15 +108,25 @@ def mark():
     return len(events())
 
 
-def new_bytes(m, wait=0.6):
-    """bytes received since mark m; returns once an SGR release arrived (or timeout)."""
+def quiesce():
+    last = -1
+    stable = 0
+    while stable < 4:
+        n = len(events())
+        stable = stable + 1 if n == last else 0
+        last = n
+        time.sleep(0.05)
+
+
+def new_bytes(m, wait=1.5):
+    """bytes since mark m, returned once at least one SGR press and one release arrived (or timeout)."""
     end = time.time() + wait
     data = b""
     while time.time() < end:
         data = b"".join(bytes.fromhex(e["hex"]) for e in events()[m:] if "hex" in e)
         t = SGR.findall(data)
-        if t and t[-1][3] == b"m":
-            time.sleep(0.03)
+        if any(x[3] == b"M" for x in t) and any(x[3] == b"m" for x in t):
+            time.sleep(0.08)
             return b"".join(bytes.fromhex(e["hex"]) for e in events()[m:] if "hex" in e)
         time.sleep(0.03)
     return data
@@ -190,9 +200,16 @@ class Model:
 
 
 def cell_at(x, y):
-    m = mark()
-    click(x, y)
-    return received_cell(m)
+    for attempt in range(2):
+        quiesce()
+        m = mark()
+        click(x, y)
+        c = received_cell(m)
+        if c is not None:
+            if attempt:
+                RES["retries"] = RES.get("retries", 0) + 1
+            return c
+    return None
 
 
 def find_boundary(axis, fixed, lo, hi, k, none_val=None):

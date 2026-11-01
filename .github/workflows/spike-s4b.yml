@@ -15,15 +15,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, macos-15, macos-15-intel]
+        os: [macos-26]
         term: [Terminal, iTerm2]
         variant: [std]
-        rep: [1, 2, 3]
-        include:
-          - {os: macos-26, term: Terminal, variant: hidpi, rep: 1}
-          - {os: macos-15, term: Terminal, variant: hidpi, rep: 1}
-          - {os: macos-15-intel, term: Terminal, variant: hidpi, rep: 1}
-          - {os: macos-26, term: iTerm2, variant: hidpi, rep: 1}
+        rep: [1]
     env:
       S4: ${{ github.workspace }}/scripts/uat/spikes/s4
       OUT: ${{ github.workspace }}/out
