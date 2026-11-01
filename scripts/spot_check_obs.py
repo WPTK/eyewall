@@ -2,7 +2,8 @@
 
 This is the check to run after a milestone, or when a parser starts failing, to see whether the live services still
 look the way the code expects. It makes about 14 requests, a second apart, with the eyewall User-Agent. It exits 1 when
-a feed fails to fetch or parse to anything.
+a feed does not parse as expected, 2 when the only problems are feeds that were down, unreachable or empty (an outage
+is not a format change), and 0 otherwise. A line starting `DOWN` is an outage, one starting `FAIL` is a format failure.
 
     python scripts/spot_check_obs.py
 """
@@ -33,6 +34,7 @@ DARK_CANDIDATES = ("42040", "41001", "42003", "42019", "42020", "42059")  # list
 class Report:
     def __init__(self) -> None:
         self.failures = 0
+        self.outages = 0
 
     def ok(self, label: str, detail: str) -> None:
         print(f"  ok    {label:<28} {detail}")
@@ -41,8 +43,18 @@ class Report:
         self.failures += 1
         print(f"  FAIL  {label:<28} {detail}")
 
-    def check(self, passed: bool, label: str, detail: str) -> None:
-        (self.ok if passed else self.fail)(label, detail)
+    def down(self, label: str, detail: str) -> None:
+        self.outages += 1
+        print(f"  DOWN  {label:<28} {detail}")
+
+    def check(self, passed: bool, label: str, detail: str, *, empty: bool = False) -> None:
+        """Record one check. `empty` marks a feed that gave nothing: an outage, not a format change."""
+        if passed:
+            self.ok(label, detail)
+        elif empty:
+            self.down(label, detail)
+        else:
+            self.fail(label, detail)
 
 
 async def polite[T](call: Callable[[], Awaitable[T]]) -> T:
@@ -69,6 +81,7 @@ async def check_ndbc(ndbc: NdbcClient, report: Report) -> list[Station]:
         len(stations) > 500,
         "activestations.xml",
         f"{len(stations)} stations, {reporting} with met data, {catalog.skipped if catalog else '?'} skipped",
+        empty=not stations,
     )
 
     latest = (await polite(ndbc.latest_obs)).value
@@ -80,6 +93,7 @@ async def check_ndbc(ndbc: NdbcClient, report: Report) -> list[Station]:
         "latest_obs.txt",
         f"{len(rows)} stations, {with_wind} with wind, "
         f"{with_pressure} with pressure, {latest.skipped if latest else '?'} skipped",
+        empty=not rows,
     )
     live_ids = {r.station_id for r in rows}
 
@@ -88,6 +102,7 @@ async def check_ndbc(ndbc: NdbcClient, report: Report) -> list[Station]:
         bool(series and series.reporting),
         f"{LIVE_BUOY}_5day.txt",
         f"{len(series.observations) if series else 0} rows; " + describe(series.latest if series else None, now),
+        empty=True,
     )
     if series and series.reporting:
         extra = (await polite(lambda: ndbc.supplemental(LIVE_BUOY))).value
@@ -127,7 +142,9 @@ async def check_coops(coops: CoopsClient, report: Report, ndbc_stations: list[St
     now = datetime.now(UTC)
     gauges = await polite(coops.all_stations)
     both = sum(1 for g in gauges if {"water_level", "met"} <= g.products)
-    report.check(len(gauges) > 250, "stations.json", f"{len(gauges)} stations, {both} with water level and met")
+    report.check(
+        len(gauges) > 250, "stations.json", f"{len(gauges)} stations, {both} with water level and met", empty=not gauges
+    )
 
     levels = await polite(lambda: coops.water_level(TIDE_GAUGE, date="recent"))
     gaps = sum(1 for r in levels.items if r.level_ft is None)
@@ -137,16 +154,18 @@ async def check_coops(coops: CoopsClient, report: Report, ndbc_stations: list[St
         f"water_level {TIDE_GAUGE}",
         f"{len(levels.items)} readings, {gaps} gaps"
         + (f", newest {newest.level_ft} ft at {newest.time:%H:%MZ}" if newest else ""),
+        empty=True,
     )
     tides = await polite(lambda: coops.predictions(TIDE_GAUGE, begin=now, hours=36))
     nxt = ", ".join(f"{p.kind} {p.level_ft} ft {p.time:%a %H:%MZ}" for p in tides.items[:3])
-    report.check(bool(tides.items), "predictions (hilo)", nxt or "none")
+    report.check(bool(tides.items), "predictions (hilo)", nxt or "none", empty=True)
     wind = await polite(lambda: coops.wind(TIDE_GAUGE, hours=3))
     top = wind.items[0] if wind.items else None
     report.check(
         top is not None,
         "wind",
         f"{len(wind.items)} readings" + (f", {top.speed_kt} kt {top.direction_text}" if top else ""),
+        empty=True,
     )
     pressure = await polite(lambda: coops.air_pressure(TIDE_GAUGE, hours=3))
     top_p = pressure.items[0] if pressure.items else None
@@ -154,6 +173,7 @@ async def check_coops(coops: CoopsClient, report: Report, ndbc_stations: list[St
         top_p is not None,
         "air_pressure",
         f"{len(pressure.items)} readings" + (f", {top_p.pressure_mb} mb" if top_p else ""),
+        empty=True,
     )
     missing = await polite(lambda: coops.wind(GAUGE_WITHOUT_MET, date="latest"))
     report.check(
@@ -184,10 +204,12 @@ async def main() -> int:
             stations = await check_ndbc(NdbcClient(client), report)
             await check_coops(CoopsClient(client), report, stations)
         except FetchError as exc:
-            report.fail("fetch", str(exc))
+            report.down("fetch", str(exc))
     took = (datetime.now(UTC) - started) / timedelta(seconds=1)
     print(f"\n{'all feeds parsed' if not report.failures else str(report.failures) + ' problem(s)'} in {took:.0f} s")
-    return 1 if report.failures else 0
+    if report.outages:
+        print(f"{report.outages} feed(s) down or empty")
+    return 1 if report.failures else 2 if report.outages else 0
 
 
 if __name__ == "__main__":
