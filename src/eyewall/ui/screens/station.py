@@ -35,6 +35,8 @@ from eyewall.units import LABELS, convert
 BUOY_CHARTS = ("pressure", "wind", "wave")
 GAUGE_CHARTS = ("level", "gwind", "gpressure")
 
+SMALL_HEIGHT = 30  # rows under which the lead drops the third trend and the extremes line
+
 
 class StationScreen(ChromeScreen):
     NAV_SCOPES = ("station",)
@@ -157,6 +159,7 @@ class StationScreen(ChromeScreen):
         entry = cast("NearbyStation[Station] | None", self._entry())
         storm = store.storms.get(eye.selected or "")
         out: list[tuple[str, str]] = []
+        small = self.size.height < SMALL_HEIGHT
         if state == "ok" and obs is not None:
             waves = st.last_reading(store, self.station_id, obs, now, "wave_height_m")
             if entry is not None and storm is not None:
@@ -166,13 +169,14 @@ class StationScreen(ChromeScreen):
             out.append((lead.text, "bold"))
             series = store.series.get(self.station_id)
             rows = () if series is None else series.observations
-            for words_, arrow in (
-                (words.pressure_trend(store.tendency(self.station_id, now), preset), None),
-                (words.wind_trend_sentence(wind_trend(rows), preset), None),
-                (words.wave_trend_sentence(wave_trend(rows), preset), None),
-            ):
-                if words_ is not None:
-                    out.append((f"{g.sep} {words_.text}" if arrow is None else words_.text, ""))
+            trends = (
+                words.pressure_trend(store.tendency(self.station_id, now), preset),
+                words.wind_trend_sentence(wind_trend(rows), preset),
+                words.wave_trend_sentence(wave_trend(rows), preset),
+            )
+            shown = [t for t in trends if t is not None]
+            for trend in shown[:2] if small else shown:  # a short screen keeps room for the charts
+                out.append((f"{g.sep} {trend.text}", ""))
         else:
             name = f" ({station.name})" if station.name else ""
             out.append((f"Buoy {self.station_id}{name}", "bold"))
@@ -189,7 +193,7 @@ class StationScreen(ChromeScreen):
             now,
             self.hours,
         )
-        extremes = words.extremes_sentence(ext, preset, tz)
+        extremes = None if small else words.extremes_sentence(ext, preset, tz)
         if extremes is not None:
             out.append((f"Last {self.hours} hours: {extremes.text}", DIM))
         return out

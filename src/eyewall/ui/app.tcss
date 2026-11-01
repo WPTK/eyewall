@@ -113,7 +113,7 @@ MainScreen.full-map #strip {
 }
 
 #text-tabs {
-    height: 3;
+    height: 2;
 }
 
 #text-head {
@@ -134,7 +134,7 @@ MainScreen.full-map #strip {
 /* ---- buoys and stations ---- */
 
 #buoys-tabs {
-    height: 3;
+    height: 2;
 }
 
 #buoys-head, #buoys-empty {
@@ -146,6 +146,18 @@ MainScreen.full-map #strip {
     height: 1fr;
     border: none;
     padding: 0;
+}
+
+/* The highlighted row keeps its own text colours readable: a quiet band and bold, never the loud accent fill. */
+StationList > .option-list--option-highlighted,
+StationList:focus > .option-list--option-highlighted {
+    background: $panel-lighten-2;
+    text-style: bold;
+}
+
+StationList > .option-list--option-hover,
+StationList > .option-list--option-hover-highlighted {
+    background: $panel-lighten-1;
 }
 
 #station-lead {
