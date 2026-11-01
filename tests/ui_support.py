@@ -121,6 +121,9 @@ class ScriptedSource:
     def stale(self, feed: str) -> bool:
         return False
 
+    def cache_answers(self, feed: str) -> int:
+        return 0
+
     def start_poll(self, feed: str) -> None:
         self.calls[feed] = self.calls.get(feed, 0) + 1
 

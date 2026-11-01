@@ -338,7 +338,7 @@ async def test_series_requests_are_conditional_once_the_first_answer_is_cached(t
             seen.append(request.headers)
             if request.headers.get("if-none-match") == '"v1"':
                 return httpx.Response(304, request=request)
-            body = (FIXTURES / "coops" / "water_level_recent.json").read_bytes()
+            body = (FIXTURES / "ndbc" / "41010_5day.txt").read_bytes()
             return httpx.Response(200, content=body, headers={"etag": '"v1"'}, request=request)
 
     source = LiveSource(cache_dir=tmp_path, transport=Series(), clock=VirtualClock(NOW))

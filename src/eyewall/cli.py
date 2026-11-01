@@ -120,6 +120,9 @@ def _headless(args: argparse.Namespace, config: Config) -> int:
         print(f"eyewall: {exc}", file=sys.stderr)
         return 2
     print(f"eyewall: {len(result.events)} event(s) in {result.polls} poll(s)", file=sys.stderr)
+    if result.feeds_failed and not result.feeds_ok:  # nothing was fetched: a script must not read this as "quiet"
+        print("eyewall: every feed failed", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -180,6 +183,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     warnings = loaded.warnings
     for warning in warnings:
         print(f"eyewall: config: {warning}", file=sys.stderr)
+    if args.until is not None and not args.headless:
+        build_parser().error("--until needs --headless")
     if args.headless:
         return _headless(args, config)
     return _run_app(args, config, loaded)
