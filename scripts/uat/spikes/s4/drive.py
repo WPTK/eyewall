@@ -233,6 +233,7 @@ def main():
         x, y = geo.px(tc, tr)
         rc, o = inject_click(be, x, y)
         got = wait_for(lambda: [e for e in jl(LOGR)[n_before:] if "hex" in e], 5)
+        time.sleep(0.8)
         if got:
             data = b"".join(bytes.fromhex(e["hex"]) for e in jl(LOGR)[n_before:] if "hex" in e)
             m = re.findall(rb"\x1b\[<(\d+);(\d+);(\d+)([Mm])", data)
@@ -324,6 +325,10 @@ def main():
     else:
         helper = os.path.join(S4, "iterm_readback.py")
         rc, txt = sh([PY, helper], timeout=40)
+        RES["iterm_api_readback"] = {"rc": rc, "out": txt[:600]}
+        if rc != 0 or "count=" not in txt:
+            rc, txt = osa('tell application id "com.googlecode.iterm2" to get text of current session of current window')
+            RES["iterm_readback_via"] = "AppleScript text of session (API failed)"
     with open(os.path.join(OUT, "readback.txt"), "w") as f:
         f.write(txt)
     last = max([e.get("count", 0) for e in jl(LOGA) if e.get("kind") == "button"] or [0])

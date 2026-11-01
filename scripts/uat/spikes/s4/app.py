@@ -34,6 +34,9 @@ class S4(App):
         yield Label("sel=none", id="sel")
 
     def on_mount(self) -> None:
+        self.set_timer(0.8, self.report_ready)
+
+    def report_ready(self) -> None:
         def reg(w):
             r = w.region
             return {"x": r.x, "y": r.y, "w": r.width, "h": r.height}
