@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, tzinfo
 
-from eyewall.models.obs import Station
+from eyewall.models.obs import Station, TideStation
+from eyewall.sources import protocol
 from eyewall.state.nearby import NearbyStation
 from eyewall.state.store import Store, StormState
 from eyewall.state.trends import wave_trend, wind_trend
@@ -26,7 +27,7 @@ def _storm_block(state: StormState, preset: Preset, now: datetime, tz: tzinfo | 
         *storm_words.warning_sentences(state),
         *storm_words.meaning_sentences(state),
         storm_words.size_sentence(state, preset),
-        storm_words.strongest(state, tz),
+        storm_words.strongest(state, preset, tz),
         storm_words.updated(state.storm, now),
         storm_words.next_advisory(state),
     ):
@@ -36,7 +37,13 @@ def _storm_block(state: StormState, preset: Preset, now: datetime, tz: tzinfo | 
 
 
 def _buoy_line(
-    store: Store, entry: NearbyStation[Station], storm_name: str, preset: Preset, now: datetime, tz: tzinfo | None
+    store: Store,
+    entry: NearbyStation[Station],
+    storm_name: str,
+    preset: Preset,
+    now: datetime,
+    tz: tzinfo | None,
+    failed: frozenset[str],
 ) -> str | None:
     station_id = entry.station.id
     obs = st.newest_observation(store, station_id)
@@ -44,6 +51,8 @@ def _buoy_line(
     if state != "ok" or obs is None:
         gap = station_words.state_sentence(state, obs, now, tz)
         label = f"Buoy {station_id}" + (f" ({entry.station.name})" if entry.station.name else "")
+        if state == "waiting" and protocol.BUOYS in failed:  # the feed that would tell us failed: not "waiting"
+            return f"{label}: Buoy data unavailable."
         return None if gap is None else f"{label}: {gap.text}"
     series = store.series.get(station_id.upper())
     rows = () if series is None else series.observations
@@ -58,8 +67,26 @@ def _buoy_line(
     return " ".join(p.text for p in parts if p is not None)
 
 
-def summary_lines(store: Store, preset: Preset, now: datetime, tz: tzinfo | None = None) -> list[str]:
-    """The summary as lines of plain text; an empty line separates the parts."""
+def _gauge_line(store: Store, gauge: TideStation, now: datetime, preset: Preset, failed: frozenset[str]) -> str:
+    series = store.tide_series.get(gauge.id)
+    if series is None and protocol.TIDES in failed:
+        return f"{gauge.name or gauge.id}: Water level data unavailable."
+    return station_words.gauge_sentence(gauge, series, now, preset).text
+
+
+def summary_lines(
+    store: Store,
+    preset: Preset,
+    now: datetime,
+    tz: tzinfo | None = None,
+    failed: frozenset[str] = frozenset(),
+) -> list[str]:
+    """The summary as lines of plain text; an empty line separates the parts.
+
+    `failed` names the feeds whose last poll failed, so a missing report reads as unavailable, never as quiet.
+    """
+    if protocol.STORMS in failed:
+        return ["Storm data unavailable."]
     enabled = store.config.basins.enabled
     blocks: list[list[str]] = []
     states = sorted(store.storms.values(), key=lambda s: s.storm.id)
@@ -71,13 +98,12 @@ def summary_lines(store: Store, preset: Preset, now: datetime, tz: tzinfo | None
         block = [w.text for w in _storm_block(state, preset, now, tz)]
         storm_id = state.storm.id
         lines = (
-            _buoy_line(store, e, state.storm.name, preset, now, tz)
+            _buoy_line(store, e, state.storm.name, preset, now, tz, failed)
             for e in store.nearby_buoys(storm_id, now)[:MAX_BUOYS]
         )
         buoys = [line for line in lines if line]
         gauges = [
-            station_words.gauge_sentence(e.station, store.tide_series.get(e.station.id), now, preset).text
-            for e in store.nearby_tides(storm_id, now)[:MAX_GAUGES]
+            _gauge_line(store, e.station, now, preset, failed) for e in store.nearby_tides(storm_id, now)[:MAX_GAUGES]
         ]
         blocks.append(block + buoys + gauges)
     blocks.append([w.text for w in outlook_words.outlook_sentences(store.outlook, enabled)])

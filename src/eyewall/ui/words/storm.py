@@ -20,7 +20,7 @@ from eyewall.palette import Category, WatchWarning, category_for_knots
 from eyewall.state.store import StormState
 from eyewall.ui.format import BASIN_NAMES, advisory_age, collapse
 from eyewall.ui.products import TCM_OUTLOOK_NOTE, fmt_lat, fmt_lon
-from eyewall.ui.words import Words, distance_text, wind_text
+from eyewall.ui.words import Words, distance_text, round5, wind_text
 from eyewall.ui.words.about import parse_abouts
 from eyewall.ui.words.glossary import MEANINGS, hazard_of, level_of, quoted_meanings
 from eyewall.units import LABELS, Preset, convert
@@ -55,6 +55,7 @@ _SEVERITY = (
 _THRESHOLDS = {34: {"mph": 39, "kmh": 63}, 64: {"mph": 74, "kmh": 119}}  # NHC's own figures for 34 and 64 kt
 _PLURALS = {"warning": "warnings", "watch": "watches"}
 _HOLD_KT = 5  # a change this small is "holding"
+_DEPRESSION_KT = 25  # the weakest wind NHC calls a tropical depression
 _NEARLY_STATIONARY_MPH = 1.0
 
 
@@ -62,21 +63,27 @@ _NEARLY_STATIONARY_MPH = 1.0
 
 
 def current_public(state: StormState) -> PublicAdvisory | None:
-    """The public advisory, when it is the one the feed lists; an older or newer copy is not trusted."""
+    """The public advisory, only when it is provably the one the feed lists.
+
+    It carries the watches and warnings, so a missing or different number means it may be stale: not trusted.
+    """
     public, ref = state.advisories.public, state.storm.public_advisory
-    if public is None:
+    if public is None or ref is None or ref.adv_num is None or public.adv_num is None:
         return None
-    if ref is None or ref.adv_num is None or public.adv_num is None or ref.adv_num == public.adv_num:
-        return public
-    return None
+    return public if ref.adv_num == public.adv_num else None
 
 
 def current_forecast(state: StormState) -> ForecastAdvisory | None:
-    """The forecast advisory (TCM), when its number matches the feed's."""
+    """The forecast advisory (TCM), when its number matches the feed's.
+
+    An intermediate advisory (12A) belongs to the complete one (12), so only the base numbers are compared.
+    """
     tcm, number = state.advisories.forecast, state.storm.adv_num
     if tcm is None:
         return None
-    return tcm if number is None or tcm.adv_num is None or tcm.adv_num == number else None
+    if number is None or tcm.adv_num is None or tcm.adv_num.number == number.number:
+        return tcm
+    return None
 
 
 # ------------------------------------------------------------------------------------------------------------- names
@@ -152,7 +159,7 @@ def storm_lead(state: StormState, preset: Preset) -> Words:
     head = _name(storm)
     category = hurricane_category(storm)
     if category:
-        head += f", Category {category},"
+        head += f", Category {category}"
         sources.append("state.storm.intensity_kt")
     clauses: list[str] = []
     public = current_public(state)
@@ -168,8 +175,9 @@ def storm_lead(state: StormState, preset: Preset) -> Words:
     if moving is not None:
         clauses.append(moving[0])
         sources += moving[1]
-    text = f"{head} is {' and '.join(clauses)}." if clauses else f"{head}."
-    return Words(text.replace(",,", ","), tuple(sources))
+    if not clauses:
+        return Words(f"{head}.", tuple(sources))
+    return Words(f"{head}{',' if category else ''} is {' and '.join(clauses)}.", tuple(sources))
 
 
 def storm_wind(state: StormState, preset: Preset, *, with_knots: bool = False) -> Words | None:
@@ -313,7 +321,7 @@ def meaning_sentences(state: StormState) -> list[Words]:
     seen: set[tuple[str, str]] = set()
     for _, area in sorted(enumerate(public.watches_warnings.in_effect), key=lambda i: _meaning_rank(i[1])):
         hazard, level = _area_hazard(area), _area_level(area)
-        if hazard is None or level is None or (hazard, level) in seen:
+        if not area.areas or hazard is None or level is None or (hazard, level) in seen:
             continue
         seen.add((hazard, level))
         if (hazard, level) in quoted:
@@ -345,7 +353,10 @@ def size_sentence(state: StormState, preset: Preset) -> Words | None:
         return None
 
     def threshold(kt: int) -> str:
-        return f"{_THRESHOLDS[kt].get(preset.wind, kt)}+ {LABELS[preset.wind]}"
+        value = (
+            kt if preset.wind == "kt" else _THRESHOLDS[kt].get(preset.wind) or round5(convert(kt, "kt", preset.wind))
+        )
+        return f"{value}+ {LABELS[preset.wind]}"
 
     sources = [f"{_BASE}.forecast.radii.kt34"]
     text = (
@@ -393,7 +404,7 @@ def forecast_rows(state: StormState, preset: Preset, tz: tzinfo | None) -> list[
     return out
 
 
-def strongest(state: StormState, tz: tzinfo | None) -> Words | None:
+def strongest(state: StormState, preset: Preset, tz: tzinfo | None) -> Words | None:
     """`Strongest: Category 4 now, then weakening.` From the storm's wind now and the forecast fixes."""
     storm, tcm = state.storm, current_forecast(state)
     if storm.intensity_kt is None or tcm is None:
@@ -409,7 +420,9 @@ def strongest(state: StormState, tz: tzinfo | None) -> Words | None:
     else:
         local = ensure_utc(peak_fix.valid).astimezone(tz)
         when, last_is_peak = f"on {local:%A}", peak_fix is fixes[-1]
-    word = _category_word(peak_kt) or "tropical depression"
+    # A depression is 25 kt or more at NHC; weaker winds (a remnant low) get no cyclone name.
+    word = _category_word(peak_kt) if peak_kt >= _DEPRESSION_KT else ""
+    word = word or f"winds {wind_text(preset, kt=peak_kt)}"
     head = f"Strongest: {word} {when}"
     last_kt = fixes[-1].max_wind_kt or 0
     if last_is_peak:

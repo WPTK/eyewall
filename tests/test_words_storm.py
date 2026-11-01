@@ -152,7 +152,7 @@ def test_a_forecast_for_another_advisory_gives_no_size_and_no_forecast():
     stale = replace(state, storm=other)
     assert sw.size_sentence(stale, PRESETS["us"]) is None
     assert sw.forecast_rows(stale, PRESETS["us"], EDT) == []
-    assert sw.strongest(stale, EDT) is None
+    assert sw.strongest(stale, PRESETS["us"], EDT) is None
 
 
 @pytest.mark.parametrize(
@@ -410,7 +410,7 @@ def test_forecast_rows_in_knots_and_with_a_dissipating_fix():
 
 def test_strongest_says_now_and_then_what_follows():
     state = erin_state()
-    assert traced(sw.strongest(state, EDT), state).text == "Strongest: Category 4 now, then weakening."
+    assert traced(sw.strongest(state, PRESETS["us"], EDT), state).text == "Strongest: Category 4 now, then weakening."
 
 
 def test_strongest_later_and_holding():
@@ -420,8 +420,73 @@ def test_strongest_later_and_holding():
     base = replace(state, storm=storm)
     fixes = tuple(replace(f, max_wind_kt=100 if f.tau == 48 else 98) for f in tcm.fixes)
     later = replace(base, advisories=replace(base.advisories, forecast=replace(tcm, fixes=fixes)))
-    assert sw.strongest(later, EDT).text == "Strongest: Category 3 on Wednesday, then holding."
-    rising = tuple(replace(f, max_wind_kt=70 + f.tau // 2) for f in tcm.forecast_fixes)
+    assert sw.strongest(later, PRESETS["us"], EDT).text == "Strongest: Category 3 on Wednesday, then holding."
+    rising = tuple(replace(f, max_wind_kt=70 + f.tau // 2) for f in tcm.fixes)
     still = replace(base, advisories=replace(base.advisories, forecast=replace(tcm, fixes=rising)))
-    assert sw.strongest(still, EDT).text.endswith("strengthening through the forecast.")
-    assert sw.strongest(replace(state, storm=replace(storm, intensity_kt=None)), EDT) is None
+    assert sw.strongest(still, PRESETS["us"], EDT).text.endswith("strengthening through the forecast.")
+    assert sw.strongest(replace(state, storm=replace(storm, intensity_kt=None)), PRESETS["us"], EDT) is None
+
+
+def test_a_hurricane_with_nothing_known_has_no_dangling_comma():
+    storm = replace(
+        make_storm(classification=Classification.HU),
+        intensity_kt=105,
+        lat=None,
+        lon=None,
+        movement_dir_deg=None,
+        movement_speed_mph=None,
+    )
+    assert sw.storm_lead(StormState(storm), PRESETS["us"]).text == "Hurricane Ana, Category 3."
+
+
+def test_a_public_advisory_that_cannot_be_compared_is_not_trusted_for_warnings():
+    state = erin_state()
+    assert sw.warning_sentences(state)
+    for ref in (None, replace(state.storm.public_advisory, adv_num=None)):
+        unsure = replace(state, storm=replace(state.storm, public_advisory=ref))
+        assert sw.current_public(unsure) is None
+        assert sw.warning_sentences(unsure) == []
+        assert sw.meaning_sentences(unsure) == []
+        assert "Tropical storm conditions" not in sw.storm_lead(unsure, PRESETS["us"]).text
+    no_number = replace(
+        state, advisories=replace(state.advisories, public=replace(state.advisories.public, adv_num=None))
+    )
+    assert sw.warning_sentences(no_number) == []
+
+
+def test_an_intermediate_public_advisory_does_not_drop_the_forecast():
+    state = erin_state()
+    number = state.advisories.forecast.adv_num
+    suffixed = AdvNum(number.number, "A")
+    storm = replace(
+        state.storm,
+        forecast_advisory=replace(state.storm.forecast_advisory, adv_num=suffixed),
+        public_advisory=replace(state.storm.public_advisory, adv_num=suffixed),
+    )
+    newer = replace(state, storm=storm)
+    assert newer.storm.adv_num == suffixed
+    assert sw.current_forecast(newer) is not None
+    assert sw.size_sentence(newer, PRESETS["us"]) is not None
+    assert sw.forecast_rows(newer, PRESETS["us"], EDT)
+    moved = replace(storm, forecast_advisory=replace(storm.forecast_advisory, adv_num=AdvNum(number.number + 1)))
+    assert sw.current_forecast(replace(newer, storm=moved)) is None
+
+
+def test_a_watch_warning_entry_with_no_places_gets_no_meaning_sentence():
+    state = erin_state()
+    public = state.advisories.public
+    empty = tuple(replace(a, areas=()) for a in public.watches_warnings.in_effect)
+    emptied = replace(public, watches_warnings=replace(public.watches_warnings, in_effect=empty))
+    assert sw.meaning_sentences(replace(state, advisories=replace(state.advisories, public=emptied))) == []
+
+
+def test_winds_below_tropical_storm_force_are_not_called_a_depression_by_the_peak_line():
+    state = erin_state()
+    tcm = state.advisories.forecast
+    weak = replace(tcm, fixes=tuple(replace(f, max_wind_kt=min(f.max_wind_kt or 0, 15)) for f in tcm.fixes))
+    state = replace(
+        state, advisories=replace(state.advisories, forecast=weak), storm=replace(state.storm, intensity_kt=15)
+    )
+    text = sw.strongest(state, PRESETS["us"], EDT).text
+    assert "tropical depression" not in text
+    assert text.startswith("Strongest: winds 15 mph now")

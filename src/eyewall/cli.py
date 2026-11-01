@@ -158,12 +158,16 @@ def _summary(args: argparse.Namespace, config: Config) -> int:
     if result.feeds_failed and not result.feeds_ok:  # nothing was fetched: a script must not read this as "quiet"
         print("eyewall: every feed failed", file=sys.stderr)
         return 1
-    if result.store is None or result.ended is None:
-        return 1
+    assert result.store is not None and result.ended is not None  # both runners always set them
     zone = datetime.now().astimezone().tzinfo
-    lines = summary_lines(result.store, PRESETS[config.units.preset], result.ended, zone)
-    sys.stdout.write("".join(f"{line}\n" for line in lines))
-    return 0
+    failed = frozenset(result.failed_feeds)
+    lines = summary_lines(result.store, PRESETS[config.units.preset], result.ended, zone, failed)
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:  # a legacy code page must not turn a place name into a traceback
+        reconfigure(errors="replace")
+    for line in lines:
+        print(line)
+    return 1 if "storms" in failed else 0
 
 
 def _config_path(args: argparse.Namespace) -> Path | None:

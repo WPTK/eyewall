@@ -56,6 +56,7 @@ class HeadlessResult:
     ended: datetime | None = None
     feeds_ok: int = 0  # feed polls that worked
     feeds_failed: int = 0  # feed polls that raised, timed out or were answered by a server that was failing
+    failed_feeds: set[str] = field(default_factory=set)  # feeds whose latest poll failed
     store: Store | None = None  # what the poller learned, for a summary
 
 
@@ -133,8 +134,10 @@ async def run_live(
             for polled in await poller.tick():
                 if polled.ok and not polled.freshness.data_old:
                     result.feeds_ok += 1
+                    result.failed_feeds.discard(polled.feed)
                 else:
                     result.feeds_failed += 1
+                    result.failed_feeds.add(polled.feed)
             result.polls += 1
             due = poller.seconds_until_next()  # 0.0 means a feed is due now: poll it now, not after a full interval
             wait = poller.interval("storms") if due is None else due

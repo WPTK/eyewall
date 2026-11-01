@@ -13,7 +13,7 @@ from eyewall.models.outlook import Outlook
 from eyewall.sources import bundle
 from eyewall.sources.replay import ReplaySource
 from eyewall.state.store import Store
-from eyewall.ui.words.summary import summary_lines
+from eyewall.ui.words.summary import _gauge_line, summary_lines
 from eyewall.units import PRESETS
 from tests.nhc_fixtures import gis_bytes
 from tests.state_support import T0
@@ -140,3 +140,36 @@ def test_a_live_summary_where_every_feed_failed_exits_one_and_prints_nothing(mon
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "eyewall: every feed failed\n"
+
+
+async def test_a_failed_storms_feed_says_so_instead_of_reading_as_quiet():
+    result = await erin()
+    assert summary_lines(result.store, PRESETS["us"], result.ended, EDT, frozenset({"storms"})) == [
+        "Storm data unavailable."
+    ]
+
+
+async def test_a_failed_tides_or_buoys_feed_says_unavailable_not_waiting():
+    result = await erin()
+    store = result.store
+    store.series, store.tide_series, store.latest = {}, {}, {}
+    quiet = summary_lines(store, PRESETS["us"], result.ended, EDT)
+    assert any("Waiting for the first" in line for line in quiet)
+    failed = summary_lines(store, PRESETS["us"], result.ended, EDT, frozenset({"buoys", "tides"}))
+    assert any("Buoy data unavailable." in line for line in failed)
+    assert not any("Waiting for the first" in line for line in failed)
+    gauge = store.tide_stations[0]  # the replay has none near Erin, so ask for one directly
+    assert _gauge_line(store, gauge, result.ended, PRESETS["us"], frozenset()).endswith(
+        "Waiting for the first water level."
+    )
+    unavailable = _gauge_line(store, gauge, result.ended, PRESETS["us"], frozenset({"tides"}))
+    assert unavailable.endswith("Water level data unavailable.")
+
+
+def test_a_live_summary_without_the_storms_feed_exits_one(monkeypatch, capsys):
+    async def fake(config, state_dir, until, *, emit=None):
+        return HeadlessResult(store=Store(config), ended=T0, feeds_ok=2, feeds_failed=1, failed_feeds={"storms"})
+
+    monkeypatch.setattr(headless, "run_live", fake)
+    assert cli.main(["--no-config", "--summary"]) == 1
+    assert capsys.readouterr().out.splitlines() == ["Storm data unavailable."]
