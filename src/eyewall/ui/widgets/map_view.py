@@ -233,21 +233,27 @@ class MapView(Widget, can_focus=True):
             return PATTERN_SAMPLES[pattern][1 if ascii_mode else 0]
 
         items: list[list[tuple[str, str]]] = []
-        if self.options.radii and any(storm.radii for storm in storms):
-            parts = [(" rings", DIM)]
+        if self.options.radii:
+            drawn = {
+                knots
+                for storm in storms
+                for radii in storm.radii
+                for knots, quadrants in ((34, radii.kt34), (50, radii.kt50), (64, radii.kt64))
+                if quadrants is not None and any(quadrants)
+            }
             for knots in RING_KNOTS:
-                parts += [(f" {knots}kt ", DIM), (sample(RING_PATTERNS[knots]), category_color(knots))]
-            items.append(parts)
-        if self.options.warnings and any(storm.warnings or storm.surge for storm in storms):
-            parts = [(" lines", DIM)]
-            for name, kind in (
-                ("watch", WatchWarning.TROPICAL_STORM_WATCH),
-                ("warning", WatchWarning.TROPICAL_STORM_WARNING),
-                ("surge", WatchWarning.SURGE_WARNING),
-            ):
-                cue = WATCH_WARNING_CUES[kind]
-                parts += [(f" {name} ", DIM), (sample(cue.pattern), cue.color)]
-            items.append(parts)
+                if knots in drawn:
+                    ring = [(f" {knots}kt ", DIM), (sample(RING_PATTERNS[knots]), category_color(knots))]
+                    items.append([(" rings", DIM), *ring] if not items else ring)
+        if self.options.warnings:
+            kinds = {segment.kind for storm in storms for segment in (*storm.warnings, *storm.surge)}
+            first = True
+            for kind in WatchWarning:
+                if kind in kinds:
+                    cue = WATCH_WARNING_CUES[kind]
+                    parts = [(f" {cue.short} ", DIM), (sample(cue.pattern), cue.color)]
+                    items.append([(" lines", DIM), *parts] if first else parts)
+                    first = False
         return items
 
     def legend(self, width: int) -> Text:

@@ -3,7 +3,10 @@
 Each meaningful state (category, watch or warning kind, outlook risk, freshness, alert severity, tide difference,
 pressure trend) is a `Cue`: a color plus a word, a short word, a Unicode and an ASCII glyph, a line pattern for the map
 and an emphasis. Colour never carries a meaning alone, so with `NO_COLOR` set the words, glyphs, patterns and emphasis
-still tell the states apart.
+still tell the states apart. Today the interface reads the color and emphasis of every cue, the pattern of the
+watch and warning cues (map lines and key), the short word of those cues (map key) and the glyphs of the freshness and
+pressure trend cues. The `word` and `short` fields elsewhere, the risk cues and the remaining glyphs are plumbing for
+the later redesign PRs that name states in words; the guard tests keep them complete until then.
 
 Category order follows the Saffir-Simpson scale. The hex values are tuned for dark terminals; watch and warning colors
 follow the conventional NHC reading (tropical storm watch yellow, warning blue, hurricane watch pink, warning red).
@@ -22,12 +25,15 @@ Pattern = tuple[int, int] | None
 SOLID: Pattern = None
 DASHED: Pattern = (6, 3)
 DOTTED: Pattern = (1, 3)
+SPARSE: Pattern = (1, 7)  # widely spaced dots, apart from DOTTED
+FORECAST_DASH: Pattern = (4, 2)  # the forecast track; kept apart from the 50 kt ring's DASHED
 
 # A sample stroke of each pattern for the map key, as (Unicode, ASCII).
 PATTERN_SAMPLES: dict[Pattern, tuple[str, str]] = {
     SOLID: ("───", "---"),
     DASHED: ("╌╌╌", "- -"),
     DOTTED: ("┈┈┈", "..."),
+    SPARSE: ("┈ ┈ ┈", ". . ."),
 }
 
 # Chrome.
@@ -143,18 +149,20 @@ class WatchWarning(StrEnum):
     SURGE_WARNING = "SURGE_WARNING"
 
 
-# A warning is solid, a watch dashed and a surge line dotted.
+# A warning is solid, a watch dashed, a surge warning dotted and a surge watch sparsely dotted. Hurricane and tropical
+# storm lines of the same kind differ by color and by the words in the key.
 WATCH_WARNING_CUES: dict[WatchWarning, Cue] = {
     WatchWarning.TROPICAL_STORM_WATCH: Cue("#ffe94a", "Tropical Storm Watch", "TS watch", pattern=DASHED),
     WatchWarning.TROPICAL_STORM_WARNING: Cue("#4aa3ff", "Tropical Storm Warning", "TS warning"),
     WatchWarning.HURRICANE_WATCH: Cue("#ff8fcf", "Hurricane Watch", "Hurr watch", pattern=DASHED),
     WatchWarning.HURRICANE_WARNING: Cue("#ff4d4d", "Hurricane Warning", "Hurr warning"),
-    WatchWarning.SURGE_WATCH: Cue("#c8a8ff", "Storm Surge Watch", "Surge watch", pattern=DOTTED),
+    WatchWarning.SURGE_WATCH: Cue("#c8a8ff", "Storm Surge Watch", "Surge watch", pattern=SPARSE),
     WatchWarning.SURGE_WARNING: Cue("#9b4dff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
 }
 WATCH_WARNING_COLORS: dict[WatchWarning, str] = {kind: cue.color for kind, cue in WATCH_WARNING_CUES.items()}
 
-# NHC's outlook risk labels for the 2-day and 7-day formation chance. The map shades them by hatch density.
+# NHC's outlook risk labels for the 2-day and 7-day formation chance. Only the colors are read today; the words are
+# for a later redesign PR.
 RISK_CUES: dict[str, Cue] = {
     "low": Cue("#ffe94a", "Low", "low"),
     "medium": Cue("#ffa63d", "Medium", "medium"),

@@ -11,6 +11,7 @@ from eyewall.palette import (
     CATEGORY_CUES,
     DASHED,
     DOTTED,
+    FORECAST_DASH,
     FRESHNESS_CUES,
     NEUTRAL,
     PATTERN_SAMPLES,
@@ -20,6 +21,7 @@ from eyewall.palette import (
     RISK_CUES,
     SEVERITY_CUES,
     SOLID,
+    SPARSE,
     TIDE_DIFFERENCE_CUES,
     WATCH_WARNING_COLORS,
     WATCH_WARNING_CUES,
@@ -123,9 +125,10 @@ def test_rings_and_watch_warning_lines_have_distinct_patterns():
     watch = WATCH_WARNING_CUES[WatchWarning.HURRICANE_WATCH].pattern
     surge = WATCH_WARNING_CUES[WatchWarning.SURGE_WARNING].pattern
     assert warning is SOLID and watch == DASHED and surge == DOTTED
+    assert WATCH_WARNING_CUES[WatchWarning.SURGE_WATCH].pattern == SPARSE != surge
+    assert FORECAST_DASH not in (RING_PATTERNS[50], DASHED)  # the forecast track is not mistaken for a 50 kt ring
     assert WATCH_WARNING_CUES[WatchWarning.TROPICAL_STORM_WATCH].pattern == watch
-    assert WATCH_WARNING_CUES[WatchWarning.SURGE_WATCH].pattern == surge
-    assert set(PATTERN_SAMPLES) == {SOLID, DASHED, DOTTED}
+    assert set(PATTERN_SAMPLES) == {SOLID, DASHED, DOTTED, SPARSE}
 
 
 def test_cue_style_puts_emphasis_before_the_color():

@@ -297,13 +297,18 @@ def test_the_ring_key_and_the_rings_use_the_same_wind_scale():
     [
         (WatchWarning.HURRICANE_WARNING, "solid"),
         (WatchWarning.HURRICANE_WATCH, "dashed"),
-        (WatchWarning.SURGE_WATCH, "dotted"),
+        (WatchWarning.SURGE_WATCH, "sparse"),
+        (WatchWarning.SURGE_WARNING, "dotted"),
     ],
 )
 def test_warning_watch_and_surge_lines_wear_solid_dashed_and_dotted_patterns(kind, pattern):
     view = Viewport(30.0, -77.5, 0.05, 100, 30)
     line = tuple((30.0, -80.0 + i * 0.1) for i in range(40))
-    segments = {"warnings" if kind is not WatchWarning.SURGE_WATCH else "surge": (WarningSegment(kind, line),)}
+    segments = {
+        "surge" if kind in (WatchWarning.SURGE_WATCH, WatchWarning.SURGE_WARNING) else "warnings": (
+            WarningSegment(kind, line),
+        )
+    }
     canvas = render_map(view, MapScene(storms=(StormScene(**segments),)), options=OPEN_SEA)
     dots = dot_count(canvas)
     solid = dot_count(
@@ -314,7 +319,9 @@ def test_warning_watch_and_surge_lines_wear_solid_dashed_and_dotted_patterns(kin
         )
     )
     ratio = dots / solid
-    assert {"solid": ratio == 1.0, "dashed": 0.4 < ratio < 0.8, "dotted": 0.1 < ratio < 0.4}[pattern], ratio
+    assert {"solid": ratio == 1.0, "dashed": 0.4 < ratio < 0.8, "dotted": 0.1 < ratio < 0.4, "sparse": ratio < 0.2}[
+        pattern
+    ], ratio
 
 
 def test_a_quadrant_without_wind_collapses_to_the_center():

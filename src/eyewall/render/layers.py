@@ -19,11 +19,13 @@ from eyewall.palette import (
     CONE_EDGE,
     CONE_FILL,
     CURSOR,
+    FORECAST_DASH,
     MAP_LABEL,
     RING_PATTERNS,
     STALE,
     TIDE_GAUGE,
     WATCH_WARNING_CUES,
+    Pattern,
     WatchWarning,
     category_color,
     risk_color,
@@ -180,7 +182,7 @@ class MapStyle:
     tide_gauge: str = TIDE_GAUGE
     stale: str = STALE
     cursor: str = CURSOR
-    forecast_dash: tuple[int, int] = (4, 2)
+    forecast_dash: Pattern = FORECAST_DASH
 
 
 DEFAULT_OPTIONS = MapOptions()
