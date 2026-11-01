@@ -538,3 +538,9 @@ def test_writing_past_the_threshold_trims_the_cache(tmp_path, monkeypatch):
     assert trims == []
     cache.store("https://x/b", b"0123456789", httpx.Headers(), NOW)
     assert trims == [cache_module.MAX_TOTAL_BYTES]
+
+
+def test_a_recording_manifest_that_is_not_utf8_is_a_bundle_error_not_a_traceback(tmp_path):
+    (tmp_path / bundle.MANIFEST).write_bytes(b"name = '\xff\xfe'\n")
+    with pytest.raises(BundleError):
+        bundle.read_manifest(tmp_path)

@@ -805,3 +805,35 @@ def test_a_replay_that_steps_back_drops_a_cone_from_a_later_advisory():
     state = store.storms["al012026"]
     assert state.advisories.public.adv_num.number == 30  # type: ignore[union-attr]
     assert state.forecast_gis is None and state.radii_gis is None
+
+
+# ---- refresh requests and the Retry-After window ------------------------------------------------------------------
+
+
+async def test_a_watchlist_change_and_a_return_from_away_wait_out_a_backoff_window():
+    config = Config(poll=PollConfig(storms=100.0, backoff_max=500.0))
+    poller, source, _, clock, _ = build(config=config)
+    source.fail.add("storms")
+    await poller.tick()
+    window = poller.seconds_until_next()
+    assert window == pytest.approx(200.0)
+    poller.refresh_feeds(protocol.STORMS)
+    assert protocol.STORMS not in poller.due()
+    poller.set_away(True)
+    poller.set_away(False)
+    assert protocol.STORMS not in poller.due()
+    clock.advance(200.0)
+    assert protocol.STORMS in poller.due()
+
+
+async def test_a_refresh_asked_for_during_a_feeds_own_poll_is_not_lost():
+    poller, source, _, _clock, _ = build()
+    original = source.storms
+
+    async def slow():
+        poller.refresh()  # the key is pressed while the storms poll is in flight
+        return await original()
+
+    source.storms = slow
+    await poller.tick()
+    assert protocol.STORMS in poller.due()

@@ -18,6 +18,7 @@ Observed behaviours the code handles:
 
 from __future__ import annotations
 
+import contextlib
 import re
 import zlib
 from datetime import UTC, datetime
@@ -181,7 +182,8 @@ def parse_btk_index(data: bytes | str) -> tuple[BDeckFile, ...]:
     for match in _LISTING.finditer(text):
         modified: datetime | None = None
         if match["date"]:
-            modified = datetime.strptime(match["date"], "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
+            with contextlib.suppress(ValueError):  # a date the directory page got wrong costs only the date
+                modified = datetime.strptime(match["date"], "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
         found.append(
             BDeckFile(
                 name=match["name"],

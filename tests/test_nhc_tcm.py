@@ -249,6 +249,8 @@ def test_a_tcm_with_no_issue_time_raises():
         ("SUBTROPICAL STORM ANA", ("SUBTROPICAL STORM", "ANA")),
         ("POTENTIAL TROPICAL CYCLONE TWO", ("POTENTIAL TROPICAL CYCLONE", "TWO")),
         ("HURRICANE", ("HURRICANE", None)),
+        ("HURRICANE ERIN SPECIAL", ("HURRICANE", "ERIN")),
+        ("Tropical Storm Fay Special", ("TROPICAL STORM", "Fay")),
         ("SOMETHING ELSE ENTIRELY", ("SOMETHING ELSE ENTIRELY", None)),
     ],
 )

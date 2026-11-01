@@ -2,10 +2,11 @@
 
     python scripts/spot_check_nhc.py [--delay SECONDS] [--floater-product]
 
-It reads the real services, so it is a format-drift check, not a test: run it before a release and from the weekly
-canary. Exit status is 1 when any endpoint fails to fetch or parse, or when a structural assertion fails. A quiet day is
-fine: the storm list is then empty, and the checks that need a storm use the most recent storm in each basin, whose last
-advisory the bins and `*_latest.zip` files still hold.
+It reads the real services, so it is a format-drift check, not a test: run it before a release and from the daily
+canary. Exit status is 1 when any endpoint parses wrongly or a structural assertion fails (a line starting
+`FAIL`), and 2 when the only problems are endpoints that were down, unreachable or empty (`DOWN`): an outage is not a
+format change. A quiet day is fine: the storm list is then empty, and the checks that need a storm use the most recent
+storm in each basin, whose last advisory the bins and `*_latest.zip` files still hold.
 
 What is fetched, in order, one request at a time with the eyewall User-Agent and a pause between requests:
 
@@ -50,9 +51,14 @@ PRODUCT_PARSERS: dict[ProductKind, Callable[[str], Any]] = {
 }
 
 
+class Empty(Exception):
+    """An endpoint answered but had nothing in it; reported as an outage, not a format change."""
+
+
 class Report:
     def __init__(self) -> None:
         self.failures = 0
+        self.outages = 0
         self.checks = 0
 
     async def run(self, name: str, work: Callable[[], Awaitable[str]], delay: float) -> None:
@@ -61,7 +67,11 @@ class Report:
         try:
             summary = await work()
             status = "ok  "
-        except (FetchError, ParseError, AssertionError, ValueError, KeyError, IndexError) as exc:
+        except (FetchError, Empty) as exc:
+            self.outages += 1
+            summary = f"{type(exc).__name__}: {exc}"
+            status = "DOWN"
+        except (ParseError, AssertionError, ValueError, KeyError, IndexError) as exc:
             self.failures += 1
             summary = f"{type(exc).__name__}: {exc}"
             status = "FAIL"
@@ -90,7 +100,16 @@ def _missing(response: Response[Any]) -> str | None:
 async def check_active_storms(client: NhcClient, report: Report, delay: float, current: CurrentStorms) -> None:
     for storm in current.storms:
         label = f"{storm.id} {storm.name}"
-        advisory_set = await client.advisory(storm)
+        advisory_holder: list[Any] = []
+
+        async def fetch_advisory(storm: Any = storm, holder: list[Any] = advisory_holder) -> str:
+            holder.append(await client.advisory(storm))
+            return "advisory products fetched"
+
+        await report.run(f"{label} advisory", fetch_advisory, delay)
+        if not advisory_holder:
+            continue  # the fetch failed and is already reported; the other storms still get checked
+        advisory_set = advisory_holder[0]
         found = [
             name
             for name, product in (
@@ -166,7 +185,8 @@ async def check_outlooks(client: NhcClient, report: Report, delay: float) -> Non
 
         async def two(basin: Basin = basin) -> str:
             response = await client.fetch_outlook_text(basin, fallback=False)
-            assert response.value, "empty outlook"
+            if not response.value:
+                raise Empty("empty outlook")
             parsed = parse_two(response.value)
             return f"{len(parsed.areas)} areas, quiet={parsed.quiet}, issued {parsed.issued:%Y-%m-%d %H:%MZ}"
 
@@ -174,7 +194,8 @@ async def check_outlooks(client: NhcClient, report: Report, delay: float) -> Non
 
     async def fallback() -> str:
         response = await client.fetch_api_text(ProductKind.TWO, ids.outlook_location(Basin.AL))
-        assert response.value, "api.weather.gov returned no outlook text"
+        if not response.value:
+            raise Empty("api.weather.gov returned no outlook text")
         return f"{len(parse_two(response.value).areas)} areas via api.weather.gov"
 
     await report.run("TWO AT (api.weather.gov)", fallback, delay)
@@ -267,7 +288,7 @@ async def check_graphics(client: NhcClient, report: Report, delay: float, floate
     async def floater_root() -> str:
         response = await client.fetch_floater_storms()
         storms.extend(response.value or ())
-        assert storms, "no storm directories listed"
+        assert storms, "no storm directories listed"  # the page answered, so an empty parse is a format change
         return f"{len(storms)} storm directories, newest {storms[-1]}"
 
     await report.run("NESDIS FLOATER/data/", floater_root, delay)
@@ -295,6 +316,14 @@ async def check_graphics(client: NhcClient, report: Report, delay: float, floate
 
 async def main_async(delay: float, floater_product: bool) -> int:
     report = Report()
+    await run_checks(report, delay, floater_product)
+    print(f"\n{report.checks - report.failures - report.outages} of {report.checks} checks passed")
+    if report.outages:
+        print(f"{report.outages} endpoint(s) down or empty")
+    return 1 if report.failures else 2 if report.outages else 0
+
+
+async def run_checks(report: Report, delay: float, floater_product: bool) -> None:
     async with new_client() as http:
         client = NhcClient(http)
         current_holder: list[CurrentStorms] = []
@@ -314,8 +343,6 @@ async def main_async(delay: float, floater_product: bool) -> int:
         await check_outlooks(client, report, delay)
         await check_latest_storms(client, report, delay)
         await check_graphics(client, report, delay, floater_product)
-    print(f"\n{report.checks - report.failures} of {report.checks} checks passed")
-    return 1 if report.failures else 0
 
 
 def main(argv: list[str] | None = None) -> int:

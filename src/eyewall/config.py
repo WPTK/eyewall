@@ -350,7 +350,7 @@ def load_config(path: Path | None = None, *, use_file: bool = True) -> LoadResul
         notes = (f"config file {target} not found; using defaults",) if explicit else ()
         return LoadResult(Config(), notes, target)
     try:
-        data = tomllib.loads(target.read_text(encoding="utf-8"))
+        data = tomllib.loads(target.read_text(encoding="utf-8-sig"))  # Notepad adds a BOM
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         return LoadResult(Config(), (f"could not read {target}: {exc}; using defaults",), target, broken=True)
     config, problems = parse_config(data)
