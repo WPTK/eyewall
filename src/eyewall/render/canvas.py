@@ -404,11 +404,12 @@ class Canvas:
                             prios[i] = prio
 
     def tint_polygon(self, rings: Iterable[Sequence[Dot]], color: str) -> None:
-        """Give the background of every cell whose center lies inside the rings (even-odd, so a ring inside another
-        one is a hole) a color. Dots, text and markers drawn on a tinted cell keep it, so the area reads as one flat
-        fill."""
+        """Give the background of every cell that is at least half inside the rings (even-odd, so a ring inside
+        another one is a hole) a color. Coverage is counted in dots, so the edge of the tint follows the shore as
+        closely as whole cells can. Dots, text and markers drawn on a tinted cell keep it, so the area reads as one
+        flat fill."""
         dots_x, dots_y, cols = self.dots_x, self.dots_y, self.cols
-        crossings: list[list[float]] = [[] for _ in range(self.rows)]
+        crossings: list[list[float]] = [[] for _ in range(self.height)]
         for ring in rings:
             n = len(ring)
             for i in range(n if n >= 3 else 0):
@@ -418,20 +419,22 @@ class Canvas:
                     continue
                 if ya > yb:
                     xa, ya, xb, yb = xb, yb, xa, ya
-                half = dots_y / 2.0
-                first = max(0, math.ceil((ya - half) / dots_y))
-                last = min(self.rows, math.ceil((yb - half) / dots_y))  # exclusive, as in fill_polygon
+                first = max(0, math.ceil(ya - 0.5))
+                last = min(self.height, math.ceil(yb - 0.5))  # exclusive, as in fill_polygon
                 slope = (xb - xa) / (yb - ya)
-                for row in range(first, last):
-                    crossings[row].append(xa + (row * dots_y + half - ya) * slope)
-        half_x = dots_x / 2.0
-        for row, xs in enumerate(crossings):
+                for y in range(first, last):
+                    crossings[y].append(xa + (y + 0.5 - ya) * slope)
+        covered = [0] * (cols * self.rows)
+        for y, xs in enumerate(crossings):
             xs.sort()
+            base = (y // dots_y) * cols
             for k in range(0, len(xs) - 1, 2):
-                for col in range(
-                    max(0, math.ceil((xs[k] - half_x) / dots_x)), min(cols, math.ceil((xs[k + 1] - half_x) / dots_x))
-                ):
-                    self._bg[row * cols + col] = color
+                for x in range(max(0, math.ceil(xs[k] - 0.5)), min(self.width, math.ceil(xs[k + 1] - 0.5))):
+                    covered[base + x // dots_x] += 1
+        half = dots_x * dots_y / 2.0
+        for i, count in enumerate(covered):
+            if count >= half:
+                self._bg[i] = color
 
     # ------------------------------------------------------------------------------------------------ text, markers
 

@@ -6,12 +6,21 @@ from __future__ import annotations
 from dataclasses import replace
 
 from eyewall.models.outlook import Outlook, OutlookGis, OutlookSystem
-from eyewall.render.layers import OutlookArea
+from eyewall.render.hits import Mark
 from eyewall.render.projection import Viewport
 from eyewall.ui import adapt, nav
 from eyewall.ui.chrome import footer_items
 from tests.test_main_screen import panel_text
-from tests.ui_support import ScriptedSource, into_the_storm, quiet_outlook, replay_app, running, scripted_app
+from tests.ui_support import (
+    WATCHLIST_BUOYS,
+    WATCHLIST_GAUGES,
+    ScriptedSource,
+    into_the_storm,
+    quiet_outlook,
+    replay_app,
+    running,
+    scripted_app,
+)
 
 ALL = ("AL", "EP", "CP")
 ATLANTIC = (adapt.BASIN_BOUNDS["AL"][0], adapt.BASIN_BOUNDS["AL"][1])
@@ -26,30 +35,19 @@ def square(lat: float, lon: float, half: float = 1.0) -> tuple[tuple[float, floa
     )
 
 
-def test_with_no_area_the_quiet_map_fits_the_atlantic_not_the_hemisphere() -> None:
-    assert adapt.quiet_points((), ALL) == list(ATLANTIC)
-    quiet = Viewport.fit_points(adapt.quiet_points((), ALL), 100, 27)
+def test_the_quiet_map_fits_the_atlantic_not_the_hemisphere() -> None:
+    assert adapt.quiet_points(ALL) == list(ATLANTIC)
+    quiet = Viewport.fit_points(adapt.quiet_points(ALL), 100, 27)
     hemisphere = Viewport.fit_points(adapt.basin_points(()), 100, 27)
     assert quiet.deg_per_dot < 0.6 * hemisphere.deg_per_dot
     assert not quiet.bounds().contains(10.0, -150.0)  # the Pacific is off the map
     assert quiet.bounds().contains(25.0, -80.0)
 
 
-def test_a_small_area_inside_the_basin_does_not_zoom_in_past_the_basin() -> None:
-    area = OutlookArea((square(15.0, -45.0, 1.5),), "low", "20% in 7 days")
-    points = adapt.quiet_points((area,), ALL)
-    assert Viewport.fit_points(points, 100, 27).deg_per_dot == Viewport.fit_points(list(ATLANTIC), 100, 27).deg_per_dot
-
-
-def test_an_area_outside_the_basin_widens_the_fit_to_take_it_in() -> None:
-    area = OutlookArea((square(12.0, -125.0),), "medium", "40% in 7 days")
-    view = Viewport.fit_points(adapt.quiet_points((area,), ALL), 100, 27)
-    assert view.bounds().contains(12.0, -125.0) and view.bounds().contains(25.0, -80.0)
-
-
-def test_the_first_enabled_basin_is_the_base_of_the_fit() -> None:
-    assert adapt.quiet_points((), ("EP", "CP")) == list(adapt.BASIN_BOUNDS["EP"])
-    assert adapt.quiet_points((), ("CP",)) == list(adapt.BASIN_BOUNDS["CP"])
+def test_the_first_enabled_basin_is_the_whole_fit() -> None:
+    assert adapt.quiet_points(("EP", "CP")) == list(adapt.BASIN_BOUNDS["EP"])
+    assert adapt.quiet_points(("CP",)) == list(adapt.BASIN_BOUNDS["CP"])
+    assert adapt.quiet_points(()) == list(ATLANTIC)
 
 
 def atlantic_only() -> Outlook:
@@ -57,12 +55,33 @@ def atlantic_only() -> Outlook:
     return replace(quiet_outlook(), gis=OutlookGis(None, (system,)))
 
 
-async def test_the_quiet_screen_fits_an_atlantic_outlook_and_not_the_hemisphere() -> None:
-    app = scripted_app(ScriptedSource(atlantic_only()))
+async def test_the_quiet_screen_is_the_atlantic_at_half_a_degree_a_dot_whatever_the_outlook() -> None:
+    far = OutlookSystem("Pacific", "1", 0, "low", 40, "medium", polygons=(square(12.0, -150.0, 2.0),))
+    for outlook in (atlantic_only(), replace(quiet_outlook(), gis=OutlookGis(None, (far,)))):
+        app = scripted_app(ScriptedSource(outlook))
+        async with running(app, (120, 30)):
+            view = app.screen.map_view.viewport
+            assert view is not None and view.deg_per_dot <= 0.5
+            assert not view.bounds().contains(12.0, -150.0) and view.bounds().contains(25.0, -80.0)
+
+
+async def test_an_area_in_another_basin_is_panel_text_not_a_wider_map() -> None:
+    far = OutlookSystem("Pacific", "1", 0, "low", 40, "medium", polygons=(square(12.0, -150.0, 2.0),))
+    app = scripted_app(ScriptedSource(replace(quiet_outlook(), gis=OutlookGis(None, (far,)))))
+    async with running(app, (120, 30)):
+        assert "1 area in the Central Pacific: a 40% chance" in " ".join(panel_text(app).split())
+
+
+async def test_every_followed_station_inside_the_quiet_view_has_a_mark() -> None:
+    app = scripted_app(ScriptedSource(stations=WATCHLIST_BUOYS, gauges=WATCHLIST_GAUGES))
     async with running(app, (120, 30)):
         view = app.screen.map_view.viewport
-        assert view is not None and view.deg_per_dot < 0.55
-        assert not view.bounds().contains(10.0, -150.0) and view.bounds().contains(15.0, -45.0)
+        assert view is not None
+        marks = {mark for mark, _ in app.screen.map_view.hits.drawn}
+        followed = [(Mark("buoy", s.id), s.lat, s.lon) for s in WATCHLIST_BUOYS]
+        followed += [(Mark("gauge", g.id), g.lat, g.lon) for g in WATCHLIST_GAUGES]
+        inside = [m for m, lat, lon in followed if view.bounds().contains(lat, lon)]
+        assert len(inside) == 4 and set(inside) <= marks
 
 
 async def test_the_quiet_footer_keeps_to_what_there_is_to_do() -> None:

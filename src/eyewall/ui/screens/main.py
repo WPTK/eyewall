@@ -238,7 +238,7 @@ class MainScreen(ChromeScreen):
             points = adapt.storm_scene(state).near_extent()
             if points:
                 return points
-        return adapt.quiet_points(adapt.outlook_areas(eye.store.outlook), eye.basin_view)
+        return adapt.quiet_points(eye.basin_view)
 
     # ---- actions ----------------------------------------------------------------------------------------------
 

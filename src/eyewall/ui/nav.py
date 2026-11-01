@@ -80,7 +80,13 @@ KEYS: tuple[Key, ...] = (
     K("main", "1", "basin('AL')", "Atlantic"),
     K("main", "2", "basin('EP')", "East Pacific"),
     K("main", "3", "basin('CP')", "Central Pacific"),
-    K("main", "a", "basin('')", "all basins", "Atlantic, East Pacific, Central Pacific, all"),
+    K(
+        "main",
+        "a",
+        "basin('')",
+        "all basins",
+        "Atlantic, East Pacific, Central Pacific, all (all: the Atlantic)",
+    ),
     K(
         "main",
         "b",

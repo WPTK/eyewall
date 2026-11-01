@@ -64,7 +64,7 @@ def test_with_no_storm_the_summary_says_so_and_gives_the_outlook():
     assert summary_lines(store, PRESETS["us"], T0, EDT) == [
         "No tropical storms in the Atlantic, East Pacific and Central Pacific right now.",
         "",
-        "NHC is watching 1 area: a 90% chance it forms within 7 days, and 80% within 2 days.",
+        "NHC is watching 1 area in the Atlantic: a 90% chance it forms within 7 days, and 80% within 2 days.",
     ]
 
 

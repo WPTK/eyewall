@@ -27,7 +27,7 @@ def texts(outlook: Outlook, words):
 def test_one_area_reads_as_a_single_sentence_with_an_before_80():
     outlook = Outlook(gis=gis("gtwo_20250926.zip"))
     assert texts(outlook, outlook_sentences(outlook, ("AL", "EP", "CP"))) == [
-        "NHC is watching 1 area: a 90% chance it forms within 7 days, and 80% within 2 days."
+        "NHC is watching 1 area in the Atlantic: a 90% chance it forms within 7 days, and 80% within 2 days."
     ]
 
 
@@ -44,7 +44,7 @@ def test_several_areas_get_a_lead_and_a_line_each():
 def test_only_areas_in_the_enabled_basins_are_counted():
     outlook = Outlook(gis=gis("gtwo_20250919.zip"))
     assert texts(outlook, outlook_sentences(outlook, ("AL",))) == [
-        "NHC is watching 1 area: a 20% chance it forms within 7 days, and 0% within 2 days."
+        "NHC is watching 1 area in the Atlantic: a 20% chance it forms within 7 days, and 0% within 2 days."
     ]
     assert texts(outlook, outlook_sentences(outlook, ("CP",)))[0] == "NHC is watching 2 areas."
 
@@ -65,7 +65,7 @@ def test_the_same_summary_is_not_said_twice():
 def test_when_the_shapes_did_not_arrive_the_text_areas_are_used():
     outlook = Outlook(texts=two("ep_20261031"))
     assert texts(outlook, outlook_sentences(outlook, ("EP",))) == [
-        "NHC is watching 1 area: a 40% chance it forms within 7 days, and 0% within 2 days."
+        "NHC is watching 1 area in the East Pacific: a 40% chance it forms within 7 days, and 0% within 2 days."
     ]
 
 
