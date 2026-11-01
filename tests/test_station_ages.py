@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from eyewall.config import Config, with_watchlist
 from eyewall.models.events import EventKind
 from eyewall.models.forecast import ForecastFix
@@ -290,6 +292,15 @@ def test_a_first_fix_already_past_does_not_leave_a_chord_across_the_real_track()
     store.stations = {"41010": Station("41010", "LEG", 20.0, -72.5, met=True)}
     found = store.nearby_buoys(state.storm.id, now)
     assert [e.station.id for e in found] == ["41010"] and 0 < found[0].eta_hours < 11
+
+
+def test_the_feed_position_is_anchored_at_its_own_update_time_not_the_older_tcm() -> None:
+    _, state = _store_with_a_buoy_by_the_storm()
+    tcm_time = T0 - timedelta(hours=3)  # the TCM is held at the previous advisory; the feed is a full advisory ahead
+    held = _fixes_at(state, tcm_time, fix(T0 + timedelta(hours=3), 25.0, -74.0))
+    held = replace(held, storm=replace(held.storm, last_update=T0))
+    center, _ = track_from(held, (25.0, -75.0), T0 + timedelta(minutes=10))
+    assert center[1] == pytest.approx(-75.0, abs=0.1)  # 10 minutes into a 3 hour leg, not 3 hours 10 into it
 
 
 def test_alert_expiry_uses_ends_then_expires_and_no_end_means_still_active() -> None:

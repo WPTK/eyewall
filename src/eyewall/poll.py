@@ -20,7 +20,8 @@ failed poll the delay doubles per consecutive failure up to `backoff_max` and ne
 interval. A server that says 429 or 5xx counts as a failure even when the disk cache answered for it, and its
 Retry-After sets a floor on the wait. `refresh()` wakes the loop and makes every feed due, but never sooner than
 `REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. A feed that runs past
-`FEED_DEADLINE` seconds is cut off, so one hung host cannot hold up the others.
+`FEED_DEADLINE` seconds is cut off. A tick polls storms first, then the other due feeds together, so one hung host
+costs only its own deadline.
 
 **What is refetched.** `CurrentStorms` is polled on the storms interval; a storm's advisory text, GIS zips, best track
 and graphics are fetched only when its advisory number or last-update time changes. The api.weather.gov copy of the
@@ -44,7 +45,7 @@ from enum import StrEnum
 from eyewall.clock import Clock, SystemClock
 from eyewall.config import PollConfig
 from eyewall.models.advisory import AdvisorySet
-from eyewall.models.events import Event
+from eyewall.models.events import Event, EventKind
 from eyewall.models.obs import TideStation
 from eyewall.models.watches import AlertsResult
 from eyewall.net import FetchError, HttpError, RateLimited
@@ -68,6 +69,7 @@ MAX_BUOY_SERIES = 24
 MAX_TIDE_GAUGES = 12
 PERMANENT_STATUSES = frozenset({400, 404, 410})  # a station answered for good; see _is_permanent
 STATION_REFRESH = 24 * 3600.0
+CATALOG_RETRY = 3600.0  # a refresh that failed while a catalog is held is asked for again after this long
 _PRODUCTS = ("forecast_gis", "radii_gis", "track", "graphics")
 _TEXT = "advisory"  # the text products, tracked beside the others in `_pending`
 MAX_BACKOFF_EXPONENT = 16  # 2**failures overflows a float after about 1000 consecutive failures
@@ -199,7 +201,7 @@ class Poller:
         self.fetch_counts: dict[str, int] = {}
         self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
         self.feed_deadline = FEED_DEADLINE
-        self._partial: list[Event] = []  # events a feed produced before its deadline cut it off
+        self._partial: dict[str, list[Event]] = {}  # by feed: the events it produced before a deadline cut it off
 
     # ---- timing -----------------------------------------------------------------------------------------------
 
@@ -322,12 +324,28 @@ class Poller:
         results: list[PollResult] = []
         self.polling = True
         try:
-            for name in protocol.FEEDS:  # re-checked per feed: the storms poll decides whether the others apply
-                if self._feeds[name].next_at <= self.clock.monotonic() and self._enabled(name):
-                    results.append(await self.poll_feed(name))
+            first, *others = protocol.FEEDS  # storms first: its answer decides whether the others apply
+            if self._due(first):
+                results.append(await self.poll_feed(first))
+            # The rest are independent hosts and run together, so a stalled one costs only its own deadline.
+            outcomes = await asyncio.gather(
+                *(self.poll_feed(name) for name in others if self._due(name)), return_exceptions=True
+            )
+            for (
+                outcome
+            ) in outcomes:  # poll_feed catches everything but cancellation, which gather hands back as a value
+                if isinstance(outcome, PollResult):
+                    results.append(outcome)
+                elif isinstance(outcome, asyncio.CancelledError):
+                    raise outcome
+                else:
+                    log.error("a feed poll raised", exc_info=outcome)
         finally:
             self.polling = False
         return results
+
+    def _due(self, name: str) -> bool:
+        return self._feeds[name].next_at <= self.clock.monotonic() and self._enabled(name)
 
     async def poll_feed(self, feed: str) -> PollResult:
         state = self._feeds[feed]
@@ -337,7 +355,7 @@ class Poller:
         state.last_attempt = self.clock.monotonic()
         state.requested = None
         self.source.start_poll(feed)
-        self._partial = []
+        self._partial[feed] = []
         retry_after: float | None = None
         try:
             async with asyncio.timeout(self.feed_deadline):
@@ -346,10 +364,10 @@ class Poller:
             raise
         except TimeoutError:
             error = TimeoutError(f"the {feed} feed took more than {self.feed_deadline:.0f} s")
-            events = self._partial
+            events = self._partial[feed]
         except Exception as exc:  # a parser bug must not kill the poll loop either
             error = exc
-            events = self._partial
+            events = self._partial[feed]
         if error is None and isinstance(self.source, ThrottleReporting):
             throttled = self.source.throttle(feed)
             if throttled is not None:  # a 429 or 5xx the cache answered for: old data, but still a failure
@@ -408,14 +426,21 @@ class Poller:
     async def _poll_storms(self) -> list[Event]:
         now = self.source.now()
         events = self.store.apply_storms(await self.source.storms(), now)
-        self._partial = events  # the store has moved on; these events must survive a failure or a deadline below
+        self._partial[protocol.STORMS] = (
+            events  # the store has moved on; these events must survive a failure or a deadline below
+        )
         failure: Exception | None = None
-        for storm_id, state in list(self.store.storms.items()):
-            key = storm_key(state.storm)
-            if state.fetched_key == key:
-                continue
+        todo = [
+            (storm_id, key)
+            for storm_id, state in list(self.store.storms.items())
+            if state.fetched_key != (key := storm_key(state.storm))
+        ]
+        for storm_id, key in todo:
             try:
-                events += await self._fetch_products(storm_id, key)
+                # Each storm gets an equal share of the feed's deadline, so one whose host hangs counts as a failed
+                # attempt (and settles at PRODUCT_ATTEMPTS) instead of starving the storms after it.
+                async with asyncio.timeout(self.feed_deadline / len(todo)):
+                    await self._fetch_products(storm_id, key)
             except Exception as exc:  # one storm's bad product must not cost the others theirs, nor the events above
                 if self._attempts.get((storm_id, key), 0) >= PRODUCT_ATTEMPTS:
                     log.warning("giving up on the products of %s", storm_id, exc_info=True)
@@ -429,8 +454,12 @@ class Poller:
             self.store.apply_alerts(AlertsResult())  # the alerts feed is off now; do not keep showing its last answer
         return events
 
-    async def _fetch_products(self, storm_id: str, key: tuple[str | None, datetime | None]) -> list[Event]:
-        """The heavy products for a storm whose advisory number or update time just changed."""
+    async def _fetch_products(self, storm_id: str, key: tuple[str | None, datetime | None]) -> None:
+        """The heavy products for a storm whose advisory number or update time just changed.
+
+        Each answer is stored as it arrives, and what is still owed is noted in `_pending` before the slow products
+        start, so a deadline that cuts the fetch off keeps the text, its events and the products already in hand.
+        """
         storm = self.store.storms[storm_id].storm
         now = self.source.now()
         attempt = self._attempts.get((storm_id, key), 0) + 1
@@ -448,34 +477,30 @@ class Poller:
             if behind and attempt < FALLBACK_ATTEMPTS:
                 # tgftp still serves the previous advisory, or one product of this one. Keep the old products and
                 # ask again next poll, the second time through api.weather.gov.
-                return []
+                return
             if behind:
                 failed.add(_TEXT)  # the other products settle below; the text is asked for again
                 if have is None:
                     advisories = None
-        got: dict[str, object] = {}
+        if advisories is not None:
+            self._partial[protocol.STORMS] += self.store.apply_products(storm_id, now, key=None, advisories=advisories)
+        owed = self._pending[(storm_id, key)] = failed | (pending & set(_PRODUCTS))
         for name in _PRODUCTS:
             if name in pending:
                 answered = self.source.cache_answers(protocol.STORMS)
-                got[name] = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
+                result = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
                 if self.source.cache_answers(protocol.STORMS) > answered:  # came from the disk cache: use it, ask again
                     failed.add(name)
+                self._partial[protocol.STORMS] += self.store.apply_products(storm_id, now, key=None, **{name: result})
+                if name not in failed:
+                    owed.discard(name)
         retry = bool(failed) and attempt < PRODUCT_ATTEMPTS  # a failed product is asked for again, within the cap
         if retry:
             self._pending[(storm_id, key)] = failed
         else:
             self._pending.pop((storm_id, key), None)
             self._attempts = {k: v for k, v in self._attempts.items() if k[0] != storm_id or k == (storm_id, key)}
-        return self.store.apply_products(
-            storm_id,
-            now,
-            key=None if retry else key,
-            advisories=advisories,
-            forecast_gis=got.get("forecast_gis"),  # type: ignore[arg-type]
-            radii_gis=got.get("radii_gis"),  # type: ignore[arg-type]
-            track=got.get("track"),  # type: ignore[arg-type]
-            graphics=got.get("graphics"),  # type: ignore[arg-type]
-        )
+            self.store.apply_products(storm_id, now, key=key)
 
     @staticmethod
     async def _optional[T](call: Awaitable[T], name: str, failed: set[str], storm_id: str) -> T | None:
@@ -502,11 +527,33 @@ class Poller:
         last = self._stations_at.get(name)
         return last is None or self.clock.monotonic() - last >= STATION_REFRESH
 
+    async def _refresh_catalog[T](
+        self, name: str, held: bool, fetch: Callable[[], Awaitable[T]], apply: Callable[[T], object]
+    ) -> None:
+        """Load a station catalog when none is held or the day is up. A refresh that fails while one is held keeps
+        it and asks again in CATALOG_RETRY: the observations do not depend on the listing being current."""
+        if held and not self._station_catalog_due(name):
+            return
+        try:
+            apply(await fetch())
+        except Exception:
+            if not held:
+                raise
+            log.warning("the %s station list could not be refreshed; keeping the last one", name, exc_info=True)
+            self._stations_at[name] = self.clock.monotonic() - STATION_REFRESH + CATALOG_RETRY
+            return
+        self._stations_at[name] = self.clock.monotonic()
+
     async def _poll_buoys(self) -> list[Event]:
-        if not self.store.stations or self._station_catalog_due("ndbc"):
-            self.store.apply_stations(await self.source.ndbc_stations())
-            self._stations_at["ndbc"] = self.clock.monotonic()
-        self.store.apply_latest(await self.source.ndbc_latest())
+        await self._refresh_catalog(
+            "ndbc", bool(self.store.stations), self.source.ndbc_stations, self.store.apply_stations
+        )
+        latest_error: Exception | None = None
+        try:
+            self.store.apply_latest(await self.source.ndbc_latest())
+        except Exception as exc:  # the series files are separate requests: they still count
+            log.debug("the latest buoy observations could not be fetched", exc_info=True)
+            latest_error = exc
         # A full series is fetched only for the stations an open page shows and the ones nearest a storm, at most
         # MAX_BUOY_SERIES in all. A watchlist-only buoy is covered by `latest_obs`, which is one file for every buoy.
         nearby = [[e.station.id.upper() for e in self.store.nearby_buoys(sid)] for sid in self.store.storms]
@@ -530,14 +577,20 @@ class Poller:
         await asyncio.gather(*(one(i, sid) for i, sid in enumerate(wanted)))
         if wanted and (down := _feed_failure(failures, len(wanted))) is not None:
             raise down  # every request failed: the feed backs off instead of reporting fresh
+        events = self.store.buoy_events(self.source.now())
         if self.source.stale(protocol.BUOYS):
-            return []  # answered from the disk cache: old rows say nothing about whether a buoy is still reporting
-        return self.store.buoy_events(self.source.now())
+            # Some file came from the disk cache: its old rows prove no silence. A crossing needs no such guard, since
+            # events.py ignores rows older than CROSSING_WINDOW, so cached rows cannot raise a false one.
+            events = [e for e in events if e.kind is not EventKind.BUOY_SILENT]
+        if latest_error is not None:
+            self._partial[protocol.BUOYS] = events  # what the series gave survives the failure
+            raise latest_error
+        return events
 
     async def _poll_tides(self) -> list[Event]:
-        if not self.store.tide_stations or self._station_catalog_due("coops"):
-            self.store.apply_tide_stations(await self.source.coops_stations())
-            self._stations_at["coops"] = self.clock.monotonic()
+        await self._refresh_catalog(
+            "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
+        )
         gauges: dict[str, TideStation] = {}
         ranked = [[e.station for e in self.store.nearby_tides(sid)] for sid in self.store.storms]
         for station in _by_rank(ranked):

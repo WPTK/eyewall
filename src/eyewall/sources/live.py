@@ -351,11 +351,11 @@ class LiveSource:
             if "met" in station.products:
                 try:
                     wind = await self.coops.wind(station.id, date="recent")
-                except FetchError as exc:
+                except (FetchError, ParseError) as exc:
                     wind = Parsed(message=str(exc))
                 try:
                     pressure = await self.coops.air_pressure(station.id, date="recent")
-                except FetchError as exc:
+                except (FetchError, ParseError) as exc:
                     pressure = Parsed(message=str(exc))
             predictions = await self._predictions_for(station, datum)
             return TideSeries(station.id, datum, level, wind, pressure, predictions)
@@ -381,8 +381,8 @@ class LiveSource:
             if not 400 <= exc.status < 500 or isinstance(exc, RateLimited):
                 return found  # a 5xx or 429 passes: ask again next poll
             # a subordinate station answers with a 4xx; the answer will not change today, so it is remembered
-        except FetchError as exc:
-            return Parsed(message=str(exc))  # the network failed (timeout, no connection): ask again next poll
+        except (FetchError, ParseError) as exc:  # the network failed or the body was junk: ask again next poll
+            return Parsed(message=str(exc))
         self._predictions = {k: v for k, v in self._predictions.items() if k[2] == key[2]}
         self._predictions[key] = found
         return found
