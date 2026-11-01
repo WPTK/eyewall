@@ -1,0 +1,50 @@
+name: Spike S4 (macOS real input)
+
+on:
+  push:
+    branches: ['spike/s4-*']
+
+permissions:
+  contents: read
+
+jobs:
+  s4:
+    name: ${{ matrix.os }} / ${{ matrix.method }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-15, macos-15-intel]
+        method: [tcc, vnc, iterm]
+    env:
+      S4: ${{ github.workspace }}/scripts/uat/spikes/s4
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Attempt 1 - inventory
+        run: bash "$S4/inventory.sh"
+        continue-on-error: true
+      - name: Install tools
+        run: bash "$S4/setup.sh" ${{ matrix.method }}
+        continue-on-error: true
+      - name: Run method ${{ matrix.method }}
+        run: bash "$S4/method_${{ matrix.method }}.sh"
+        continue-on-error: true
+        timeout-minutes: 12
+      - name: Final screen and logs
+        if: always()
+        run: |
+          screencapture -x "$OUT/final_screen.png" || true
+          log show --last 10m --predicate 'subsystem == "com.apple.TCC"' --style compact > "$OUT/tcc_log.txt" 2>&1 || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: s4-${{ matrix.os }}-${{ matrix.method }}
+          path: out/
+          if-no-files-found: warn
