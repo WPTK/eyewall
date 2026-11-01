@@ -216,8 +216,8 @@ class StationScreen(ChromeScreen):
             rows = () if series is None else series.observations
             trends = (
                 words.pressure_trend(store.tendency(self.station_id, now), preset),
-                words.wind_trend_sentence(wind_trend(rows), preset),
-                words.wave_trend_sentence(wave_trend(rows), preset),
+                words.wind_trend_sentence(wind_trend(rows, now=now), preset),
+                words.wave_trend_sentence(wave_trend(rows, now=now), preset),
             )
             shown = [t for t in trends if t is not None]
             for trend in shown[:2] if small else shown:  # a short screen keeps room for the charts

@@ -29,6 +29,8 @@ from typing import Any
 
 import tomli_w
 
+from eyewall.textclean import printable
+
 FORMAT = 1
 MANIFEST = "manifest.toml"
 TEXT_KINDS = ("tcm", "tcp", "tcd", "pws")
@@ -106,20 +108,25 @@ def read_manifest(directory: Path) -> Manifest:
         raise BundleError(f"{path}: not valid TOML ({exc})") from exc
     try:
         graphics = tuple(
-            GraphicEntry(str(g["file"]), str(g["kind"]), str(g["product"]), str(g["adv"]))
+            GraphicEntry(
+                printable(str(g["file"])),
+                printable(str(g["kind"])),
+                printable(str(g["product"])),
+                printable(str(g["adv"])),
+            )
             for g in data.get("graphics", [])
         )
         storm_id = str(data["storm_id"]).lower()
         if not _STORM_ID.fullmatch(storm_id):
             raise BundleError(f"{path}: storm_id {storm_id!r} is not a storm id such as al052025")
         return Manifest(
-            name=str(data["name"]),
+            name=printable(str(data["name"])),
             storm_id=storm_id,
-            storm_name=str(data["storm_name"]),
+            storm_name=printable(str(data["storm_name"])),
             bin=str(data["bin"]).upper(),
             start=_moment(data["start"], "start"),
             end=_moment(data["end"], "end"),
-            title=str(data.get("title", "")),
+            title=printable(str(data.get("title", ""))),
             graphics=graphics,
             format=int(data.get("format", FORMAT)),
         )

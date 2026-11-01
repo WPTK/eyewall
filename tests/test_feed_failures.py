@@ -267,7 +267,7 @@ async def test_only_a_4xx_prediction_failure_is_remembered_for_the_day(tmp_path,
     assert len(asked) == (1 if remembered else 2)
 
 
-async def test_an_image_answered_from_the_cache_does_not_mark_the_poll_stale(tmp_path):
+async def test_an_image_the_cache_could_only_stand_in_for_is_refused_and_does_not_mark_the_poll_stale(tmp_path):
     state = {"fail": False}
 
     def handler(request):
@@ -281,7 +281,8 @@ async def test_an_image_answered_from_the_cache_does_not_mark_the_poll_stale(tmp
         await source.image(url)
         source.start_poll(protocol.STORMS)
         state["fail"] = True
-        await source.image(url)
+        with pytest.raises(FetchError):  # the old copy may be the previous advisory's picture
+            await source.image(url)
         assert not source.stale(protocol.STORMS)
         assert source.throttle(protocol.STORMS) is None
     finally:

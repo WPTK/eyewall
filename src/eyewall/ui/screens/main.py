@@ -24,6 +24,7 @@ from textual.widgets import Static
 
 from eyewall.clock import format_age
 from eyewall.sources import protocol
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui import adapt, nav
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
@@ -92,7 +93,7 @@ def _old_reason(view: View) -> str:
 
 def _unread_sentence(pending: list[StormState], total: int) -> str:
     if total == 1:
-        adv = pending[0].storm.adv_num
+        adv = current_adv(pending[0].storm)
         return (
             f"Its watches and warnings are not yet read for advisory {adv}."
             if adv

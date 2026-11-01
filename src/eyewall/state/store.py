@@ -26,7 +26,7 @@ from eyewall.models.wind import WindRadiiGis
 from eyewall.state import events as ev
 from eyewall.state.alerts import tropical_alerts
 from eyewall.state.nearby import NearbyStation, TrackFix, nearby_stations
-from eyewall.state.trends import PressureTendency, pressure_tendency
+from eyewall.state.trends import TENDENCY_MAX_AGE, PressureTendency, pressure_tendency
 
 # A storm is a threat to the United States when its center or a forecast position is inside one of these boxes
 # (south, west, north, east): the Atlantic and Gulf coasts with the Caribbean territories, and Hawaii.
@@ -35,7 +35,6 @@ US_BOXES = (
     (18.0, -161.0, 23.0, -154.0),
 )
 US_NEAR_NM_DEG = 3.0  # slack, in degrees, around the boxes
-TENDENCY_MAX_AGE = timedelta(hours=2)
 
 
 @dataclass(frozen=True, slots=True)

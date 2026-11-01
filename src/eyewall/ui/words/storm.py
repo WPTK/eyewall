@@ -18,6 +18,7 @@ from eyewall.models.storm import Classification, Storm
 from eyewall.models.watches import WatchWarningArea
 from eyewall.models.wind import WindProbabilities
 from eyewall.palette import Category, WatchWarning, category_for_knots
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui.format import BASIN_NAMES, advisory_age, collapse
 from eyewall.ui.products import TCM_OUTLOOK_NOTE, fmt_lat, fmt_lon
@@ -132,16 +133,20 @@ def _movement(state: StormState, preset: Preset) -> tuple[str, list[str]] | None
         and public.summary.movement_speed_mph is not None
     ):
         degrees, mph = public.summary.movement_dir_deg, float(public.summary.movement_speed_mph)
+        issued_in = public.adv_num
         sources = [f"{_BASE}.public.summary.movement_dir_deg", f"{_BASE}.public.summary.movement_speed_mph"]
     elif storm.movement_dir_deg is not None and storm.movement_speed_mph is not None:
         degrees, mph = storm.movement_dir_deg, storm.movement_speed_mph
+        issued_in = current_adv(storm)
         sources = ["state.storm.movement_dir_deg", "state.storm.movement_speed_mph"]
     else:
         return None
     if mph < _NEARLY_STATIONARY_MPH:
         return "nearly stationary", sources
     tcm = current_forecast(state)
-    kt = tcm.movement_speed_kt if tcm is not None else None  # NHC's own knots, which its km/h are worked from
+    # NHC's own knots, which its km/h are worked from; the TCM of advisory 31 says nothing of 31A's speed, so the
+    # suffix has to match too.
+    kt = tcm.movement_speed_kt if tcm is not None and tcm.adv_num == issued_in else None
     if kt is not None:
         sources.append(f"{_BASE}.forecast.movement_speed_kt")
     if preset.wind == "mph":
@@ -302,6 +307,21 @@ def _area_level(area: WatchWarningArea) -> str | None:
     if area.kind is not None:
         return "warning" if area.kind.value in ("TWR", "HWR", "SURGE_WARNING") else "watch"
     return level_of(area.label)
+
+
+def unread_warnings(state: StormState) -> Words | None:
+    """`Its watches and warnings are not yet read for advisory 31A.` when the public advisory cannot be trusted.
+
+    Without it a storm whose list could not be read looks the same as one with nothing in effect.
+    """
+    if current_public(state) is not None:
+        return None
+    adv = current_adv(state.storm)
+    return Words(
+        f"Its watches and warnings are not yet read for advisory {adv}."
+        if adv
+        else "Its watches and warnings are not yet read."
+    )
 
 
 def warning_sentences(state: StormState) -> list[Words]:

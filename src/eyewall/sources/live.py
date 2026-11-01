@@ -37,12 +37,12 @@ from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult
 from eyewall.models.wind import WindRadiiGis
 from eyewall.ndbc.client import NdbcClient
-from eyewall.net import FetchError, HttpError, RateLimited, new_client
+from eyewall.net import FetchError, HttpError, NetworkError, RateLimited, new_client
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.client import NhcClient
 from eyewall.render.images import fetch_image
 from eyewall.sources import protocol
-from eyewall.sources.cache import Cache, CachingTransport, watch_stale
+from eyewall.sources.cache import Cache, CachingTransport, StaleMarker, watch_stale
 
 CACHE_MAX_AGE = timedelta(days=7)
 INVEST_MAX_AGE = timedelta(hours=48)
@@ -129,7 +129,7 @@ class LiveSource:
         return self._throttled.get(feed)
 
     @contextlib.asynccontextmanager
-    async def _feed(self, feed: str, *, report: bool = True) -> AsyncIterator[None]:
+    async def _feed(self, feed: str, *, report: bool = True) -> AsyncIterator[StaleMarker]:
         """Record whether any request made for this feed was answered from the cache instead of the network. A fetch
         a screen asks for on its own (an image, a gallery product) passes `report=False`: the poll in flight reads the
         feed's state when it ends, and a cached picture must not make that poll look stale or failed."""
@@ -138,7 +138,7 @@ class LiveSource:
         await asyncio.shield(self._pruned)
         with watch_stale() as marker:
             try:
-                yield
+                yield marker
             finally:
                 if report:
                     self._stale[feed] = self._stale.get(feed, False) or marker.hit  # any request in the poll counts
@@ -222,8 +222,13 @@ class LiveSource:
                 return None
 
     async def image(self, url: str) -> bytes:
-        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS, report=False):
-            return await fetch_image(self._http, url)
+        async with self._feed(protocol.SATELLITE if _is_nesdis(url) else protocol.STORMS, report=False) as marker:
+            data = await fetch_image(self._http, url)
+            if marker.hit:
+                # A fixed-name graphic keeps its address from one advisory to the next, so a copy the cache kept
+                # when the network failed is the previous advisory's picture; it must not pass for the new one.
+                raise NetworkError(url, "the server could not be reached; only an older copy of this picture is kept")
+            return data
 
     # ---- outlook and alerts -----------------------------------------------------------------------------------
 

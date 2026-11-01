@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from rich.text import Text
 
 from eyewall.palette import DIM, FRESHNESS_CUES, HEADING
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui.format import collapse
 from eyewall.ui.products import fmt_local
@@ -61,12 +62,8 @@ def lead_lines(view: View, state: StormState, width: int) -> list[Line]:
 
 
 def _unread_sentence(state: StormState) -> str:
-    adv = state.storm.adv_num
-    return (
-        f"Its watches and warnings are not yet read for advisory {adv}."
-        if adv
-        else ("Its watches and warnings are not yet read.")
-    )
+    unread = storm_words.unread_warnings(state)
+    return unread.text if unread is not None else ""
 
 
 def in_effect_lines(view: View, state: StormState, width: int) -> list[Line]:
@@ -74,7 +71,7 @@ def in_effect_lines(view: View, state: StormState, width: int) -> list[Line]:
     public = storm_words.current_public(state)
     head = "IN EFFECT"
     if public is not None:
-        adv = state.storm.adv_num
+        adv = current_adv(state.storm)
         when = fmt_local(public.issued, view.tz) if public.issued is not None else ""
         bits = [f"advisory {adv}" if adv else "", when if when != MISSING else ""]
         head += "  (" + ", ".join(b for b in bits if b) + ")" if any(bits) else ""

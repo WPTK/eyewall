@@ -12,6 +12,7 @@ from rich.text import Text
 
 from eyewall.palette import DIM, FRESHNESS_CUES
 from eyewall.render.canvas import ASCII_GLYPHS, UNICODE_GLYPHS
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui.format import advisory_age, movement_text, storm_color
 from eyewall.ui.widgets.side_panel import DO, OPEN, Block, Line, View, heading, link, spread, wrapped
@@ -115,7 +116,7 @@ def strip_line(view: View, width: int) -> Line | None:
     head.append(storm.name.title() if storm.name else storm.id.upper(), style="bold")
     head.append(f"{gap}{storm_words.short_label(storm)}", style=f"bold {storm_color(storm)}")
     age, old = advisory_age(storm, view.now)
-    adv = state.advisories.adv_num or storm.adv_num
+    adv = current_adv(storm)
     advisory = f"adv {adv}, {age} ago" if adv and storm.last_update else f"adv {adv}" if adv else "no advisory"
     old = old or view.storms_old
     if old and storm.last_update:

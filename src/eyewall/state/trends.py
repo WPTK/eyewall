@@ -18,6 +18,7 @@ TENDENCY_HOURS = 3.0
 STEADY_BAND_MPS = 1.0
 STEADY_BAND_WAVE_M = 0.3
 SILENT_AFTER = timedelta(hours=2)
+TENDENCY_MAX_AGE = timedelta(hours=2)  # a tendency from an older reading would not be "the last 3 hours"
 _PAIR_TOLERANCE_MIN = 20.0
 
 Direction = Literal["rising", "falling", "steady"]
@@ -125,11 +126,14 @@ def _trend(
     value: Callable[[Observation], float | None],
     hours: float,
     steady_band: float,
+    now: datetime | None = None,
 ) -> Trend | None:
     rows = list(observations)
     newest = _newest_with(rows, value)
     if newest is None:
         return None
+    if now is not None and max(timedelta(0), now - newest.time) > TENDENCY_MAX_AGE:
+        return None  # the sentence says "in the last 3 hours": a reading from before that is not it
     tolerance = timedelta(minutes=max(_PAIR_TOLERANCE_MIN, hours * 6))
     earlier = _reference(rows, newest, value, hours, tolerance)
     now_value, then_value = value(newest), value(earlier) if earlier else None
@@ -141,24 +145,39 @@ def _trend(
 
 
 def wind_trend(
-    observations: Iterable[Observation], *, hours: float = TENDENCY_HOURS, steady_band: float = STEADY_BAND_MPS
+    observations: Iterable[Observation],
+    *,
+    hours: float = TENDENCY_HOURS,
+    steady_band: float = STEADY_BAND_MPS,
+    now: datetime | None = None,
 ) -> Trend | None:
-    """The change in wind speed (m/s) between the newest reading and one about `hours` earlier."""
-    return _trend(observations, lambda o: o.wind_speed_mps, hours, steady_band)
+    """The change in wind speed (m/s) between the newest reading and one about `hours` earlier.
+
+    With `now`, None when that newest reading is older than TENDENCY_MAX_AGE, as `Store.tendency` does for pressure.
+    """
+    return _trend(observations, lambda o: o.wind_speed_mps, hours, steady_band, now)
 
 
 def gust_trend(
-    observations: Iterable[Observation], *, hours: float = TENDENCY_HOURS, steady_band: float = STEADY_BAND_MPS
+    observations: Iterable[Observation],
+    *,
+    hours: float = TENDENCY_HOURS,
+    steady_band: float = STEADY_BAND_MPS,
+    now: datetime | None = None,
 ) -> Trend | None:
     """The change in gust speed (m/s) between the newest reading and one about `hours` earlier."""
-    return _trend(observations, lambda o: o.gust_mps, hours, steady_band)
+    return _trend(observations, lambda o: o.gust_mps, hours, steady_band, now)
 
 
 def wave_trend(
-    observations: Iterable[Observation], *, hours: float = TENDENCY_HOURS, steady_band: float = STEADY_BAND_WAVE_M
+    observations: Iterable[Observation],
+    *,
+    hours: float = TENDENCY_HOURS,
+    steady_band: float = STEADY_BAND_WAVE_M,
+    now: datetime | None = None,
 ) -> Trend | None:
     """The change in wave height (m) between the newest reading that has one and one about `hours` earlier."""
-    return _trend(observations, lambda o: o.wave_height_m, hours, steady_band)
+    return _trend(observations, lambda o: o.wave_height_m, hours, steady_band, now)
 
 
 def observation_age(series: ObservationSeries, now: datetime) -> timedelta | None:
