@@ -249,15 +249,18 @@ class DashboardScreen(Screen[None]):
         self.call_after_refresh(self._refocus)
 
     def _refocus(self) -> None:
-        """Hiding a focused widget clears the focus; give it to the map when it is shown, else to the storm list."""
-        if self.focused is not None:
-            return
-        map_shown = (
-            self._full_map
-            or self.has_class("show-map")
-            or not (self.has_class("compact") or self.has_class("hide-map"))
-        )
-        (self.map_view if map_shown else self.query_one("#storms", StormList)).focus()
+        """Move the focus off a widget that the new layout hides, to the map when it is shown, else to the storm list.
+        Decided from the layout flags, not from whether Textual has blurred the hidden widget yet."""
+        focused = self.focused
+        compact = self.has_class("compact")
+        map_shown = self._full_map or self.has_class("show-map") or not (compact or self.has_class("hide-map"))
+        inside = {w.id for w in focused.ancestors_with_self} if focused is not None else set()
+        on_map = "map-pane" in inside
+        covered = {"storms", "side-stack", "side-tabs"} if self._full_map else set()  # what the map hides
+        if compact and self.has_class("show-map"):
+            covered = {"side-tabs"}
+        if focused is None or (on_map and not map_shown) or (not on_map and inside & covered):
+            (self.map_view if map_shown else self.query_one("#storms", StormList)).focus()
 
     def action_layers(self) -> None:
         self.eye.open_layers()
