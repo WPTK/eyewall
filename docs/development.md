@@ -52,12 +52,18 @@ is nearly certain about, so a report means a real leftover.
 - Interface tests use Textual's `App.run_test()` and its `Pilot`. `tests/test_textual_api.py` shows the pattern, including
   a widget that paints its own lines the way the map will. Snapshot tests use `pytest-textual-snapshot`; update them only
   after an intentional visual change.
-- The UAT suite in `tests/uat` drives the whole app with the Pilot over the bundled Erin recording, with no network, at
-  80x24, 120x30 and (for an every-screen sweep) 100x50, 200x50 and 280x70, plus the too-small case, live resizes and the
-  command-line paths. Every step is checked (no error toast or logged error, nothing clipped, a one-row footer ending in
+- The UAT suite in `tests/uat` drives the whole app over the bundled Erin recording, with no network. It runs at the
+  sizes the main screen is built around: 80x24 (the floor), 100x40, 100x50, 120x30, 200x50 and 280x70, plus the
+  too-small case (below 60x16, where the app shows the size it needs), live resizes between them, and the
+  command-line paths. Navigation is checked with real mouse clicks (a storm or a buoy on the map, a card's `open >`
+  link, a list row, the breadcrumb, a footer key, the feed-health slot) as well as keys, and every screen is visited at
+  every size. Every step is checked (no error toast or logged error, nothing clipped, a one-row footer ending in
   `? help`) and saved as an SVG screenshot. Run it with `python -m pytest tests/uat -m uat`, or with
   `python scripts/uat.py [OUT_DIR]`, which also renders each screenshot to PNG through Edge (default directory: a new
   temporary one, never the repository). Set `EYEWALL_UAT_OUT` to choose where `pytest` writes the SVG files.
+- `eyewall --demo --summary` and `eyewall --demo --summary --until +20h` print the plain-sentence summary of the
+  recording at two moments; `tests/test_words_*.py` pin the wording. Run the app once with `NO_COLOR=1` and read each
+  screen: every cue must still have a word, glyph or pattern.
 - `python scripts/screenshots.py` rewrites the README pictures in `docs/images`. It clears `NO_COLOR` (set in some shells and
   agent sessions, it turns Textual monochrome) and fails if a picture has no chromatic colour.
 - `textual_image.renderable` and `textual_image.widget` send terminal queries when imported with stdout on a TTY. Import
@@ -143,8 +149,9 @@ Before announcing a release, run the binary for each platform on a machine with 
 
 1. `eyewall --version` prints the release number and `eyewall --selftest` prints `selftest ok`.
 2. `eyewall --demo --headless --until +1h` prints three events and `3 event(s)`.
-3. `eyewall --demo` opens in a terminal at least 100 columns wide: the map draws, Space pauses, `Enter` opens the storm
-   detail, a buoy's charts draw, `?` shows help and `q` restores the terminal.
+3. `eyewall --demo` opens at 80x24 and at 120x30: the map draws, Space pauses, `Enter` opens the Storm screen, `t`, `b`
+   and `g` open the NHC text, Buoys and gauges and Pictures screens, a click on a buoy opens its Station screen, `?`
+   shows help, `Esc` goes back and `q` restores the terminal. `eyewall --demo --summary` prints sentences and exits 0.
 4. Live, `eyewall` starts and either lists the active storms or says `No tropical cyclones`; out of season that is
    correct. Offline it still opens and marks the feeds as waiting.
 5. The binaries are not signed, so expect the SmartScreen and Gatekeeper prompts described in `install.md`.

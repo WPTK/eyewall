@@ -7,6 +7,7 @@ The bundled recording is Hurricane Erin (2025, AL052025), from 19 August 03:00Z 
 eyewall --demo                          # the interface, driven by the recording
 eyewall --replay path\to\bundle         # your own recording
 eyewall --demo --headless --until +6h   # no interface: print the events the first six hours produce
+eyewall --demo --summary --until +20h  # no interface: the plain-sentence summary at that moment
 ```
 
 ## How it works
@@ -16,6 +17,8 @@ implements, so the poller, the store, the alert engine and the interface cannot 
 `VirtualClock` (`src/eyewall/clock.py`) that starts at the bundle's first moment. Each call answers with what NOAA would
 have published at the clock's current time: the newest advisory at or before it, the best track rows up to it, the buoy
 and tide gauge rows up to it. Time advances only when the replay is playing, so a paused replay is still.
+
+With no storm active, the live app offers the bundled recording: press `R` on the map screen.
 
 In the interface the Replay keys are: space pauses and resumes, `<` and `>` slow down and speed up, `[` and `]` jump to
 the previous and next advisory. Headless runs step the clock between polls and stop at `--until` (`+12h`, `+90m`, or an
