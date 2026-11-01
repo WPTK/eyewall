@@ -26,6 +26,9 @@ KEYCODE = {"2": 19, "3": 20, "4": 21, "5": 23}
 KEYFOR = {"osa": "2", "cgevent": "3", "cliclick": "4", "vnc": "5"}
 
 
+NL = chr(10)
+
+
 def step(name, ok, **kw):
     RES["steps"].append({"name": name, "ok": ok, **kw})
     print(("PASS " if ok else "FAIL ") + name, kw, flush=True)
@@ -115,7 +118,7 @@ def inject_key(be, ch):
     if be == "cliclick":
         return sh(["cliclick", f"t:{ch}"])
     if be == "vnc":
-        return sh([os.path.join(os.path.dirname(PY), "vncdo"), "-s", os.environ["VNC_SERVER"], "-p", os.environ["VNC_PW"], "key", ch])
+        return sh([os.path.join(os.path.dirname(PY), "vncdo"), "-s", os.environ["VNC_SERVER"], "-u", os.environ["VNC_USER"], "-p", os.environ["VNC_PW"], "key", ch])
     return 98, "unknown backend"
 
 
@@ -137,7 +140,7 @@ def inject_click(be, x, y):
         return sh(["cliclick", f"m:{x},{y}", "w:150", f"c:{x},{y}"])
     if be == "vnc":
         s = float(RES.get("vnc_scale", 1.0))
-        return sh([os.path.join(os.path.dirname(PY), "vncdo"), "-s", os.environ["VNC_SERVER"], "-p", os.environ["VNC_PW"],
+        return sh([os.path.join(os.path.dirname(PY), "vncdo"), "-s", os.environ["VNC_SERVER"], "-u", os.environ["VNC_USER"], "-p", os.environ["VNC_PW"],
                    "move", str(int(x * s)), str(int(y * s)), "pause", "0.2", "click", "1"])
     return 98, "unknown backend"
 
@@ -172,16 +175,24 @@ def main():
         )
     os.chmod(inner, 0o755)
     if TERM == "Terminal":
-        rc, o = osa(
-            'tell application "Terminal"\nactivate\ndo script "' + inner + '"\n'
-            "set bounds of front window to {40, 60, 900, 660}\nend tell"
-        )
+        script = NL.join(['tell application "Terminal"', "activate", 'do script "' + inner + '"',
+                           "set bounds of front window to {40, 60, 900, 660}", "end tell"])
     else:
-        rc, o = osa(
-            'tell application "iTerm"\nactivate\nset w to (create window with default profile command "/bin/bash ' + inner + '")\n'
-            "set bounds of w to {40, 60, 900, 660}\nend tell"
-        )
-    step("launch terminal window", rc == 0, rc=rc, out=o)
+        script = NL.join(['tell application id "com.googlecode.iterm2"', "activate",
+                           'create window with default profile command "/bin/bash ' + inner + '"',
+                           "set bounds of current window to {40, 60, 900, 660}", "end tell"])
+    rc, o = sh(["osascript", "-e", script], timeout=25)
+    if rc != 0:
+        step("launch via AppleScript (Apple Events)", False, rc=rc, out=o)
+        sh("pkill -x Terminal; pkill -x iTerm2; true")
+        time.sleep(1)
+        cmdf = os.path.join(OUT, "inner.command")
+        sh(["cp", inner, cmdf])
+        os.chmod(cmdf, 0o755)
+        rc, o = sh(["open", "-a", APPNAME, cmdf])
+        step("fallback launch via open -a (no Apple Events)", rc == 0, rc=rc, out=o)
+        rc = 0
+    step("terminal window launched", rc == 0, rc=rc, out=o)
     if rc != 0:
         return
     ready = wait_for(lambda: [e for e in jl(LOGR) if e.get("event") == "ready"], 40)
