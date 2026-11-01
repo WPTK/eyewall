@@ -321,22 +321,28 @@ async def test_track_is_the_storms_bdeck_keyed_by_id(nhc):
 
 
 @respx.mock
-async def test_outlook_text_collects_each_basin_that_works(nhc):
+async def test_outlook_text_collects_the_basins_and_a_failed_one_raises_instead_of_being_left_out(nhc):
     respx.get(ids.outlook_url(Basin.AL)).respond(200, content=nhc_bytes("two/at_20261031.txt"))
     respx.get(ids.outlook_url(Basin.EP)).respond(200, content=nhc_bytes("two/ep_20261031.txt"))
-    respx.get(ids.outlook_url(Basin.CP)).respond(200, content=b"<html>garbage</html>")
+    cp = respx.get(ids.outlook_url(Basin.CP)).respond(404)
     outlooks = await nhc.outlook_text()
-    assert len(outlooks) == 2  # the Central Pacific text was garbage and is left out
+    assert len(outlooks) == 2  # a basin NOAA has no text for is no outlook
     assert outlooks[0].quiet
     assert outlooks[1].areas[0].chance_7d.percent == 40
+    cp.respond(200, content=b"<html>garbage</html>")  # a partial outlook would replace the good one
+    with pytest.raises(ParseError):
+        await nhc.outlook_text()
 
 
 @respx.mock
-async def test_outlook_gis_is_empty_when_the_download_fails(nhc):
+async def test_outlook_gis_is_empty_for_a_missing_zip_and_a_failed_download_raises(nhc):
     route = respx.get(ids.GTWO_ZIP_URL).respond(200, content=gis_bytes("gtwo_20250919.zip"))
     assert len((await nhc.outlook_gis()).systems) == 3
-    route.respond(500)
+    route.respond(404)
     assert (await nhc.outlook_gis()).empty
+    route.respond(500)
+    with pytest.raises(HttpError):
+        await nhc.outlook_gis()
 
 
 @respx.mock

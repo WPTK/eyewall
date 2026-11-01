@@ -253,9 +253,14 @@ def test_extra_fields_are_ignored():
     assert len(parse_current_storms(json.dumps(document)).storms) == 4
 
 
-@pytest.mark.parametrize("payload", [b'{"other": 1}', b'{"activeStorms": null}', b'{"activeStorms": {}}'])
-def test_a_document_without_a_storm_list_is_empty(payload):
-    assert parse_current_storms(payload).storms == ()
+@pytest.mark.parametrize("payload", [b"{}", b'{"other": 1}', b'{"activeStorms": null}', b'{"activeStorms": {}}'])
+def test_a_document_without_a_storm_list_raises_instead_of_meaning_no_storms(payload):
+    with pytest.raises(ParseError):
+        parse_current_storms(payload)
+
+
+def test_an_empty_storm_list_is_a_quiet_season():
+    assert parse_current_storms(b'{"activeStorms": []}').storms == ()
 
 
 @pytest.mark.parametrize("payload", [b"", b"<html>maintenance</html>", b"[1, 2]", b"null", b"\xff\xfe"])

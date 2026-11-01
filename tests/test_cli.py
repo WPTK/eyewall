@@ -121,3 +121,31 @@ def test_selftest_reports_a_missing_recording(monkeypatch, capsys):
     monkeypatch.setattr("eyewall.sources.bundle.demo_bundle_path", missing)
     assert main(["--selftest"]) == 1
     assert "selftest failed" in capsys.readouterr().err
+
+
+def test_until_without_headless_is_refused_not_ignored(capsys):
+    with pytest.raises(SystemExit) as raised:
+        main(["--demo", "--until", "+1h"])
+    assert raised.value.code == 2
+    assert "--until needs --headless" in capsys.readouterr().err
+
+
+def test_a_live_headless_run_where_every_feed_failed_exits_one(monkeypatch, capsys):
+    from eyewall import headless
+
+    async def failed(config, state_dir, until, *, emit=None):
+        return headless.HeadlessResult(polls=1, feeds_failed=3)
+
+    monkeypatch.setattr(headless, "run_live", failed)
+    assert main(["--headless", "--no-config"]) == 1
+    assert "every feed failed" in capsys.readouterr().err
+
+
+def test_a_live_headless_run_where_a_feed_worked_exits_zero(monkeypatch):
+    from eyewall import headless
+
+    async def partly(config, state_dir, until, *, emit=None):
+        return headless.HeadlessResult(polls=1, feeds_ok=1, feeds_failed=2)
+
+    monkeypatch.setattr(headless, "run_live", partly)
+    assert main(["--headless", "--no-config"]) == 0

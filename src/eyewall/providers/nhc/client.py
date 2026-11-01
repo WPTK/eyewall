@@ -47,6 +47,7 @@ from eyewall.providers.nhc.ids import Bin, ProductKind
 from eyewall.providers.nhc.tcm import parse_tcm
 from eyewall.providers.nhc.text import parse_pws, parse_tcd, parse_tcp, parse_two
 from eyewall.providers.nhc.two import parse_gtwo_zip
+from eyewall.urls import is_noaa_url
 
 
 class _Identified(Protocol):
@@ -74,6 +75,17 @@ class Response[T]:
     @property
     def missing(self) -> bool:
         return self.fetched.missing
+
+
+MAX_ZIP_BYTES = 16 * 1024 * 1024  # a GIS zip is a few hundred kilobytes; the feed's address is not trusted for more
+MAX_PAGE_BYTES = 4 * 1024 * 1024
+
+
+def _noaa(url: str) -> str:
+    """An address the feed supplied, refused unless it is a NOAA host (the gallery applies the same check)."""
+    if not is_noaa_url(url):
+        raise FetchError(url, "not a NOAA address")
+    return url
 
 
 def _present[T](response: Response[T]) -> T | None:
@@ -110,6 +122,7 @@ class NhcClient:
         etag: str | None = None,
         last_modified: str | None = None,
         allow_404: bool = True,
+        max_bytes: int | None = None,
     ) -> Fetched:
         return await fetch_bytes(
             self._http,
@@ -118,6 +131,7 @@ class NhcClient:
             etag=etag,
             last_modified=last_modified,
             allow_404=allow_404,
+            max_bytes=max_bytes,
             retries=self._retries,
             sleep=self._sleep,
         )
@@ -131,8 +145,11 @@ class NhcClient:
         etag: str | None = None,
         last_modified: str | None = None,
         allow_404: bool = True,
+        max_bytes: int | None = None,
     ) -> Response[T]:
-        fetched = await self._fetch(url, params=params, etag=etag, last_modified=last_modified, allow_404=allow_404)
+        fetched = await self._fetch(
+            url, params=params, etag=etag, last_modified=last_modified, allow_404=allow_404, max_bytes=max_bytes
+        )
         if fetched.not_modified or fetched.missing:
             return Response(None, fetched)
         return Response(parse(fetched.body), fetched)
@@ -224,23 +241,30 @@ class NhcClient:
         return await self._get(ids.BTK_INDEX_URL, parse_btk_index)
 
     async def fetch_forecast_gis(self, zip_url: str) -> Response[ForecastGis]:
-        return await self._get(zip_url, parse_forecast_zip)
+        return await self._get(_noaa(zip_url), parse_forecast_zip, max_bytes=MAX_ZIP_BYTES)
 
     async def fetch_radii_gis(self, zip_url: str) -> Response[WindRadiiGis]:
-        return await self._get(zip_url, parse_radii_zip)
+        return await self._get(_noaa(zip_url), parse_radii_zip, max_bytes=MAX_ZIP_BYTES)
 
     async def fetch_best_track_gis(self, zip_url: str) -> Response[BestTrackGis]:
-        return await self._get(zip_url, parse_best_track_zip)
+        return await self._get(_noaa(zip_url), parse_best_track_zip, max_bytes=MAX_ZIP_BYTES)
 
     async def fetch_outlook_gis(
         self, *, etag: str | None = None, last_modified: str | None = None
     ) -> Response[OutlookGis]:
         return await self._get(
-            ids.GTWO_ZIP_URL, parse_gtwo_zip, etag=etag, last_modified=last_modified, allow_404=False
+            ids.GTWO_ZIP_URL,
+            parse_gtwo_zip,
+            etag=etag,
+            last_modified=last_modified,
+            allow_404=False,
+            max_bytes=MAX_ZIP_BYTES,
         )
 
     async def fetch_graphics(self, landing_url: str) -> Response[tuple[GraphicLink, ...]]:
-        return await self._get(landing_url, lambda body: parse_graphics_page(body, landing_url))
+        return await self._get(
+            _noaa(landing_url), lambda body: parse_graphics_page(body, landing_url), max_bytes=MAX_PAGE_BYTES
+        )
 
     async def fetch_floater_storms(self) -> Response[tuple[str, ...]]:
         return await self._get(ids.floater_url(), parse_floater_storms)
@@ -263,19 +287,29 @@ class NhcClient:
     async def _product[P: _Identified](
         self, storm: Storm, kind: ProductKind, ref: ProductRef | None, parse: Callable[[str], P], *, fallback: bool
     ) -> P | None:
-        """Fetch, parse and staleness-check one text product for a storm; None when it is missing or not current."""
+        """Fetch, parse and staleness-check one text product for a storm; None when it is missing or not current.
+
+        tgftp is asked first. With `fallback`, a tgftp copy that failed, is empty, or is not the advisory the feed lists
+        (it still serves the previous one, or the cache answered for a failed request) is followed by api.weather.gov.
+        """
         if storm.bin_number is None or ref is None:
             return None
-        try:
-            response = await self.fetch_text(kind, ids.parse_bin(storm.bin_number), fallback=fallback)
-            if not response.value:
+        bin_ = ids.parse_bin(storm.bin_number)
+
+        async def current(fetch: Callable[[], Awaitable[Response[str]]]) -> P | None:
+            try:
+                response = await fetch()
+                parsed = parse(response.value) if response.value else None
+            except (FetchError, ParseError, ValueError):
                 return None
-            parsed = parse(response.value)
-        except (FetchError, ParseError, ValueError):
-            return None
-        if not ids.text_is_current(storm, ref, storm_id=parsed.storm_id, adv_num=parsed.adv_num):
-            return None
-        return parsed
+            if parsed is None or not ids.text_is_current(storm, ref, storm_id=parsed.storm_id, adv_num=parsed.adv_num):
+                return None
+            return parsed
+
+        found = await current(lambda: self.fetch_text(kind, bin_, fallback=False))
+        if found is None and fallback:
+            found = await current(lambda: self.fetch_api_text(kind, bin_.name))
+        return found
 
     async def advisory(self, storm: Storm, *, fallback: bool = False) -> AdvisorySet:
         """The four text products for a storm, each None when it is missing, unparsable or stale.
@@ -313,22 +347,35 @@ class NhcClient:
         return _present(await self.fetch_bdeck(storm.id))
 
     async def outlook_text(self, *, fallback: bool = False) -> tuple[OutlookText, ...]:
-        """The outlook text for each basin that could be fetched and parsed (tgftp only unless `fallback`)."""
+        """The outlook text for each basin (tgftp only unless `fallback`). A basin that fails raises after the others
+        were tried, so the caller keeps its last outlook instead of replacing it with a partial one."""
         found: list[OutlookText] = []
+        failure: Exception | None = None
         for basin in (Basin.AL, Basin.EP, Basin.CP):
             try:
-                response = await self.fetch_outlook_text(basin, fallback=fallback)
-                if response.value:
-                    found.append(parse_two(response.value))
-            except (FetchError, ParseError):
-                continue
+                text = await self.outlook_basin(basin, fallback=fallback)
+            except (FetchError, ParseError) as exc:
+                failure = failure or exc
+            else:
+                if text is not None:
+                    found.append(text)
+        if failure is not None:
+            raise failure
         return tuple(found)
 
+    async def outlook_basin(self, basin: Basin, *, fallback: bool = False) -> OutlookText | None:
+        """One basin's outlook text; None when NOAA has none. A failed fetch or an unparsable text raises."""
+        response = await self.fetch_outlook_text(basin, fallback=fallback)
+        return parse_two(response.value) if response.value else None
+
     async def outlook_gis(self) -> OutlookGis:
+        """The outlook areas. A zip NOAA does not serve (404) is no areas; any other failure raises."""
         try:
             return (await self.fetch_outlook_gis()).value or OutlookGis(None)
-        except (FetchError, ParseError):
-            return OutlookGis(None)
+        except HttpError as exc:
+            if exc.status == 404:
+                return OutlookGis(None)
+            raise
 
     async def graphics(self, storm: Storm) -> tuple[GraphicLink, ...]:
         landing = storm.forecast_graphics.url if storm.forecast_graphics else None

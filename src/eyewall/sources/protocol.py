@@ -50,7 +50,8 @@ class ThrottleReporting(Protocol):
     said 429 or 5xx. The data is old but usable; the poller backs off as it would after a failure."""
 
     def throttle(self, feed: str) -> tuple[FetchError, float | None] | None:
-        """The error and the server's Retry-After seconds (None if absent), or None when the poll was not throttled."""
+        """The error and the server's Retry-After seconds (None if absent), or None when the poll was not throttled.
+        A part of the feed that failed while the rest was applied (one basin's outlook) is reported the same way."""
         ...
 
 
@@ -63,6 +64,12 @@ class DataSource(Protocol):
 
     def stale(self, feed: str) -> bool:
         """True when the last fetch of this feed was answered from the disk cache because the network failed."""
+        ...
+
+    def cache_answers(self, feed: str) -> int:
+        """Requests of this feed answered from the disk cache because the server or network failed, since its last
+        `start_poll`. The poller uses it to tell which product of a poll came from the cache and ask for just that one
+        again. A source with no cache returns 0."""
         ...
 
     def start_poll(self, feed: str) -> None:

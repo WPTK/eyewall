@@ -265,10 +265,24 @@ async def test_the_api_fallback_is_asked_only_after_tgftp_lags_and_at_most_a_few
 async def test_a_storm_nobody_can_fetch_text_for_stops_being_retried():
     poller, source, store, clock, _ = build()
     source.set_storm("1")
-    for _ in range(FALLBACK_ATTEMPTS + 3):
+    for _ in range(PRODUCT_ATTEMPTS + 3):
         await step(poller, clock, 300)
-    assert source.count("advisory") + source.count("advisory-fallback") == FALLBACK_ATTEMPTS
+    assert source.count("advisory") + source.count("advisory-fallback") == PRODUCT_ATTEMPTS
     assert store.storms["al012026"].fetched_key is not None
+
+
+async def test_text_that_is_still_behind_is_asked_for_again_while_the_other_products_settle():
+    poller, source, store, clock, _ = build()
+    source.set_storm("2")
+    for _ in range(FALLBACK_ATTEMPTS + 2):
+        await step(poller, clock, 300)
+    assert store.storms["al012026"].fetched_key is None  # not settled on the previous advisory's text
+    source.texts["2"] = source.fallback_texts["2"] = advisories("2")
+    await step(poller, clock, 300)
+    state = store.storms["al012026"]
+    assert state.fetched_key is not None
+    assert state.advisories.public.adv_num.number == 2  # type: ignore[union-attr]
+    assert source.count("forecast_gis") == 1  # the products were fetched once, only the text was asked for again
 
 
 # ---- stations -----------------------------------------------------------------------------------------------------
