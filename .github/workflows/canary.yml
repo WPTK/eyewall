@@ -65,9 +65,11 @@ jobs:
           fi
           echo "label=feed-down" >> "$GITHUB_OUTPUT"
           echo "title=Feed canary: a feed has been down for days" >> "$GITHUB_OUTPUT"
-          # This run is still in progress, so the completed runs are the earlier ones, newest first.
-          bad="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow canary.yml --status completed --limit 2 \
-            --json conclusion --jq '[.[] | select(.conclusion != "success")] | length')"
+          # This run is still in progress, so the completed runs are the earlier ones, newest first. Only scheduled
+          # runs count and cancelled ones are skipped, so a manual rerun cannot advance the three-day clock.
+          bad="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow canary.yml --event schedule --status completed \
+            --limit 10 --json conclusion \
+            --jq '[.[] | select(.conclusion != "cancelled")][:2] | map(select(.conclusion != "success")) | length')"
           echo "Earlier runs not successful (of the last 2 scheduled): $bad"
           if [ "$bad" -ge 2 ]; then echo "raise=yes" >> "$GITHUB_OUTPUT"; else echo "raise=no" >> "$GITHUB_OUTPUT"; fi
 
