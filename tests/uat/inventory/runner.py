@@ -86,6 +86,6 @@ async def all_results() -> dict[str, str | None]:
                 if path.exists():
                     break
                 await asyncio.sleep(0.5)
-            out |= json.loads(path.read_text(encoding='utf-8')) if path.exists() else await run_group(group)
+            out |= json.loads(path.read_text(encoding="utf-8")) if path.exists() else await run_group(group)
     registry.RESULTS.update(out)
     return out

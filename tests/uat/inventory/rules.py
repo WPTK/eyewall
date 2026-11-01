@@ -23,7 +23,7 @@ from textual.widget import Widget
 from textual.widgets import Tab, Tabs
 
 from eyewall.sources import protocol
-from eyewall.ui import nav, station_view
+from eyewall.ui import station_view
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.screens.buoys import NEAR, YOURS, BuoysScreen
 from eyewall.ui.screens.main import MainScreen
@@ -84,7 +84,7 @@ def footer(w: W, name: str, screen: Screen[Any], text: str) -> list[Violation]:
         out.append(("footer", f"footer wider than the terminal: {last!r}"))
     row = bar.row
     if row is None:
-        return out + [("footer", "footer never built")]
+        return [*out, ("footer", "footer never built")]
     actions = [t.action for t in row.targets]
     for needed in ("app:help", "app:command_palette"):
         if needed not in actions:
@@ -122,7 +122,12 @@ def layout(w: W, name: str, screen: Screen[Any], text: str) -> list[Violation]:
         for b, rb in visible[i + 1 :]:
             if a in b.ancestors or b in a.ancestors:
                 continue
-            if _is_overlay(a) or _is_overlay(b) or isinstance(a, FooterBar | TopBar) or isinstance(b, FooterBar | TopBar):
+            if (
+                _is_overlay(a)
+                or _is_overlay(b)
+                or isinstance(a, FooterBar | TopBar)
+                or isinstance(b, FooterBar | TopBar)
+            ):
                 continue  # the chrome is docked over scrolling content by design
             common = ra.intersection(rb)
             if common.area > 0:
@@ -175,7 +180,12 @@ def health_vs_body(w: W, name: str, screen: Screen[Any], text: str) -> list[Viol
         for found in BAD_BODY.finditer(body):
             if name in ("feeds",):
                 continue
-            out.append(("contradiction", f"slot says {health.word!r} but the screen says {found.group(0)!r}: {_line_of(body, found.start())!r}"))
+            out.append(
+                (
+                    "contradiction",
+                    f"slot says {health.word!r} but the screen says {found.group(0)!r}: {_line_of(body, found.start())!r}",
+                )
+            )
     if app.replay is not None:
         for word in ("offline", "failing", "data ok"):
             if word in top:
@@ -270,7 +280,9 @@ def _buoys_counts(w: W, screen: BuoysScreen, flat: str) -> list[Violation]:
         if not rows and not screen.query_one("#buoys-empty").display:
             out.append(("count", "no stations and no hint about how to follow one"))
     label = str(screen.query_one(f"#t-{YOURS}", Tab).label)
-    followed = len(station_view.followed_rows(w.app.store, w.app.now(), w.app.preset, w.app.glyphs, w.app.local_tz, False))
+    followed = len(
+        station_view.followed_rows(w.app.store, w.app.now(), w.app.preset, w.app.glyphs, w.app.local_tz, False)
+    )
     found = re.search(r"\((\d+)\)", label)
     if found and int(found.group(1)) != followed:
         out.append(("count", f"tab says {label!r} but {followed} stations are followed"))
@@ -298,7 +310,9 @@ def _home_counts(w: W, flat: str) -> list[Violation]:
         if found and (found.group(1) or found.group(2)):
             got = (int(found.group(1) or 0), int(found.group(2) or 0))
             if got != (buoys, gauges):
-                out.append(("count", f"Home says {found.group(0)!r} but the store has {buoys} buoys and {gauges} gauges near"))
+                out.append(
+                    ("count", f"Home says {found.group(0)!r} but the store has {buoys} buoys and {gauges} gauges near")
+                )
         del near
     found = re.search(r"YOUR STATIONS\s+(\d+) buoys?(?: and (\d+) tide gauges?)?\.", flat)
     if found:

@@ -129,7 +129,10 @@ async def keys_demo(w: W, rec: Any) -> None:
             await w.press(key)
             after = snap(w)
             if before == after and not reason:
-                rec(item, f"pressing {key!r} on {screen} changed nothing observable ({helpers.stack_names(w)}, selected {w.app.selected}, storms {len(w.app.storm_states())})")
+                rec(
+                    item,
+                    f"pressing {key!r} on {screen} changed nothing observable ({helpers.stack_names(w)}, selected {w.app.selected}, storms {len(w.app.storm_states())})",
+                )
             else:
                 rec(item)
         except Exception as exc:

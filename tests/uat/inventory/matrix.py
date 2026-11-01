@@ -29,16 +29,20 @@ DEMO_ONLY = ("settings", "layers", "palette", "search")
 EXTRA_SIZE_SCREENS = ("main", "full_map", "storm", "buoys_near", "station_buoy", "alerts")  # the layout-sensitive ones
 BASE_SIZE = (120, 30)
 WORLDS = [World(s, BASE_SIZE) for s in STATES] + [
-    World(s, size) for s in ("demo", "quiet") for size in SIZES if size != BASE_SIZE and (s == "demo" or size[0] in (80, 200))
+    World(s, size)
+    for s in ("demo", "quiet")
+    for size in SIZES
+    if size != BASE_SIZE and (s == "demo" or size[0] in (80, 200))
 ]
+
+
 def screens_of(world: World) -> tuple[str, ...]:
     if world.size != BASE_SIZE:
         return EXTRA_SIZE_SCREENS
     return (*STATE_SCREENS, *(DEMO_ONLY if world.state == "demo" else ()))
 
-CELLS = [
-    (w.state, name, w.size) for w in WORLDS for name in (*screens_of(w), "chooser")
-]
+
+CELLS = [(w.state, name, w.size) for w in WORLDS for name in (*screens_of(w), "chooser")]
 _CACHE: dict[World, dict[str, list[tuple[str, str]] | str]] = {}
 
 

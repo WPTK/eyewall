@@ -10,10 +10,10 @@ from textual.widgets import Input
 
 from eyewall.app import EyewallApp
 from eyewall.config import Config
-from tests.ui_support import EDT, ScriptedSource, screen_text, settle
 from tests.uat.inventory.registry import World
 from tests.uat.inventory.rules import MARKUP, RAW
 from tests.uat.inventory.worlds import launch
+from tests.ui_support import EDT, ScriptedSource, screen_text, settle
 
 pytestmark = pytest.mark.uat
 

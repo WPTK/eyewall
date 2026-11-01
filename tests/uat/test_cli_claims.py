@@ -37,7 +37,18 @@ def test_version() -> None:
 
 def test_help_lists_flags() -> None:
     out = run("--help")
-    for flag in ("--demo", "--replay", "--basin", "--summary", "--glyphs", "--headless", "--until", "--config", "--no-config", "--state-dir"):
+    for flag in (
+        "--demo",
+        "--replay",
+        "--basin",
+        "--summary",
+        "--glyphs",
+        "--headless",
+        "--until",
+        "--config",
+        "--no-config",
+        "--state-dir",
+    ):
         assert flag in out.stdout, flag
 
 

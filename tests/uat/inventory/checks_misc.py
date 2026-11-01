@@ -62,7 +62,12 @@ async def replay_from_quiet(w: W, rec: Any) -> None:
     try:
         await w.goto("main")
         before = snap(w)
-        rec("palette:Replay Hurricane Erin", None if await via_palette(w, "Replay Hurricane Erin") else "choosing the replay in the menu changed nothing")
+        rec(
+            "palette:Replay Hurricane Erin",
+            None
+            if await via_palette(w, "Replay Hurricane Erin")
+            else "choosing the replay in the menu changed nothing",
+        )
     except Exception as exc:
         rec("palette:Replay Hurricane Erin", f"{type(exc).__name__}: {exc}")
 
@@ -80,8 +85,13 @@ async def linkage(w: W, rec: Any) -> None:
         b = w.text()
         moved = w.app.selected
         await w.after_tick()
-        rec(names[0], None if a != b else "j moved the selected storm but nothing on screen shows which one is selected")
-        rec(names[1], None if w.app.selected == moved != first else "the selected storm changed back after a refresh tick")
+        rec(
+            names[0], None if a != b else "j moved the selected storm but nothing on screen shows which one is selected"
+        )
+        rec(
+            names[1],
+            None if w.app.selected == moved != first else "the selected storm changed back after a refresh tick",
+        )
     except Exception as exc:
         for n in names:
             rec(n, f"{type(exc).__name__}: {exc}")
@@ -89,7 +99,10 @@ async def linkage(w: W, rec: Any) -> None:
     lists = [x for x in main.query(OptionList) if x.display and x.option_count]
     why = "the Home screen has no station or alert list beside the map: clicking a buoy or gauge mark opens its page and highlights no row"
     rec("claim:link-mark-to-row", None if lists else why)
-    rec("claim:link-row-to-mark", None if lists else "the Home screen has no list rows to select, so no row can highlight its mark")
+    rec(
+        "claim:link-row-to-mark",
+        None if lists else "the Home screen has no list rows to select, so no row can highlight its mark",
+    )
     try:
         await w.goto("station_buoy")
         station = w.screen
@@ -98,6 +111,11 @@ async def linkage(w: W, rec: Any) -> None:
         await w.after_tick()
         view = helpers.map_of(w).viewport
         near = view is not None and abs(view.center_lat - lat) < 0.5 and abs(view.center_lon - lon) < 0.5
-        rec("claim:link-station-to-mark", None if near else f"m on a station page did not centre the map on the station ({lat}, {lon}); centre is {view and (view.center_lat, view.center_lon)}")
+        rec(
+            "claim:link-station-to-mark",
+            None
+            if near
+            else f"m on a station page did not centre the map on the station ({lat}, {lon}); centre is {view and (view.center_lat, view.center_lon)}",
+        )
     except Exception as exc:
         rec("claim:link-station-to-mark", f"{type(exc).__name__}: {exc}")

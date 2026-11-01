@@ -16,8 +16,14 @@ BOUND = "tests/uat/test_boundaries.py"
 # README key token -> (behaviour and expected result, proofs)
 KEYS: dict[str, tuple[str, tuple[str, ...]]] = {
     "?": ("Help: every key. Opens the help dialog", ("key:main:question_mark", "key:help:question_mark")),
-    "Ctrl+P": ("The menu opens and lists screens, actions, storms and stations", ("key:main:ctrl+p", "palette:Open storm")),
-    "Esc": ("Go back one screen, close a dialog, leave the full-screen map", ("key:storm:escape", "key:help:escape", "key:main:escape")),
+    "Ctrl+P": (
+        "The menu opens and lists screens, actions, storms and stations",
+        ("key:main:ctrl+p", "palette:Open storm"),
+    ),
+    "Esc": (
+        "Go back one screen, close a dialog, leave the full-screen map",
+        ("key:storm:escape", "key:help:escape", "key:main:escape"),
+    ),
     "Backspace": ("Go back one screen", ("key:storm:backspace",)),
     "q": ("Quit from the first screen only", ("key:main:q", "key:storm:q")),
     "m": ("Go to the map from any screen", ("key:storm:m",)),
@@ -67,10 +73,19 @@ KEY_ALIASES = {"Page Up": "Left", "Page Down": "Left", "Arrow keys": "Left"}
 
 FLAGS: dict[str, tuple[str, tuple[str, ...]]] = {
     "--demo": ("Replays the bundled Erin recording", (f"{CLI}::test_demo_summary",)),
-    "--replay": ("Replays a recording of your own; a missing folder is a clean error", (f"{CLI}::test_replay_missing_dir",)),
-    "--basin": ("Only that basin; a bad basin is a usage error", (f"{CLI}::test_basin_filter", f"{CLI}::test_bad_basin")),
+    "--replay": (
+        "Replays a recording of your own; a missing folder is a clean error",
+        (f"{CLI}::test_replay_missing_dir",),
+    ),
+    "--basin": (
+        "Only that basin; a bad basin is a usage error",
+        (f"{CLI}::test_basin_filter", f"{CLI}::test_bad_basin"),
+    ),
     "--summary": ("Prints plain sentences and exits", (f"{CLI}::test_demo_summary",)),
-    "--glyphs": ("Plain symbols; a bad value is a usage error", (f"{CLI}::test_glyphs_ascii", f"{CLI}::test_bad_glyphs")),
+    "--glyphs": (
+        "Plain symbols; a bad value is a usage error",
+        (f"{CLI}::test_glyphs_ascii", f"{CLI}::test_bad_glyphs"),
+    ),
     "--headless": ("No interface; prints events", (f"{CLI}::test_headless_until",)),
     "--until": ("Stops the headless run at the given time", (f"{CLI}::test_headless_until",)),
     "--config": ("Reads the settings file at PATH", (f"{CLI}::test_config_path",)),
@@ -82,7 +97,10 @@ FLAGS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 BEHAVIOURS: dict[str, tuple[str, tuple[str, ...]]] = {
     "click-storm": ("Clicking a storm on the map opens its page and the storm stays marked", ("click:mark:storm",)),
-    "click-station": ("Clicking a buoy or gauge on the map opens its page and it stays marked", ("click:mark:buoy", "click:mark:gauge")),
+    "click-station": (
+        "Clicking a buoy or gauge on the map opens its page and it stays marked",
+        ("click:mark:buoy", "click:mark:gauge"),
+    ),
     "click-chooser": ("Overlapping marks open a chooser", ("click:mark:chooser",)),
     "click-card-link": ("A card's open > link opens the storm", ("click:link:main:side:open:storm",)),
     "click-list-row": ("A row in a list opens the station", ("click:row:buoys:*",)),
@@ -92,13 +110,25 @@ BEHAVIOURS: dict[str, tuple[str, tuple[str, ...]]] = {
     "drag-pan": ("Drag the map to pan it", ("click:mark:drag",)),
     "wheel-zoom": ("The wheel zooms", ("click:mark:wheel",)),
     "hover-name": ("Hovering a mark names it", ("click:mark:hover",)),
-    "menu-everything": ("The menu lists every screen, action, storm and station", ("palette:Open storm", "palette:Open buoys and gauges")),
+    "menu-everything": (
+        "The menu lists every screen, action, storm and station",
+        ("palette:Open storm", "palette:Open buoys and gauges"),
+    ),
     "footer-ends-help": ("The footer shows keys that work and ends with ? help", (f"{MATRIX}::test_matrix_rules",)),
     "map-first": ("The map is the first screen at every terminal size", (f"{MATRIX}::test_matrix_rules",)),
-    "mark-row-linkage": ("Clicking a mark selects its row; selecting a row marks it", ("claim:link-mark-to-row", "claim:link-row-to-mark")),
+    "mark-row-linkage": (
+        "Clicking a mark selects its row; selecting a row marks it",
+        ("claim:link-mark-to-row", "claim:link-row-to-mark"),
+    ),
     "station-show-on-map": ("m on a station shows it on the map", ("claim:link-station-to-mark",)),
-    "too-small-message": ("A terminal under 60x16 gets a message that says what size is needed", (f"{BOUND}::test_too_small_terminal",)),
-    "offline-honest": ("Offline, the screens say so and never show a quiet day", (f"{BOUND}::test_offline_recovers", f"{MATRIX}::test_matrix_rules")),
+    "too-small-message": (
+        "A terminal under 60x16 gets a message that says what size is needed",
+        (f"{BOUND}::test_too_small_terminal",),
+    ),
+    "offline-honest": (
+        "Offline, the screens say so and never show a quiet day",
+        (f"{BOUND}::test_offline_recovers", f"{MATRIX}::test_matrix_rules"),
+    ),
     "no-colour": ("NO_COLOR and ascii glyphs leave every screen readable", (f"{BOUND}::test_no_color_and_ascii",)),
     "search-no-hit": ("Searching for nothing finds nothing without an error", (f"{BOUND}::test_search_no_match",)),
 }

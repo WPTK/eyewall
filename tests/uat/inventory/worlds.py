@@ -29,12 +29,12 @@ from eyewall.app import EyewallApp
 from eyewall.config import Config
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import CurrentStorms
+from eyewall.net import FetchError, HttpError, NetworkError
 from eyewall.poll import FreshnessState
 from eyewall.sources import protocol
-from eyewall.net import FetchError, HttpError, NetworkError
 from eyewall.ui.screens.main import MainScreen
-from tests.ui_support import EDT, ScriptedSource, replay_app, replay_source, screen_text, settle
 from tests.uat.inventory.registry import World
+from tests.ui_support import EDT, ScriptedSource, replay_app, replay_source, screen_text, settle
 
 STATES = ("first_run", "offline", "loading", "stale", "empty", "quiet", "busy", "error", "demo")
 SIZES = ((100, 30), (120, 30), (200, 50), (280, 70), (80, 24))
@@ -167,7 +167,9 @@ async def feeds_done(app: EyewallApp, pilot: Pilot[None], state: str) -> None:
         return
     for _ in range(400):
         loading = [
-            f for f in protocol.FEEDS if app.poller.active(f) and app.poller.freshness(f).state is FreshnessState.LOADING
+            f
+            for f in protocol.FEEDS
+            if app.poller.active(f) and app.poller.freshness(f).state is FreshnessState.LOADING
         ]
         if not loading and not app.poller.polling:
             return

@@ -49,7 +49,9 @@ async def click_cells(w: W, name: str, rec: Any) -> None:
     """Footer cells, crumbs and the health slot of the screen showing now."""
     shown = SCREEN_OF.get(name, name)
     screen = w.screen
-    idempotent = {"key:c", "key:f", "key:enter"} if name == "full_map" else set()  # repeating or empty: no change by design
+    idempotent = (
+        {"key:c", "key:f", "key:enter"} if name == "full_map" else set()
+    )  # repeating or empty: no change by design
     if not isinstance(screen, ChromeScreen):
         return
     jobs: list[tuple[str, Any, Any]] = []
@@ -80,7 +82,10 @@ async def click_cells(w: W, name: str, rec: Any) -> None:
             continue
         last_crumb = bool(crumbs) and target.action == crumbs[-1]
         if before == after and not last_crumb and target.action not in idempotent:
-            rec(item, f"clicking {target.action!r} ({kind.__name__} cells {target.start}-{target.end}) on {name} changed nothing")
+            rec(
+                item,
+                f"clicking {target.action!r} ({kind.__name__} cells {target.start}-{target.end}) on {name} changed nothing",
+            )
         else:
             rec(item)
 
@@ -160,7 +165,12 @@ async def click_widgets(w: W, name: str, rec: Any) -> None:
             for tab in list(widget.query(Tab)):
                 item = f"click:tab:{shown}:{tab.id}"
                 await w.click(tab)
-                rec(item, None if widget.active == tab.id else f"clicking tab {tab.id!r} left {widget.active!r} active on {name}")
+                rec(
+                    item,
+                    None
+                    if widget.active == tab.id
+                    else f"clicking tab {tab.id!r} left {widget.active!r} active on {name}",
+                )
         elif isinstance(widget, OptionList | DataTable | SelectionList):
             item = f"click:row:{shown}:{kind}"
             before = snap(w)
@@ -169,14 +179,24 @@ async def click_widgets(w: W, name: str, rec: Any) -> None:
             except Exception as exc:
                 rec(item, f"{type(exc).__name__}: {exc}")
                 continue
-            rec(item, None if before != snap(w) or widget.has_focus else f"clicking the first row of the {kind} on {name} changed nothing and took no focus")
+            rec(
+                item,
+                None
+                if before != snap(w) or widget.has_focus
+                else f"clicking the first row of the {kind} on {name} changed nothing and took no focus",
+            )
         else:
             item = f"click:widget:{shown}:{kind}:{wid}"
             before = snap(w)
             widget.scroll_visible(animate=False)
             await w.settle()
             await w.click(widget)
-            rec(item, None if before != snap(w) or widget.has_focus else f"clicking the {kind} #{wid} on {name} changed nothing and took no focus")
+            rec(
+                item,
+                None
+                if before != snap(w) or widget.has_focus
+                else f"clicking the {kind} #{wid} on {name} changed nothing and took no focus",
+            )
 
 
 async def widget_key_checks(w: W, name: str, rec: Any) -> None:
@@ -189,7 +209,9 @@ async def widget_key_checks(w: W, name: str, rec: Any) -> None:
         if widget is None:
             continue
         kind = cls.__name__
-        size = getattr(widget, "option_count", None) or getattr(widget, "row_count", None) or len(list(widget.query(Tab)))
+        size = (
+            getattr(widget, "option_count", None) or getattr(widget, "row_count", None) or len(list(widget.query(Tab)))
+        )
         for key in sorted(widget_keys(widget)):
             item = f"key:{shown}:{kind}:{key}"
             if (
@@ -199,7 +221,9 @@ async def widget_key_checks(w: W, name: str, rec: Any) -> None:
                 or (size is not None and size < 2 and key in ("up", "down", "left", "right"))
                 or (kind in ("StationList", "OptionList", "SelectionList") and key in ("left", "right"))
             ):
-                rec(item)  # no-op by construction: one row, a whole-row cursor, a submit with nothing new, no sideways move
+                rec(
+                    item
+                )  # no-op by construction: one row, a whole-row cursor, a submit with nothing new, no sideways move
                 continue
             await back_to(w, name, screen)
             widget = find_widget(w, cls, wid, index)
@@ -273,7 +297,10 @@ async def map_marks(w: W, rec: Any) -> None:
             await w.pilot.pause(0.6)
             await w.after_tick()
             if helpers.map_of(w).focused_mark != mark:
-                rec(item, f"after the click, the page and a refresh tick the {kind} mark {mark.id} is no longer the marked one")
+                rec(
+                    item,
+                    f"after the click, the page and a refresh tick the {kind} mark {mark.id} is no longer the marked one",
+                )
             else:
                 rec(item)
         except Exception as exc:
@@ -291,10 +318,16 @@ async def map_marks(w: W, rec: Any) -> None:
                 rec("click:mark:chooser", f"clicking overlapping marks opened {helpers.top_name(w)}")
             else:
                 await w.press("escape")
-                rec("key:chooser:escape", None if helpers.top_name(w) != "MarkChooser" else "escape left the chooser open")
+                rec(
+                    "key:chooser:escape",
+                    None if helpers.top_name(w) != "MarkChooser" else "escape left the chooser open",
+                )
                 await w.click(view, cell)
                 await w.press("enter")
-                rec("click:mark:chooser", None if helpers.top_name(w) != "MarkChooser" else "enter in the chooser left it open")
+                rec(
+                    "click:mark:chooser",
+                    None if helpers.top_name(w) != "MarkChooser" else "enter in the chooser left it open",
+                )
     except Exception as exc:
         rec("click:mark:chooser", f"{type(exc).__name__}: {exc}")
     try:
