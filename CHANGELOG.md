@@ -17,6 +17,7 @@
 - Pin the standalone binaries' dependencies in `scripts/binary-constraints.txt`, with `scripts/update_constraints.py` to refresh them ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
 - Rewrite the README around the redesigned screens, keys and `--summary`, and move contributor guidance into `docs/development.md` and install notes into `docs/install.md` ([`bbdff09`](https://github.com/WPTK/eyewall/commit/bbdff09), [#46](https://github.com/WPTK/eyewall/pull/46); [`c92dc90`](https://github.com/WPTK/eyewall/commit/c92dc90), [#56](https://github.com/WPTK/eyewall/pull/56))
 - Bound test runs, split feed outages from format drift in the daily canary and enable Dependabot ([`d72818f`](https://github.com/WPTK/eyewall/commit/d72818f), [#92](https://github.com/WPTK/eyewall/pull/92))
+- Call the picture screen Pictures everywhere, in the crumb, help, command palette and empty message, instead of Graphics ([`5655bf5`](https://github.com/WPTK/eyewall/commit/5655bf5), [#128](https://github.com/WPTK/eyewall/pull/128))
 
 ### Added
 
@@ -31,6 +32,7 @@
 - Keep bold, underline and reverse video on the map and charts when `NO_COLOR` is set ([`cb806d9`](https://github.com/WPTK/eyewall/commit/cb806d9), [#117](https://github.com/WPTK/eyewall/pull/117))
 - Add `Tab` on the Station screen to show the next chart when the screen is too short for all of them ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
 - Add the last traceback to the feed canary issue ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
+- Strip control characters from feed text, and show notifications without interpreting markup ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
 
 ### Removed
 
@@ -76,6 +78,11 @@
 - Fix a config file with a byte order mark discarding all settings, and a malformed proxy port crashing startup ([`b111d67`](https://github.com/WPTK/eyewall/commit/b111d67), [#93](https://github.com/WPTK/eyewall/pull/93))
 - Fix the cone and wind radii vanishing when advisory text is retried, and buoy threshold alerts being skipped when a buoy file came from the cache ([`7154d82`](https://github.com/WPTK/eyewall/commit/7154d82), [#102](https://github.com/WPTK/eyewall/pull/102))
 - Fix a junk answer from CO-OPS or a junk 200 page blanking good data or replacing a cached feed, and the disk cache growing without a limit ([`7154d82`](https://github.com/WPTK/eyewall/commit/7154d82), [#102](https://github.com/WPTK/eyewall/pull/102))
+- Fix `NO_COLOR` alert log warning rows, which were the faintest; they are now bold and start with `!` ([`aa92cd6`](https://github.com/WPTK/eyewall/commit/aa92cd6), [#130](https://github.com/WPTK/eyewall/pull/130))
+- Fix the buoy and tide gauge wind charts, which now scale to the data instead of a fixed axis up to 100 ([`aa92cd6`](https://github.com/WPTK/eyewall/commit/aa92cd6), [#130](https://github.com/WPTK/eyewall/pull/130))
+- Fix a stale cached picture shown as the new advisory's, and the NHC text Public tab showing the previous advisory as current ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+- Fix wind and wave trend sentences using readings older than 2 hours, and the movement speed mixing advisories ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
+- Fix `--summary` leaving out that watches and warnings are not yet read for the latest advisory ([`bbb7e39`](https://github.com/WPTK/eyewall/commit/bbb7e39), [#137](https://github.com/WPTK/eyewall/pull/137))
 
 ## [0.8.5] - 2026-10-31
 
