@@ -342,13 +342,14 @@ def _alert_color(alert: WatchWarningAlert) -> str:
     return WATCH_WARNING_COLORS.get(alert.kind, NEUTRAL) if alert.kind else NEUTRAL
 
 
-def _radii_cells(radii: QuadrantRadii | None, preset: Preset) -> str:
-    if radii is None:
-        return "  --   --   --   --"
-    cells = []
-    for value in (radii.ne, radii.se, radii.sw, radii.nw):
-        cells.append(MISSING.rjust(4) if value is None else preset.fmt_distance(value, decimals=0).split()[0].rjust(4))
-    return " " + " ".join(cells)
+def _radii_cells(radii: QuadrantRadii, preset: Preset) -> str:
+    """One threshold's radii, each value named by its quadrant, so the row needs no header line above it."""
+    values = (("NE", radii.ne), ("SE", radii.se), ("SW", radii.sw), ("NW", radii.nw))
+    cells = [
+        f"{name} {MISSING if value is None else preset.fmt_distance(value, decimals=0).split()[0]}"
+        for name, value in values
+    ]
+    return " ".join(cells) + f" {preset.distance}"
 
 
 def top_probabilities(state: StormState) -> list[tuple[int, str, int]]:
@@ -388,13 +389,10 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
         _kv(out, "eye", preset.fmt_distance(tcm.eye_diameter_nm))
     out.append("\n")
     if tcm is not None and not tcm.radii.empty:
-        unit = preset.distance
-        # No blank line above the header: a short panel scrolls, and a blank row could leave it alone at the bottom.
-        out.append(f"Radii ({unit})".ljust(10) + "  NE   SE   SW   NW\n", style=DIM)
         for kt in (34, 50, 64):
             radii = tcm.radii.for_threshold(kt)
             if radii is not None:
-                out.append(f"{kt} kt".ljust(9), style=f"bold {category_color(kt)}")
+                out.append(f"{kt} kt".ljust(7), style=f"bold {category_color(kt)}")
                 out.append(_radii_cells(radii, preset) + "\n")
     probabilities = top_probabilities(state)
     if probabilities:
