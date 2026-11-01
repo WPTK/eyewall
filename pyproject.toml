@@ -46,6 +46,9 @@ dev = [
     "vulture>=2.14",
     "mypy>=1.13",
     "build>=1,<2",
+    # real-input suite (tests/realinput, tests/uat_kit): test-only, never runtime dependencies
+    "pyte>=0.8.2",
+    "pywinpty>=2.0; sys_platform == 'win32'",
 ]
 
 [project.urls]
@@ -70,10 +73,11 @@ packages = ["src/eyewall"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 120  # seconds per test; see docs/development.md for what happens when it passes (--timeout=0 turns it off)
-addopts = "-m 'not uat'"  # the UAT suite takes minutes: run it with `pytest tests/uat -m uat`
+addopts = "-m 'not uat and not realinput'"  # the UAT suite takes minutes: run it with `pytest tests/uat -m uat`
 markers = [
     "live: hits the real NOAA endpoints; skipped unless EYEWALL_LIVE=1",
     "uat: user-journey tests that drive the whole app",
+    "realinput: drives the built eyewall executable on a pseudo-console with real terminal bytes; set EYEWALL_EXE",
 ]
 
 [tool.ruff]
