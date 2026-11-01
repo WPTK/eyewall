@@ -11,14 +11,15 @@ from textual.binding import Binding
 from eyewall.app import EyewallApp
 from eyewall.ui import nav
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.buoys import BuoysScreen
 from eyewall.ui.screens.help import help_text
 from eyewall.ui.screens.main import MainMap, MainScreen
-from eyewall.ui.screens.watchlist import WatchlistScreen
+from eyewall.ui.screens.nhc_text import NhcTextScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.widgets.gallery import GalleryPanel
 from eyewall.ui.widgets.map_view import MapView
-from eyewall.ui.widgets.station_table import StationTable
+from eyewall.ui.widgets.station_list import StationList
 
 OWNERS: dict[str, type] = {
     "app": EyewallApp,
@@ -26,10 +27,11 @@ OWNERS: dict[str, type] = {
     "main": MainScreen,
     "main_map": MainMap,
     "map": MapView,
-    "detail": StormDetailScreen,
-    "stations": StationTable,
-    "buoy": BuoyDetailScreen,
-    "watch": WatchlistScreen,
+    "storm": StormScreen,
+    "text": NhcTextScreen,
+    "buoys": BuoysScreen,
+    "stations": StationList,
+    "station": StationScreen,
     "alerts": AlertLogScreen,
     "gallery": GalleryPanel,
 }

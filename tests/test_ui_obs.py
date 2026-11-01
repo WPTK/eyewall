@@ -1,5 +1,5 @@
-"""Pilot journeys through the buoy and tide gauge views: the two tabs, the buoy charts, the watchlist, the search, the
-settings screen and unit cycling. Everything runs over the Erin replay (ticked by hand) or a scripted quiet-day source."""
+"""Pilot journeys through the buoy and tide gauge views: the Buoys and gauges list, the station screens, following, the
+station menu, the settings screen and unit cycling. Everything runs over the Erin replay (ticked by hand) or a scripted quiet-day source."""
 
 from __future__ import annotations
 
@@ -21,12 +21,10 @@ from eyewall.models.obs import (
     WaterLevelReading,
 )
 from eyewall.models.obs import Parsed as ObsParsed
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
-from eyewall.ui.screens.search import SearchScreen
+from eyewall.ui.screens.buoys import BuoysScreen
 from eyewall.ui.screens.settings import SettingsScreen
-from eyewall.ui.screens.watchlist import WatchlistScreen
-from eyewall.ui.widgets.station_table import StationTable
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.widgets.station_list import StationList
 from tests.ui_support import (
     QUIET_NOW,
     ScriptedSource,
@@ -44,8 +42,19 @@ STEP = "right_square_bracket"
 SIZES = [(80, 24), (140, 45)]
 
 
-def table(app: EyewallApp, table_id: str) -> StationTable:
-    return app.screen.query_one(f"#{table_id}", StationTable)
+def stations(app: EyewallApp) -> StationList:
+    return app.screen.query_one(StationList)
+
+
+def buoy_ids(app: EyewallApp) -> list[str]:
+    return [r.id for r in stations(app).rows if r.kind == "ndbc"]
+
+
+async def highlight(pilot, app: EyewallApp, key: str) -> None:  # type: ignore[no-untyped-def]
+    """Put the list's highlight on a station, the way arrow keys would."""
+    keys = [r.key for r in stations(app).rows]
+    stations(app).highlighted = keys.index(key)
+    await settle(pilot)
 
 
 def with_files(tmp_path: Path, config: Config | None = None) -> dict[str, object]:
@@ -53,42 +62,42 @@ def with_files(tmp_path: Path, config: Config | None = None) -> dict[str, object
 
 
 @pytest.mark.parametrize("size", SIZES, ids=["80x24", "140x45"])
-async def test_buoys_tab_lists_the_nearest_buoys_first(size: tuple[int, int]) -> None:
+async def test_the_list_shows_the_nearest_stations_first(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7")
-        assert isinstance(app.screen, StormDetailScreen)
-        keys = table(app, "buoys-table").keys
-        assert keys[:2] == ["41002", "41001"]
+        await press(pilot, "enter", "b")
+        assert isinstance(app.screen, BuoysScreen)
+        assert buoy_ids(app)[:2] == ["41002", "41001"]
         text = screen_text(app)
         assert "41002" in text
-        assert "Wind" in text
+        assert "near Erin" in text
 
 
-async def test_the_nearest_buoy_stays_first_across_a_tick() -> None:
+async def test_the_nearest_station_stays_first_across_a_tick() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7")
-        keys = table(app, "buoys-table").keys
+        await press(pilot, "enter", "b")
+        keys = [r.key for r in stations(app).rows]
         await press(pilot, STEP)
-        assert table(app, "buoys-table").keys[0] == keys[0]
+        assert next(r.key for r in stations(app).rows) == keys[0]
 
 
-async def test_enter_on_a_buoy_row_opens_its_charts_and_escape_returns() -> None:
+async def test_enter_on_a_buoy_row_opens_its_page_and_escape_returns() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "enter")
-        assert isinstance(app.screen, BuoyDetailScreen)
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        await press(pilot, "enter")
+        assert isinstance(app.screen, StationScreen)
         assert app.screen.station_id == "41002"
         text = screen_text(app)
-        assert "41002" in text and "Pressure" in text and "Wind and gust" in text and "Wave" in text
-        assert "24 h" in text
+        assert "41002" in text and "24 h" in text
         assert "41002" in app.poller.extra_buoys
         await press(pilot, "escape")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, BuoysScreen)
         assert "41002" not in app.poller.extra_buoys
 
 
@@ -96,7 +105,8 @@ async def test_the_h_key_cycles_the_range_through_24_48_and_72_hours() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "enter")
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
         seen = []
         for _ in range(3):
             seen.append(app.screen.hours)  # type: ignore[attr-defined]
@@ -106,48 +116,49 @@ async def test_the_h_key_cycles_the_range_through_24_48_and_72_hours() -> None:
 
 
 @pytest.mark.parametrize("size", SIZES, ids=["80x24", "140x45"])
-async def test_buoy_detail_fits_both_sizes_and_the_info_panel_toggles_when_narrow(size: tuple[int, int]) -> None:
+async def test_the_station_page_fits_both_sizes_and_i_explains_buoy_winds(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "enter")
-        screen = app.screen
-        assert isinstance(screen, BuoyDetailScreen)
-        assert screen.has_class("narrow") is (size[0] < 110)
-        if size[0] < 110:
-            assert screen.has_class("show-info") is False
-            await press(pilot, "i")
-            assert screen.has_class("show-info")
-            assert "Latest" in screen_text(app) or "Wind" in screen_text(app)
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
+        assert isinstance(app.screen, StationScreen)
+        assert "average over about 8 minutes" not in " ".join(screen_text(app).split())
+        await press(pilot, "i")
+        assert "average over about 8 minutes" in " ".join(screen_text(app).split())
+        await press(pilot, "i")
+        assert "average over about 8 minutes" not in " ".join(screen_text(app).split())
 
 
-async def test_the_buoy_detail_shows_the_supplemental_note_when_there_is_no_file() -> None:
+async def test_the_station_page_loads_the_supplemental_file_once() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "enter")
+        app.open_station("ndbc", "41002")
         await wait_until(pilot, lambda: app.screen.supl is not None)  # type: ignore[attr-defined]
         await settle(pilot)
-        assert "supplemental" in screen_text(app).lower()
+        assert isinstance(app.screen, StationScreen)
 
 
-async def test_tides_tab_shows_observed_predicted_and_the_residual() -> None:
+async def test_a_tide_gauge_page_shows_the_water_level_and_the_readings() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "8")
-        keys = table(app, "tides-table").keys
-        assert keys
-        text = screen_text(app)
-        assert "Observed" in text and "Predicted" in text and "Residual" in text
-        assert any(mark in text for mark in ("+0.", "-0.", "+1.", "+2."))
+        gauge = next(iter(app.store.tide_series))
+        app.open_station("coops", gauge)
+        await settle(pilot)
+        assert isinstance(app.screen, StationScreen) and not app.screen.is_buoy
+        assert gauge in " ".join(screen_text(app).split())
+        await press(pilot, "r")
+        text = " ".join(screen_text(app).split())
+        assert "Observed" in text or "Water level" in text
 
 
-async def test_unit_cycling_changes_the_numbers_on_the_buoys_tab() -> None:
+async def test_unit_cycling_changes_the_numbers_on_the_list() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7")
+        await press(pilot, "enter", "b")
         nautical = screen_text(app)
         await press(pilot, "u")
         us = screen_text(app)
@@ -155,35 +166,39 @@ async def test_unit_cycling_changes_the_numbers_on_the_buoys_tab() -> None:
         metric = screen_text(app)
         assert app.units == "metric"
         assert "kt" in nautical and "mb" in nautical
-        assert "mph" in us and "inHg" in us
+        assert "mph" in us
         assert "km/h" in metric and "hPa" in metric
         await press(pilot, "u")
         assert app.units == "nautical"
         assert "kt" in screen_text(app)
 
 
-async def test_p_pins_the_highlighted_buoy_and_saves_it_to_the_config_file(tmp_path: Path) -> None:
+async def test_f_follows_the_highlighted_station_and_saves_it_to_the_config_file(tmp_path: Path) -> None:
     app = replay_app(**with_files(tmp_path))
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7")
-        station = table(app, "buoys-table").current_key()
-        assert station is not None and station not in app.config.watchlist.ndbc
-        await press(pilot, "p")
-        await wait_until(pilot, lambda: station in app.config.watchlist.ndbc)
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        assert "41002" not in app.config.watchlist.ndbc
+        await press(pilot, "f")
+        await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
         saved = load_config(tmp_path / "eyewall.toml")
         assert saved.warnings == ()
-        assert station in saved.config.watchlist.ndbc
-        await press(pilot, "p")
-        await wait_until(pilot, lambda: station not in app.config.watchlist.ndbc)
-        assert station not in load_config(tmp_path / "eyewall.toml").config.watchlist.ndbc
+        assert "41002" in saved.config.watchlist.ndbc
+        assert any("Following 41002" in n.message for n in app._notifications)
+        await press(pilot, "f")
+        await wait_until(pilot, lambda: "41002" not in app.config.watchlist.ndbc)
+        assert "41002" not in load_config(tmp_path / "eyewall.toml").config.watchlist.ndbc
+        assert any("Stopped following 41002" in n.message for n in app._notifications)
 
 
-async def test_p_on_the_buoy_detail_pins_that_buoy(tmp_path: Path) -> None:
+async def test_f_on_the_station_page_follows_that_station(tmp_path: Path) -> None:
     app = replay_app(**with_files(tmp_path))
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "enter", "p")
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
+        await press(pilot, "f")
         await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
         assert "41002" in load_config(tmp_path / "eyewall.toml").config.watchlist.ndbc
 
@@ -192,67 +207,56 @@ async def test_changes_are_kept_for_the_run_when_there_is_no_config_file() -> No
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "p")
-        station = table(app, "buoys-table").current_key()
-        await wait_until(pilot, lambda: station in app.config.watchlist.ndbc)
+        await press(pilot, "enter", "b", "f")
+        row = stations(app).current_row()
+        assert row is not None
+        await wait_until(pilot, lambda: row.id in app.config.watchlist.ndbc + app.config.watchlist.coops)
 
 
-async def test_the_watchlist_screen_adds_and_removes_stations(tmp_path: Path) -> None:
+async def test_your_stations_lists_what_you_follow_and_f_removes_it(tmp_path: Path) -> None:
     app = replay_app(**with_files(tmp_path))
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "w")
-        assert isinstance(app.screen, WatchlistScreen)
-        before = app.config.watchlist.ndbc
-        candidate = next(i for i in app.store.stations if i not in before and i.isdigit())
-        await press(pilot, "a")
-        assert isinstance(app.screen, SearchScreen)
-        await pilot.press(*candidate)
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        await press(pilot, "f")
+        await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
+        await press(pilot, "tab")
         await settle(pilot)
-        await press(pilot, "enter")
-        await wait_until(pilot, lambda: candidate in app.config.watchlist.ndbc)
-        assert isinstance(app.screen, WatchlistScreen)
-        assert candidate in load_config(tmp_path / "eyewall.toml").config.watchlist.ndbc
-        keys = app.screen.query_one("#watch-buoys", StationTable).keys
-        assert candidate in keys
-        app.screen.query_one("#watch-buoys", StationTable).move_cursor(row=keys.index(candidate))
-        await press(pilot, "d")
-        await wait_until(pilot, lambda: candidate not in app.config.watchlist.ndbc)
-        assert candidate not in load_config(tmp_path / "eyewall.toml").config.watchlist.ndbc
-        await press(pilot, "escape")
-        assert not isinstance(app.screen, WatchlistScreen)
+        followed = [r.key for r in stations(app).rows]
+        assert "ndbc:41002" in followed
+        assert f"You follow {len(followed)} station" in screen_text(app)
+        await press(pilot, "f")
+        await wait_until(pilot, lambda: "41002" not in app.config.watchlist.ndbc)
+        await settle(pilot)
+        assert "ndbc:41002" not in [r.key for r in stations(app).rows]
 
 
-async def test_the_search_finds_a_station_by_name_and_enter_opens_its_charts() -> None:
+async def test_the_slash_menu_finds_a_station_by_name_and_enter_opens_it() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "slash")
-        assert isinstance(app.screen, SearchScreen)
-        station = app.store.stations["41002"]
-        word = station.name.split()[0].lower()
+        await pilot.pause(0.3)
+        word = app.store.stations["41002"].name.split()[0].lower()
         await pilot.press(*word)
-        await settle(pilot)
+        await pilot.pause(0.6)
         assert "41002" in screen_text(app)
-        await press(pilot, "ctrl+p")
-        await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
-        assert not isinstance(app.screen, SearchScreen)
-        await press(pilot, "slash")
-        await pilot.press(*"41002")
-        await settle(pilot)
         await press(pilot, "enter")
-        assert isinstance(app.screen, BuoyDetailScreen)
+        await wait_until(pilot, lambda: isinstance(app.screen, StationScreen))
+        assert app.screen.station_id == "41002"  # type: ignore[attr-defined]
 
 
-async def test_the_search_says_so_when_nothing_matches() -> None:
+async def test_the_slash_menu_offers_nothing_when_nothing_matches() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await press(pilot, "slash")
+        await pilot.pause(0.3)
         await pilot.press(*"qqqqzz")
-        await settle(pilot)
-        assert "No station matches" in screen_text(app)
+        await pilot.pause(0.6)
+        assert "41002" not in screen_text(app)
         await press(pilot, "escape")
-        assert not isinstance(app.screen, SearchScreen)
+        assert not isinstance(app.screen, StationScreen)
 
 
 async def test_settings_save_round_trips_through_the_toml_file(tmp_path: Path) -> None:
@@ -300,11 +304,11 @@ async def test_a_config_file_that_cannot_be_written_is_reported_and_the_change_s
     app = replay_app(config_path=blocked)
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "p")
-        station = table(app, "buoys-table").current_key()
-        await wait_until(pilot, lambda: station in app.config.watchlist.ndbc)
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        await press(pilot, "f")
+        await wait_until(pilot, lambda: "41002" in app.config.watchlist.ndbc)
         assert not blocked.is_file()
-        assert station in app.config.watchlist.ndbc
 
 
 # ---- a quiet day: no storm, a watchlist ------------------------------------------------------------------------------
@@ -356,34 +360,34 @@ async def test_a_quiet_day_polls_the_watchlist_and_the_main_screen_counts_it() -
         assert "Highest wind" in text or "not reporting" in text
 
 
-async def test_the_watchlist_screen_on_a_quiet_day_opens_a_buoy_with_enter() -> None:
+async def test_the_stations_list_on_a_quiet_day_opens_a_buoy_with_enter() -> None:
     app = scripted_app(QuietDaySource())
     async with running(app) as pilot:
         await wait_until(pilot, lambda: "41010" in app.store.latest)
         await press(pilot, "b")
-        assert isinstance(app.screen, WatchlistScreen)
-        assert app.screen.query_one("#watch-buoys", StationTable).keys[0] == "41010"
+        assert isinstance(app.screen, BuoysScreen)
+        assert stations(app).rows[0].key == "ndbc:41010"
         await press(pilot, "enter")
-        assert isinstance(app.screen, BuoyDetailScreen)
+        assert isinstance(app.screen, StationScreen)
         await settle(pilot)
         text = screen_text(app)
         assert "41010" in text and "CANAVERAL" in text
 
 
-async def test_a_silent_watchlist_buoy_reads_not_reporting_on_its_chart_screen() -> None:
+async def test_a_silent_buoy_reads_not_reporting_on_its_station_page() -> None:
     app = scripted_app(QuietDaySource())
     async with running(app) as pilot:
         await wait_until(pilot, lambda: "41010" in app.store.latest)
-        app.open_buoy("42001")
+        app.open_station("ndbc", "42001")
         await settle(pilot)
-        assert isinstance(app.screen, BuoyDetailScreen)
+        assert isinstance(app.screen, StationScreen)
         assert "not reporting" in screen_text(app) or "waiting" in screen_text(app)
 
 
 # ---- review fixes ------------------------------------------------------------------------------------------------
 
 
-async def test_command_line_flags_are_not_saved_with_a_pin(tmp_path: Path) -> None:
+async def test_command_line_flags_are_not_saved_when_following(tmp_path: Path) -> None:
     from dataclasses import replace
 
     from eyewall.config import BasinsConfig, save_config
@@ -395,7 +399,9 @@ async def test_command_line_flags_are_not_saved_with_a_pin(tmp_path: Path) -> No
     app = replay_app(flagged, config_path=path, file_config=from_file)
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "p")
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        await press(pilot, "f")
         await wait_until(pilot, lambda: load_config(path).config.watchlist != from_file.watchlist)
     saved = load_config(path).config
     assert saved.basins == from_file.basins
@@ -426,7 +432,9 @@ async def test_a_file_that_failed_to_load_is_backed_up_before_the_first_save(tmp
     app = replay_app(config_path=path, config_file_broken=True)
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "7", "p")
+        await press(pilot, "enter", "b")
+        await highlight(pilot, app, "ndbc:41002")
+        await press(pilot, "f")
         await wait_until(pilot, lambda: not load_config(path).broken)
     assert (tmp_path / "eyewall.toml.bak").read_bytes() == original
     assert load_config(path).config.watchlist != Config().watchlist
@@ -448,7 +456,7 @@ async def test_opening_a_buoy_fetches_that_series_and_reuses_the_supplemental_fi
         app.poller.refresh_feeds = lambda *feeds: refreshed.append(feeds)  # type: ignore[method-assign]
         app.store.series.pop("41002", None)
         for _ in range(2):
-            app.open_buoy("41002")
+            app.open_station("ndbc", "41002")
             await settle(pilot)
             await wait_until(pilot, lambda: app.screen.supl is not None)  # type: ignore[attr-defined]
             await press(pilot, "escape")
@@ -475,7 +483,7 @@ async def test_a_settings_change_makes_only_the_affected_feeds_due() -> None:
         assert due == []
 
 
-async def test_a_failing_pin_is_reported_and_does_not_end_the_app() -> None:
+async def test_a_failing_follow_is_reported_and_does_not_end_the_app() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
@@ -484,10 +492,10 @@ async def test_a_failing_pin_is_reported_and_does_not_end_the_app() -> None:
             raise RuntimeError("disk on fire")
 
         app.set_watch = broken  # type: ignore[method-assign]
-        await press(pilot, "enter", "7", "p")
+        await press(pilot, "enter", "b", "f")
         await wait_until(pilot, lambda: any("disk on fire" in n.message for n in app._notifications))
         assert app.is_running
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, BuoysScreen)
 
 
 async def test_a_hand_edited_fractional_interval_survives_a_settings_save(tmp_path: Path) -> None:

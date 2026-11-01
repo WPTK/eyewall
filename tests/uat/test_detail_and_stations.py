@@ -1,107 +1,106 @@
-"""The storm detail tabs, buoy charts and tide gauges."""
+"""The Storm screen, the NHC text tabs, the buoys and gauges list and the station pages."""
 
 from __future__ import annotations
 
 import pytest
 
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import TABS, StormDetailScreen
+from eyewall.ui.nhc_text import STORM_TABS
+from eyewall.ui.screens.buoys import BuoysScreen
+from eyewall.ui.screens.nhc_text import NhcTextScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.stations import RANGES_H
-
-MARKERS = {
-    "summary": "Position",
-    "forecast": "TAU",
-    "public": "Advisory 38",
-    "discussion": "Discussion 38",
-    "probs": "Cumulative chance",
-    "ww": "Storm Surge Warning",
-    "buoys": "buoys within",
-    "tides": "gauges near",
-    "graphics": "Cone, 5 day",
-    "history": "Best track",
-}
+from eyewall.ui.widgets.station_list import StationList
 
 
-@pytest.mark.parametrize(("index", "tab"), [(i, t) for i, (t, _) in enumerate(TABS)], ids=[t for t, _ in TABS])
-async def test_every_detail_tab(journey, size, index, tab) -> None:
+async def test_the_storm_screen_reads_in_plain_words(journey, size) -> None:
     async with journey(size) as j:
         await j.keys("enter")
-        assert isinstance(j.screen, StormDetailScreen)
-        await j.keys(str((index + 1) % 10))
-        assert j.tab() == tab
-        j.see("ERIN", MARKERS[tab])
-        await j.shot(f"tab-{tab}")
-
-
-async def test_detail_tab_keys_and_advisory_toggle(journey, size) -> None:
-    async with journey(size) as j:
-        await j.keys("enter", "right")
-        assert j.tab() == "forecast"
-        await j.keys("left", "left")
-        assert j.tab() == "history"  # wraps round
-        await j.keys("3")
-        before = j.text()
-        await j.keys("t")
-        assert j.text() != before
-        await j.shot("forecast-advisory-text")
-        await j.keys("t")
-        after = j.text()
-        changed = [
-            (a, b)
-            for a, b in zip(before.splitlines(), after.splitlines(), strict=False)
-            if a != b and set(a + b) - set("━╸╺ ")  # the tab underline is animated; leave it out
-        ]
-        assert not changed, f"toggling twice changed the screen: {changed}"
+        assert isinstance(j.screen, StormScreen)
+        j.see("IN EFFECT", "WHAT THIS MEANS")
+        await j.shot("storm")
         await j.keys("escape")
-        assert not isinstance(j.screen, StormDetailScreen)
+        assert not isinstance(j.screen, StormScreen)
 
 
-async def test_buoy_list_charts_ranges_and_pin(journey, size) -> None:
+@pytest.mark.parametrize("tab", STORM_TABS)
+async def test_every_text_tab(journey, size, tab) -> None:
+    async with journey(size) as j:
+        await j.keys("enter", "t")
+        assert isinstance(j.screen, NhcTextScreen)
+        for _ in range(len(STORM_TABS)):
+            if j.screen.tab == tab:
+                break
+            await j.keys("right")
+        assert j.screen.tab == tab
+        j.see("ERIN")
+        await j.shot(f"text-{tab}")
+
+
+async def test_text_tab_keys_wrap_round(journey, size) -> None:
+    async with journey(size) as j:
+        await j.keys("enter", "t")
+        first = j.screen.tab
+        await j.keys("left")
+        assert j.screen.tab != first
+        await j.keys("right")
+        assert j.screen.tab == first
+        await j.keys("escape")
+        assert isinstance(j.screen, StormScreen)
+
+
+async def test_buoy_list_charts_ranges_and_follow(journey, size) -> None:
     async with journey(size) as j:
         app = j.app
-        await j.keys("b")
-        assert isinstance(j.screen, StormDetailScreen) and j.tab() == "buoys"
+        await j.keys("enter", "b")
+        assert isinstance(j.screen, BuoysScreen)
         await j.shot("buoy-list")
         await j.keys("enter")
-        assert isinstance(j.screen, BuoyDetailScreen)
+        assert isinstance(j.screen, StationScreen)
         station = j.screen.station_id
-        j.see("Pressure (", "Wind and gust (", "Wave height (", f"{RANGES_H[0]} h")
+        j.see(station, f"{RANGES_H[0]} h")
         await j.shot("charts-24h")
         for hours in (*RANGES_H[1:], RANGES_H[0]):
             await j.keys("h")
-            assert f"{hours} h" in " ".join(j.text().splitlines()[:3])
+            assert f"{hours} h" in " ".join(j.text().splitlines()[:6])
             await j.shot(f"range-{hours}h")
-        if size[0] < 110:
-            await j.keys("i")
-            j.see("Observed")
-            await j.shot("observation")
-            await j.keys("i")
-        watched = station in app.config.watchlist.ndbc
-        await j.keys("p")
+        await j.keys("i")
+        assert "average over about 8 minutes" in " ".join(j.text().split())
+        await j.shot("about-buoy-winds")
+        await j.keys("i", "r")
+        await j.shot("readings")
+        await j.keys("r")
+        followed = station in app.config.watchlist.ndbc + app.config.watchlist.coops
+        await j.keys("f")
         await j.settle()
-        assert (station in app.config.watchlist.ndbc) != watched
-        await j.shot("pin-toggled")
-        await j.keys("p")
+        assert (station in app.config.watchlist.ndbc + app.config.watchlist.coops) != followed
+        await j.shot("follow-toggled")
+        await j.keys("f")
         await j.settle()
-        assert (station in app.config.watchlist.ndbc) == watched
+        assert (station in app.config.watchlist.ndbc + app.config.watchlist.coops) == followed
         await j.keys("u")
         await j.shot("units-cycled")
         await j.keys("escape")
-        assert isinstance(j.screen, StormDetailScreen)
+        assert isinstance(j.screen, BuoysScreen)
 
 
-async def test_tide_gauges_list_and_pin(journey, size) -> None:
+async def test_tide_gauge_page_and_follow(journey, size) -> None:
     async with journey(size) as j:
         app = j.app
-        await j.keys("enter", "8")
-        assert j.tab() == "tides"
-        j.see("Residual")
-        await j.shot("tide-list")
+        await j.keys("enter", "b")
+        stations = j.screen.query_one(StationList)
+        gauge = next(r for r in stations.rows if r.kind == "coops")
+        stations.highlighted = [r.key for r in stations.rows].index(gauge.key)
+        await j.settle()
+        await j.shot("gauge-in-list")
+        await j.keys("enter")
+        assert isinstance(j.screen, StationScreen) and not j.screen.is_buoy
+        await j.settle()
+        await j.shot("gauge-page")
         before = set(app.config.watchlist.coops)
-        await j.keys("p")
+        await j.keys("f")
         await j.settle()
         assert set(app.config.watchlist.coops) != before
-        await j.shot("tide-pinned")
-        await j.keys("p")
+        await j.keys("f")
         await j.settle()
         assert set(app.config.watchlist.coops) == before

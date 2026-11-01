@@ -53,13 +53,17 @@ def known(view: View) -> bool:
     return bool(view.states) and all(trusted(s) for s in view.states)
 
 
-def marker(item: Item, view: View) -> tuple[str, str]:
-    """The stroke and style for an item, as the map key draws it."""
-    kind = item.area.kind
+def area_marker(area: WatchWarningArea, view: View) -> tuple[str, str]:
+    """The stroke and style for an area, as the map key draws it."""
+    kind = area.kind
     cue = WATCH_WARNING_CUES.get(kind) if kind is not None else None
     if cue is None:
         return view.g.chip, NEUTRAL
     return PATTERN_SAMPLES[cue.pattern][1 if view.ascii else 0][:MARKER_WIDTH], cue.color
+
+
+def marker(item: Item, view: View) -> tuple[str, str]:
+    return area_marker(item.area, view)
 
 
 def _title(item: Item, view: View, width: int) -> list[Line]:
@@ -185,6 +189,7 @@ def unread_lines(view: View, width: int) -> list[Line]:
 
 __all__ = [
     "Item",
+    "area_marker",
     "blocks",
     "items",
     "known",

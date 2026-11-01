@@ -24,7 +24,6 @@ from eyewall.render.images import ImageError, InlineBackend, inline_wanted
 from eyewall.sources import bundle
 from eyewall.sources.replay import ReplaySource
 from eyewall.ui import gallery
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.widgets import gallery as gallery_widget
 from eyewall.ui.widgets.gallery import GalleryPanel, ImageView, _open_frames
@@ -144,17 +143,17 @@ async def pick(pilot, panel: GalleryPanel, title: str) -> None:  # type: ignore[
     await settle(pilot)
 
 
-# ---- the detail tab -----------------------------------------------------------------------------------------------
+# ---- the pictures screen -----------------------------------------------------------------------------------------------
 
 
-async def test_the_graphics_tab_lists_the_images_and_draws_the_cone_with_its_address() -> None:
+async def test_the_pictures_screen_lists_the_images_and_draws_the_cone_with_its_address() -> None:
     source = ImageSource()
     app = app_for(source)
     async with running(app) as pilot:
         await into_the_storm(pilot)
         assert source.fetched == []  # nothing is fetched before anyone looks
-        await press(pilot, "enter", "9")
-        assert isinstance(app.screen, StormDetailScreen)
+        await press(pilot, "enter", "g")
+        assert isinstance(app.screen, GraphicsScreen)
         panel = app.screen.query_one(GalleryPanel)
         await loaded(pilot, panel, "Cone, 5 day")
         titles = current_titles(panel)
@@ -165,24 +164,22 @@ async def test_the_graphics_tab_lists_the_images_and_draws_the_cone_with_its_add
         assert source.fetched == ["replay:graphics/cone_038.png"]
 
 
-async def test_leaving_the_tab_stops_everything_and_fetches_nothing_new() -> None:
+async def test_leaving_the_screen_stops_everything_and_fetches_nothing_new() -> None:
     source = ImageSource()
     app = app_for(source)
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter", "9")
+        await press(pilot, "enter", "g")
         panel = app.screen.query_one(GalleryPanel)
         await loaded(pilot, panel)
         await pick(pilot, panel, "GEOCOLOR loop")
         await loaded(pilot, panel, "GEOCOLOR loop")
         assert panel._timer is not None  # the loop is playing
-        await press(pilot, "1")
+        await press(pilot, "escape")
         assert not panel.active and panel._timer is None
         seen = list(source.fetched)
-        await into_the_storm(pilot, 1)  # a new advisory arrives while the tab is hidden
+        await into_the_storm(pilot, 1)  # a new advisory arrives while the screen is closed
         assert source.fetched == seen
-        await press(pilot, "9")
-        assert panel.active
 
 
 async def test_a_picture_is_fetched_once_and_again_only_when_the_advisory_changes() -> None:
@@ -475,23 +472,21 @@ def replay_source_for_run() -> ReplaySource:
 # ---- review fixes -------------------------------------------------------------------------------------------------
 
 
-async def test_a_gallery_under_another_screen_is_inactive_and_wakes_with_its_tab() -> None:
+async def test_a_gallery_under_another_screen_is_inactive_and_wakes_with_its_screen() -> None:
     app = app_for()
     async with running(app) as pilot:
         await into_the_storm(pilot, 14)
-        await press(pilot, "enter", "9")
-        detail = app.screen
-        assert isinstance(detail, StormDetailScreen)
-        panel = detail.query_one(GalleryPanel)
+        await press(pilot, "enter", "g")
+        pictures = app.screen
+        assert isinstance(pictures, GraphicsScreen)
+        panel = pictures.query_one(GalleryPanel)
         assert panel.active
         await press(pilot, "question_mark")
         assert not panel.active
         await press(pilot, "escape")
         assert panel.active
-        await press(pilot, "1")
-        assert not panel.active
-        await press(pilot, "question_mark", "escape")
-        assert not panel.active  # coming back to another tab does not wake it
+        await press(pilot, "escape")
+        assert not panel.active  # leaving the screen puts it to sleep
 
 
 async def test_a_failed_image_is_not_fetched_again_by_a_refresh_only_by_a_new_version_or_a_new_pick() -> None:

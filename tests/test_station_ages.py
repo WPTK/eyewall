@@ -181,7 +181,7 @@ async def test_the_main_and_detail_screens_pass_now_to_the_age_aware_readers() -
         assert seen and all(at is not None for at in seen)
         seen.clear()
         await press(pilot, "enter")  # the storm detail screen
-        app.screen._refresh_stations()  # type: ignore[attr-defined]
+        app.screen.refresh_data()  # type: ignore[attr-defined]
         assert seen and all(at is not None for at in seen)
 
 

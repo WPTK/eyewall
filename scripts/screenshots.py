@@ -3,7 +3,7 @@
     python scripts/screenshots.py [--out docs/images]
 
 It drives the real app headless at 140x42 over the recording, takes three pictures (the main screen, still named
-dashboard so the README links hold, the storm detail's Forecast tab and a buoy's charts) and converts each with
+dashboard so the README links hold, the Storm screen and a buoy's page with its charts) and converts each with
 `msedge --headless=new --screenshot`. Without Edge the SVG files are kept.
 
 It clears NO_COLOR (some shells and agent sessions set it, which makes Textual render monochrome) and asks for
@@ -63,9 +63,9 @@ async def capture(out: Path) -> list[Path]:
             app.poller.refresh()
             await app.poller.tick()
         await shot("dashboard")
-        await pilot.press("enter", "2")
-        await shot("forecast")
-        await pilot.press("7", "down", "enter")
+        await pilot.press("enter")
+        await shot("storm")
+        await pilot.press("b", "down", "enter")
         await shot("buoy")
     return written
 

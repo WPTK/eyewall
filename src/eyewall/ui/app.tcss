@@ -102,28 +102,85 @@ MainScreen.full-map #strip {
     display: none;
 }
 
-/* ---- storm detail ---- */
+/* ---- storm and NHC text ---- */
 
-#detail-title {
-    height: 1;
-    background: $panel;
-}
-
-#detail-tabs {
+#storm-scroll, #text-scroll {
     height: 1fr;
 }
 
-.note {
-    height: auto;
-    min-height: 1;
+#storm-page {
     padding: 0 1;
 }
 
-StormDetailScreen DataTable {
+#text-tabs {
+    height: 2;
+}
+
+#text-head {
+    height: auto;
+    padding: 0 1;
+}
+
+#text-stale {
+    height: auto;
+    padding: 0 1;
+    background: $panel;
+}
+
+#text-body {
+    padding: 0 1;
+}
+
+/* ---- buoys and stations ---- */
+
+#buoys-tabs {
+    height: 2;
+}
+
+#buoys-head, #buoys-empty {
+    height: auto;
+    padding: 0 1;
+}
+
+#buoys-list {
+    height: 1fr;
+    border: none;
+    padding: 0;
+}
+
+/* The highlighted row keeps its own text colours readable: a quiet band and bold, never the loud accent fill. */
+StationList > .option-list--option-highlighted,
+StationList:focus > .option-list--option-highlighted {
+    background: $panel-lighten-2;
+    text-style: bold;
+}
+
+StationList > .option-list--option-hover,
+StationList > .option-list--option-hover-highlighted {
+    background: $panel-lighten-1;
+}
+
+#station-lead, #station-follow {
+    height: auto;
+    padding: 0 1;
+}
+
+#station-about {
+    height: auto;
+    padding: 0 1;
+    background: $panel;
+}
+
+#station-charts, #station-readings {
     height: 1fr;
 }
 
-.detail-text {
+#station-charts ChartView {
+    height: 1fr;
+    min-height: 6;
+}
+
+#station-table {
     padding: 0 1;
 }
 
@@ -133,11 +190,11 @@ StormDetailScreen DataTable {
     height: 1fr;
 }
 
-HelpScreen, FeedsScreen, OutlookNote, LayerMenu, MarkChooser {
+HelpScreen, FeedsScreen, LayerMenu, MarkChooser {
     align: center middle;
 }
 
-#help-box, #feeds-box, #outlook-box {
+#help-box, #feeds-box {
     width: 78;
     max-width: 96%;
     height: auto;
@@ -163,8 +220,8 @@ HelpScreen, FeedsScreen, OutlookNote, LayerMenu, MarkChooser {
     background: $panel;
 }
 
-/* Ten tabs fit in 80 columns: one space between labels. */
-StormDetailScreen Tab {
+/* The text tabs fit in 80 columns: one space between labels. */
+NhcTextScreen Tab, BuoysScreen Tab {
     padding: 0 1 0 0;
 }
 
@@ -192,87 +249,10 @@ SelectionList > .selection-list--button-selected {
     background: $surface;
 }
 
-/* ---- buoy detail ---- */
-
-#buoy-title {
-    height: 1;
-    background: $panel;
-}
-
-#buoy-body {
-    height: 1fr;
-}
-
-#buoy-charts {
-    width: 1fr;
-    height: 100%;
-}
-
-#buoy-info {
-    width: 50;
-    height: 100%;
-    border: round $primary 50%;
-    padding: 0 1;
-}
-
-BuoyDetailScreen.narrow #buoy-info {
-    display: none;
-}
-
-BuoyDetailScreen.narrow.show-info #buoy-info {
-    display: block;
-    width: 1fr;
-}
-
-BuoyDetailScreen.narrow.show-info #buoy-charts {
-    display: none;
-}
-
-/* ---- watchlist ---- */
-
-#watch-main {
-    height: 1fr;
-}
-
-.watch-title {
-    height: 1;
-    background: $panel;
-}
-
-#watch-buoys {
-    height: auto;
-    max-height: 60%;
-}
-
-#watch-tides {
-    height: 1fr;
-}
-
 /* ---- station search and settings ---- */
 
-SearchScreen, SettingsScreen {
+SettingsScreen {
     align: center middle;
-}
-
-#search-box {
-    width: 76;
-    max-width: 96%;
-    height: 22;
-    max-height: 92%;
-    border: round $accent;
-    background: $panel;
-}
-
-#search-results {
-    height: 1fr;
-    background: $panel;
-    text-wrap: nowrap;
-    text-overflow: ellipsis;
-}
-
-#search-note {
-    height: 1;
-    padding: 0 1;
 }
 
 #settings-box {

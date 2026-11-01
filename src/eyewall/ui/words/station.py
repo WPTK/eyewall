@@ -29,19 +29,8 @@ def _hours(hours: float) -> str:
 # ------------------------------------------------------------------------------------------------------------ a buoy
 
 
-def buoy_lead(
-    entry: NearbyStation[Station], storm_name: str, obs: Observation, waves: Observation | None, preset: Preset
-) -> Words:
-    """`Buoy 41047 (Bahamas), 120 mi NE of Erin: wind 28 mph from the NE, gusting 35 mph, waves 12 ft.`
-
-    `waves` is the row to read the wave height from (the newest row can lack it; see `ui.stations.last_reading`).
-    """
-    sources = ["entry.station.id", "entry.station.name", "entry.distance_nm", "entry.bearing_deg"]
-    name = f" ({entry.station.name})" if entry.station.name else ""
-    if round5(entry.distance_nm) < _CLOSE_NM:
-        where = f"at {storm_name}"
-    else:
-        where = f"{distance_text(preset, nm=entry.distance_nm)} {compass_point(entry.bearing_deg)} of {storm_name}"
+def _reading_parts(obs: Observation, waves: Observation | None, preset: Preset, sources: list[str]) -> list[str]:
+    """`wind 28 mph from the NE`, `gusting 35 mph`, `waves 12 ft`: what the buoy reads, in that order."""
     parts: list[str] = []
     if obs.wind_speed_mps is None:
         parts.append("wind not reported")
@@ -58,7 +47,76 @@ def buoy_lead(
     if waves is not None and waves.wave_height_m is not None:
         parts.append(f"waves {preset.fmt_length(waves.wave_height_m, 'm')}")
         sources.append("waves.wave_height_m")
+    return parts
+
+
+def buoy_lead(
+    entry: NearbyStation[Station], storm_name: str, obs: Observation, waves: Observation | None, preset: Preset
+) -> Words:
+    """`Buoy 41047 (Bahamas), 120 mi NE of Erin: wind 28 mph from the NE, gusting 35 mph, waves 12 ft.`
+
+    `waves` is the row to read the wave height from (the newest row can lack it; see `ui.stations.last_reading`).
+    """
+    sources = ["entry.station.id", "entry.station.name", "entry.distance_nm", "entry.bearing_deg"]
+    name = f" ({entry.station.name})" if entry.station.name else ""
+    if round5(entry.distance_nm) < _CLOSE_NM:
+        where = f"at {storm_name}"
+    else:
+        where = f"{distance_text(preset, nm=entry.distance_nm)} {compass_point(entry.bearing_deg)} of {storm_name}"
+    parts = _reading_parts(obs, waves, preset, sources)
     return Words(f"Buoy {entry.station.id}{name}, {where}: {', '.join(parts)}.", tuple(sources))
+
+
+def buoy_summary(station: Station, obs: Observation, waves: Observation | None, preset: Preset) -> Words:
+    """`Buoy 41047 (Bahamas): wind 28 mph from the NE, gusting 35 mph, waves 12 ft.`, for a buoy with no storm."""
+    sources = ["station.id", "station.name"]
+    name = f" ({station.name})" if station.name else ""
+    parts = _reading_parts(obs, waves, preset, sources)
+    return Words(f"Buoy {station.id}{name}: {', '.join(parts)}.", tuple(sources))
+
+
+def buoy_brief(
+    obs: Observation,
+    waves: Observation | None,
+    tendency: PressureTendency | None,
+    preset: Preset,
+    arrows: tuple[str, str, str],
+) -> Words:
+    """The second line of a list row: `wind 28 mph NE, gust 35 mph · 1004 mb falling v · waves 12 ft`.
+
+    `arrows` are the rising, falling and steady glyphs; a word always goes with the arrow."""
+    rising, falling, steady = arrows
+    sources = ["obs.wind_speed_mps"]
+    parts: list[str] = []
+    if obs.wind_speed_mps is None:
+        parts.append("wind not reported")
+    else:
+        wind = f"wind {preset.fmt_wind(obs.wind_speed_mps, 'mps')}"
+        if obs.wind_dir_deg is not None:
+            wind += f" {compass_point(obs.wind_dir_deg)}"
+            sources.append("obs.wind_dir_deg")
+        if obs.gust_mps is not None:
+            wind += f", gust {preset.fmt_wind(obs.gust_mps, 'mps')}"
+            sources.append("obs.gust_mps")
+        parts.append(wind)
+    if obs.pressure_hpa is not None:
+        pressure = preset.fmt_pressure(obs.pressure_hpa, "hpa")
+        sources.append("obs.pressure_hpa")
+        if tendency is not None:
+            sources.append("tendency.delta_hpa")
+            if tendency.delta_hpa <= FALL_RAPID_HPA:
+                pressure += f" falling fast {falling}"
+            elif tendency.delta_hpa <= FALL_WARN_HPA:
+                pressure += f" falling {falling}"
+            elif tendency.delta_hpa >= -FALL_WARN_HPA:
+                pressure += f" rising {rising}"
+            else:
+                pressure += f" steady {steady}"
+        parts.append(pressure)
+    if waves is not None and waves.wave_height_m is not None:
+        parts.append(f"waves {preset.fmt_length(waves.wave_height_m, 'm')}")
+        sources.append("waves.wave_height_m")
+    return Words(" · ".join(parts), tuple(sources))
 
 
 def pressure_trend(tendency: PressureTendency | None, preset: Preset) -> Words | None:
@@ -128,6 +186,17 @@ def state_sentence(state: str, obs: Observation | None, now: datetime, tz: tzinf
     return None
 
 
+ABOUT_BUOY_WINDS = (
+    "A buoy measures wind a few meters (10 to 15 feet) above the sea, as an average over about 8 minutes, and the "
+    "gust is the strongest 5 to 8 seconds. NHC's storm winds are a 1 minute average at 10 meters (33 feet), so a "
+    "buoy usually reads lower than the storm's stated wind even when it sits in it."
+)
+
+
+def about_buoy_winds() -> Words:
+    return Words(ABOUT_BUOY_WINDS)
+
+
 def extremes_sentence(extremes: Extremes, preset: Preset, tz: tzinfo | None) -> Words | None:
     """`Highest gust 63 kt at Mon 05:00 PM EDT; lowest pressure 988 mb at Mon 07:00 PM EDT.`"""
     parts: list[str] = []
@@ -180,6 +249,20 @@ def readings_summary(
 
 
 # ----------------------------------------------------------------------------------------------------------- a gauge
+
+
+def gauge_brief(station: TideStation, series: TideSeries | None, now: datetime, preset: Preset) -> Words:
+    """The second line of a gauge row: `water 1.8 ft above the predicted tide`, or why there is nothing to say."""
+    if series is None or series.latest_level is None:
+        return Words("waiting for the first water level")
+    residual = latest_residual(series)
+    if residual is None:
+        return Words("no tide prediction to compare with", ("series.predictions",))
+    sources = ("residual.observed_ft", "residual.predicted_ft")
+    if abs(residual.residual_ft) < _AT_PREDICTED_FT:
+        return Words("water at the predicted tide", sources)
+    size = preset.fmt_length(abs(residual.residual_ft), "ft", decimals=1)
+    return Words(f"water {size} {'above' if residual.residual_ft > 0 else 'below'} the predicted tide", sources)
 
 
 def gauge_sentence(station: TideStation, series: TideSeries | None, now: datetime, preset: Preset) -> Words:

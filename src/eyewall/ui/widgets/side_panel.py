@@ -22,6 +22,9 @@ from textual import events
 from textual.widgets import Static
 
 from eyewall.palette import HEADING
+from eyewall.poll import FreshnessState
+from eyewall.sources import protocol
+from eyewall.sources.bundle import DEMO_TITLE
 from eyewall.state.store import Store, StormState
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.units import Preset
@@ -53,6 +56,30 @@ class View:
     storms_old: bool = False  # the storm feed has stopped updating: what is shown is the last it said
     storms_age: float | None = None  # seconds since the storm feed last answered
 
+    @classmethod
+    def of(cls, eye: EyewallApp, states: tuple[StormState, ...], *, rich: bool = False) -> View:
+        """The view of the app as it is now: what the main screen, the Storm screen and the lists read."""
+        fresh = eye.poller.freshness(protocol.STORMS)
+        old = fresh.state in (FreshnessState.ERROR, FreshnessState.STALE) and eye.store.storms_loaded
+        failed = frozenset(f for f in protocol.FEEDS if eye.poller.freshness(f).state is FreshnessState.ERROR)
+        return cls(
+            store=eye.store,
+            preset=eye.preset,
+            now=eye.now(),
+            g=eye.glyphs,
+            tz=eye.local_tz,
+            states=states,
+            selected=eye.selected,
+            basins=eye.basin_view,
+            replay_offer=DEMO_TITLE if eye.replay_available() else None,
+            storms_old=old,
+            storms_age=fresh.age,
+            storms_known=eye.store.storms_loaded,
+            failed=failed,
+            ascii=eye.config.map.glyph_set == "ascii",
+            rich=rich,
+        )
+
     @property
     def chosen(self) -> StormState | None:
         return next((s for s in self.states if s.storm.id == self.selected), self.states[0] if self.states else None)
@@ -78,6 +105,7 @@ class Block:
     noun: tuple[str, str] | None = (
         None  # (singular, plural) for the `N warnings >` line when the whole group is dropped
     )
+    count: int = 1  # how many of the noun this block stands for (a block can hold several watches and warnings)
 
 
 def clean(text: str) -> str:
@@ -171,12 +199,12 @@ def fit_blocks(blocks: Sequence[Block], rows: int, width: int = 0, arrow: str = 
         for index, block in enumerate(blocks):
             if block.group in whole_lost and index == whole_lost[block.group][0]:
                 one, many = block.noun  # type: ignore[misc]
-                total = len(whole_lost[block.group])
+                total = sum(blocks[i].count for i in whole_lost[block.group])
                 label = f"{total} {one if total == 1 else many} {arrow}"
                 out.append(Block((_more_line(label, width, block.more),), 0, gap=block.gap, section=block.section))
             elif index in present and (not block.title or block.section in alive):
                 later = any(i > index and blocks[i].group == block.group for i in indices)
-                lost = sum(1 for i in members.get(block.group or "", []) if i not in present)
+                lost = sum(blocks[i].count for i in members.get(block.group or "", []) if i not in present)
                 if block.group and lost and not later:
                     label = f"+{lost} more {arrow}"
                     block = replace(block, lines=(*block.lines, _more_line(label, width, block.more)))
@@ -269,7 +297,7 @@ class SidePanel(Static):
         if storm_id in eye.store.storms:
             eye.selected = storm_id
             self.screen.refresh_data()  # type: ignore[attr-defined]
-            eye.open_detail(storm_id, tab)
+            eye.open_storm(storm_id)
 
 
 __all__ = ["DO", "OPEN", "Block", "Line", "SidePanel", "View", "fit_blocks", "heading", "link", "wrapped"]

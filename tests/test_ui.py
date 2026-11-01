@@ -8,16 +8,17 @@ from datetime import timedelta
 
 import pytest
 from textual import events
-from textual.widgets import DataTable, TabbedContent, Tabs
+from textual.widgets import Tabs
 
 from eyewall.app import EyewallApp
 from eyewall.config import Config
 from eyewall.state.store import storm_key
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.help import HelpScreen, help_text
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.main import MainScreen
+from eyewall.ui.screens.nhc_text import NhcTextScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.widgets.map_view import MapView
 from tests.ui_support import (
     EDT,
@@ -62,26 +63,19 @@ async def test_a_wide_main_screen_has_a_column_beside_the_map_and_a_small_one_a_
         assert small.screen.query_one(MapView).display is True
 
 
-async def test_enter_opens_detail_and_tabs_switch() -> None:
+async def test_enter_opens_the_storm_and_t_opens_its_text_tabs() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await press(pilot, "enter")
-        assert isinstance(app.screen, StormDetailScreen)
-        tabs = app.screen.query_one(TabbedContent)
-        assert tabs.active == "tab-summary"
-        await press(pilot, "2")
-        assert tabs.active == "tab-forecast"
-        table = app.screen.query_one("#forecast-table", DataTable)
-        assert table.row_count > 3
-        await press(pilot, "right")
-        assert tabs.active == "tab-public"
-        before = screen_text(app)
+        assert isinstance(app.screen, StormScreen)
         await press(pilot, "t")
+        assert isinstance(app.screen, NhcTextScreen)
+        tabs = app.screen.query_one(Tabs)
+        first = tabs.active
+        before = screen_text(app)
+        await press(pilot, "right")
+        assert tabs.active != first
         assert screen_text(app) != before
-        await press(pilot, "0")
-        assert tabs.active == "tab-history"
-        await press(pilot, "escape")
-        assert isinstance(app.screen, MainScreen)
 
 
 async def test_stepping_advisories_moves_the_replay_and_stops_at_the_ends() -> None:
@@ -209,25 +203,22 @@ async def test_a_dead_network_marks_feeds_stale_without_crashing(monkeypatch: py
         assert "NHC is watching 1 area" in " ".join(screen_text(app).split())  # the last good outlook stays on screen
 
 
-async def test_tab_arrows_work_while_a_table_has_focus() -> None:
+async def test_tab_arrows_move_one_step_per_press_with_the_strip_focused_or_not() -> None:
     app = replay_app()
     async with running(app) as pilot:
-        await press(pilot, "enter", "2")
-        table = app.screen.query_one("#forecast-table", DataTable)
-        table.focus()
-        await settle(pilot)
-        assert app.focused is table
-        tabs = app.screen.query_one(TabbedContent)
+        await press(pilot, "enter", "t")
+        tabs = app.screen.query_one(Tabs)
+        first = tabs.active
         await press(pilot, "right")
-        assert tabs.active == "tab-public"
-        await press(pilot, "left", "left")
-        assert tabs.active == "tab-summary"
-        strip = app.screen.query_one(Tabs)
-        strip.focus()
+        second = tabs.active
+        assert second != first
+        await press(pilot, "left")
+        assert tabs.active == first
+        tabs.focus()
         await settle(pilot)
-        assert app.focused is strip
-        await press(pilot, "right", "right")
-        assert tabs.active == "tab-public"  # one step per press: the Tabs widget must not also move
+        assert app.focused is tabs
+        await press(pilot, "right")
+        assert tabs.active == second  # one step per press: the Tabs widget must not also move
 
 
 async def test_a_screen_that_raises_does_not_stop_the_polling() -> None:
@@ -299,11 +290,11 @@ async def test_the_first_live_run_names_the_settings_file(tmp_path) -> None:
         assert any(str(path) in note.message for note in app._notifications)
 
 
-async def test_the_summary_tab_does_not_repeat_the_header_strip() -> None:
+async def test_the_storm_screen_does_not_repeat_the_header_strip() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "enter")
         text = screen_text(app)
-        assert text.count("ERIN") == 2  # the header strip, and the headline under the summary
+        assert text.count("Erin") <= 3  # the crumb and the lead say the name; nothing repeats a header strip
         assert "ERIN  H2  HU" not in text

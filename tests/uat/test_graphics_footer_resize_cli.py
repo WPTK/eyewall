@@ -125,38 +125,37 @@ async def test_footer_follows_the_focus(journey, size) -> None:
             await j.keys("tab")
             j.footer_has("zoom", "fit", "center", "layers")
             await j.shot("map-focused")
-        await j.keys("enter", "3")
-        j.footer_has("t tcp/tcm" if wide else "t")
-        await j.shot("detail-advisory")
-        await j.keys("7")
-        j.footer_has("enter charts")
-        await j.keys("8")
-        j.footer_has("p pin")
-        await j.keys("9")
-        await j.shot("detail-graphics")
-        await j.keys("1")
+        await j.keys("enter")
+        j.footer_has("b buoys" if wide else "b", "esc back")
+        await j.shot("storm-footer")
+        await j.keys("t")
         j.footer_has("esc back")
-        await j.shot("detail-summary")
-        await j.keys("escape", "b", "enter")
-        j.footer_has("h range" if wide else "h")
-        await j.shot("buoy-charts")
+        await j.shot("text-footer")
+        await j.keys("escape", "g")
+        await j.shot("storm-graphics")
+        await j.keys("escape", "b")
+        j.footer_has("enter open", "f follow" if wide else "f")
+        await j.shot("buoys-footer")
+        await j.keys("enter")
+        j.footer_has("h 24/48/72 h" if wide else "h")
+        await j.shot("station-footer")
 
 
 @pytest.mark.parametrize("size", EXTRA_SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
 async def test_every_screen_at_the_large_and_tall_sizes(journey, size) -> None:
     async with journey(size) as j:
         await j.shot("dashboard")
-        for key, step in (("w", "watchlist"), ("A", "alerts")):
-            await j.keys(key)
-            await j.shot(step, footer=key != "A")
-            await j.keys("escape")
+        await j.keys("A")
+        await j.shot("alerts", footer=False)
+        await j.keys("escape", "enter")
+        await j.shot("storm")
+        await j.keys("t")
+        await j.shot("text")
+        await j.keys("escape", "b")
+        await j.shot("buoys")
         await j.keys("enter")
-        for number, step in (("1", "summary"), ("2", "forecast"), ("7", "buoys"), ("9", "graphics")):
-            await j.keys(number)
-            await j.shot(f"detail-{step}")
-        await j.keys("7", "enter")
         await j.shot("buoy-charts")
-        await j.keys("escape", "escape", "question_mark")
+        await j.keys("escape", "escape", "escape", "question_mark")
         await j.shot("help", footer=False)
         await j.keys("escape", "S")
         await j.shot("settings", footer=False)
@@ -181,7 +180,7 @@ async def test_resize_across_the_layout_thresholds(journey) -> None:
 
 async def test_live_resize_through_too_small_and_back(journey) -> None:
     async with journey((120, 30)) as j:
-        await j.keys("enter", "7")  # a deeper screen, to prove the stack survives
+        await j.keys("enter", "b")  # a deeper screen, to prove the stack survives
         await j.shot("before")
         j.expect_small = True
         await j.resize(59, 24)
@@ -202,8 +201,8 @@ async def test_live_resize_through_too_small_and_back(journey) -> None:
 @pytest.mark.parametrize(
     "keys",
     [
-        pytest.param(("enter",), id="detail"),
-        pytest.param(("w",), id="watchlist"),
+        pytest.param(("enter",), id="storm"),
+        pytest.param(("enter", "b"), id="buoys"),
         pytest.param(("g",), id="graphics"),
     ],
 )

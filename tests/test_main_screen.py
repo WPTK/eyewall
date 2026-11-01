@@ -9,8 +9,8 @@ from rich.text import Text
 from textual.widget import Widget
 
 from eyewall.app import EyewallApp
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.main import LARGE_FROM, MEDIUM_FROM, MainScreen, Tier, tier_for
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.widgets.map_view import MapView
 from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, fit_blocks, heading, wrapped
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, scripted_app, settle
@@ -171,7 +171,7 @@ async def test_a_click_on_the_storm_card_opens_the_storm() -> None:
         row = next(i for i, line in enumerate(panel.lines) if (line.action or "").startswith("open:"))
         await pilot.click("#side", offset=(3, row))
         await settle(pilot)
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
 
 
 async def test_the_small_strip_opens_the_storm_on_click_and_enter_does_too() -> None:
@@ -180,10 +180,10 @@ async def test_the_small_strip_opens_the_storm_on_click_and_enter_does_too() -> 
         await into_the_storm(pilot)
         await pilot.click("#strip", offset=(3, 0))
         await settle(pilot)
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
         await press(pilot, "escape")
         await press(pilot, "enter")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
 
 
 async def test_b_opens_the_buoys_of_the_storm() -> None:
@@ -191,7 +191,7 @@ async def test_b_opens_the_buoys_of_the_storm() -> None:
     async with running(app, (100, 40)) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "b")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert type(app.screen).__name__ == "BuoysScreen"
 
 
 async def test_the_full_map_hides_the_panels_and_esc_brings_them_back() -> None:
@@ -228,7 +228,7 @@ async def test_nothing_active_lists_the_stations_on_the_wide_screen() -> None:
         text = " ".join(screen_text(app).split())
         assert "YOUR STATIONS" in text and "b open the list" in text
         await press(pilot, "b")
-        assert type(app.screen).__name__ == "WatchlistScreen"
+        assert type(app.screen).__name__ == "BuoysScreen"
 
 
 async def test_a_replay_has_no_replay_offer() -> None:
