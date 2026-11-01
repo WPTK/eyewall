@@ -60,6 +60,11 @@ def _areas(outlook: Outlook, enabled: Sequence[str]) -> list[_Area]:
     return found
 
 
+def area_count(outlook: Outlook | None, enabled: Sequence[str]) -> int:
+    """How many areas NHC is watching in the enabled basins (0 when the outlook has not arrived)."""
+    return 0 if outlook is None else len(_areas(outlook, enabled))
+
+
 def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str]) -> list[Words]:
     """`NHC is watching 1 area: a 30% chance it forms within 2 days and 70% within 7 days.`
 

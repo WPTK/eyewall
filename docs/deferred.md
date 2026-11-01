@@ -14,3 +14,9 @@
 - Chrome: the feed list is a small modal (`D` or a click on the health slot). A full screen with per-feed history and a manual refresh waits for the station and feed work.
 - Chrome: palette gauge hits show a toast with the newest water level, like the map click, until the station screen exists (PR8).
 - Chrome: the footer cuts whole keys from the right with no "more" marker; a `more` key that opens the help screen at the current screen's section would show that keys were cut.
+- Main screen: the full tropical weather outlook text (the old Outlook screen, `O`) is gone. The main screen carries only the plain outlook sentences from `ui/words/outlook.py`; PR7 brings the text products back on their own screen.
+- Main screen: NWS zone alerts (the old Watches and warnings panel listed them beside NHC's) are not on the main screen; it shows NHC's watches and warnings only. The alert log (`A`) still lists them.
+- Main screen: the nothing-active sentence is PR4's "No tropical storms in the ... right now." rather than "No active storms in ..."; change `words.storm.nothing_active` if the owner wants the other wording.
+- Main screen: a gauge or buoy near the storm is counted ("3 buoys near Erin") with a link to the list, but no station is named or read out on the main screen; PR8's station screen is where that belongs.
+- Main screen: the legend under the map wraps to a third row at 100 columns (the map key is PR3's); shorten it or drop the scale text on narrow panes.
+- Replay (`R`): the live app closes and a second app starts on the bundled recording, so quitting the replay quits eyewall; returning to live data needs a restart.

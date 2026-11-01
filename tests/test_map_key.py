@@ -87,6 +87,6 @@ async def test_the_pane_reserves_every_key_row_when_rings_and_lines_are_drawn(si
         pane, legend = app.screen.query_one("#map-pane"), app.screen.query_one(".legend")
         rows = view.legend(pane.size.width).plain.count("\n") + 1
         assert rows >= 2 and legend.size.height == rows
-        assert legend.region.bottom == pane.region.bottom - 1
+        assert legend.region.bottom == pane.region.bottom
         shown = " ".join(screen_text(app).splitlines()[legend.region.y : legend.region.bottom])
         assert "rings" in shown and "34kt" in shown and "lines" in shown

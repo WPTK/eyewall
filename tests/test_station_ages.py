@@ -22,12 +22,10 @@ from eyewall.models.obs import (
     WaterLevelReading,
 )
 from eyewall.models.obs import Parsed as ObsParsed
-from eyewall.models.storm import AdvNum
 from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.models.wind import WindRadii
 from eyewall.state.store import Store, StormState, track_fixes, track_from
 from eyewall.ui import adapt
-from eyewall.ui import format as fmt
 from eyewall.ui import stations as st
 from eyewall.ui.glyphs import glyphs_for
 from eyewall.units import PRESETS
@@ -40,19 +38,6 @@ NAUTICAL = PRESETS["nautical"]
 
 def fix(valid: datetime, lat: float, lon: float) -> ForecastFix:
     return ForecastFix(12, valid, lat, lon, None, None, WindRadii())
-
-
-# ---- the wind panel -------------------------------------------------------------------------------------------
-
-
-def test_the_wind_panel_takes_max_wind_and_pressure_from_the_feed_over_the_forecast_advisory() -> None:
-    store = Store(Config())
-    storm = replace(make_storm("5"), intensity_kt=115, pressure_mb=950)
-    adv = advisories("5")
-    tcm = replace(adv.forecast, max_wind_kt=100, pressure_mb=960)
-    store.storms[storm.id] = StormState(storm, replace(adv, forecast=tcm))
-    text = fmt.wind_panel(store, storm.id, NAUTICAL).plain
-    assert "115" in text and "100" not in text and "950" in text and "960" not in text
 
 
 # ---- buoy and gauge ages --------------------------------------------------------------------------------------
@@ -172,66 +157,29 @@ def _alert(alert_id: str, area: str, ends: datetime | None) -> WatchWarningAlert
     )
 
 
-# ---- the dashboard panels -------------------------------------------------------------------------------------
-
-
-def test_cut_text_ends_in_an_ellipsis_at_a_word() -> None:
-    assert fmt._cut("short", 90) == "short"
-    cut = fmt._cut("alpha beta gamma delta", 14)
-    assert cut == "alpha beta…" and len(cut) <= 14
-
-
-def test_the_buoy_strip_shows_the_pressure_change_in_the_preset_unit() -> None:
-    store = Store(Config())
-    storm = make_storm("5", lat=25.0, lon=-75.0)
-    store.storms[storm.id] = StormState(storm, advisories("5"))
-    store.stations = {"41010": Station("41010", "EAST", 25.5, -75.0, met=True)}
-    rows = tuple(
-        Observation(time=NOW - timedelta(minutes=30 + 60 * h), pressure_hpa=1000.0 + 1.0 * h, wind_speed_mps=10.0)
-        for h in range(5)
-    )
-    store.series["41010"] = ObservationSeries("41010", rows)
-    us = fmt.buoy_strip(store, storm.id, NOW, PRESETS["us"], G).plain
-    nautical = fmt.buoy_strip(store, storm.id, NOW, NAUTICAL, G).plain
-    assert "inHg" in us and "3.0" not in us.split("inHg")[1]
-    assert "3.0" in nautical
-
-
-def test_expired_alerts_are_left_out_of_the_panel() -> None:
+def test_expired_alerts_are_not_active() -> None:
     store = Store(Config())
     store.alerts = AlertsResult(
         (_alert("a", "Old County", NOW - timedelta(hours=1)), _alert("b", "Live County", NOW + timedelta(hours=1)))
     )
     assert [a.id for a in store.active_alerts(NOW)] == ["b"]
-    text = fmt.ww_panel(store, None, G, NOW).plain
-    assert "Live County" in text and "Old County" not in text
 
 
-async def test_the_dashboard_and_detail_screens_pass_now_to_the_age_aware_readers() -> None:
-    from eyewall.ui.screens.dashboard import DashboardScreen
-    from eyewall.ui.widgets.panels import Panel
+async def test_the_main_and_detail_screens_pass_now_to_the_age_aware_readers() -> None:
+    from eyewall.ui.screens.main import MainScreen
     from tests.ui_support import into_the_storm, press, replay_app, running
 
     app = replay_app()
     async with running(app) as pilot:
         await into_the_storm(pilot)
-        now = app.now()
-        app.store.alerts = AlertsResult(
-            (
-                _alert("old", "Old County", now - timedelta(hours=1)),
-                _alert("new", "Live County", now + timedelta(hours=1)),
-            )
-        )
-        screen = app.screen
-        assert isinstance(screen, DashboardScreen)
-        screen.refresh_selection()
-        ww = next(p for p in screen.query(Panel) if p.kind == "ww")
-        text = str(ww.body.render())
-        assert "Live County" in text and "Old County" not in text
-
         seen: list[datetime | None] = []
         original = app.store.nearby_buoys
         app.store.nearby_buoys = lambda storm_id, at=None: (seen.append(at), original(storm_id, at))[1]  # type: ignore[method-assign]
+        screen = app.screen
+        assert isinstance(screen, MainScreen)
+        screen.refresh_data()
+        assert seen and all(at is not None for at in seen)
+        seen.clear()
         await press(pilot, "enter")  # the storm detail screen
         app.screen._refresh_stations()  # type: ignore[attr-defined]
         assert seen and all(at is not None for at in seen)
@@ -318,15 +266,14 @@ def test_alert_expiry_uses_ends_then_expires_and_no_end_means_still_active() -> 
     assert [a.id for a in store.active_alerts(NOW)] == ["expires-only-future", "ends-later", "neither"]
 
 
-def test_the_map_and_the_strip_are_told_what_time_it_is() -> None:
+def test_the_map_is_told_what_time_it_is() -> None:
     store, state = _store_with_a_buoy_by_the_storm()
     seen: list[datetime | None] = []
     original_buoys, original_tides = store.nearby_buoys, store.nearby_tides
     store.nearby_buoys = lambda storm_id, at=None: (seen.append(at), original_buoys(storm_id, at))[1]  # type: ignore[method-assign]
     store.nearby_tides = lambda storm_id, at=None: (seen.append(at), original_tides(storm_id, at))[1]  # type: ignore[method-assign]
     adapt.station_marks(store, state.storm.id, NOW)
-    fmt.buoy_strip(store, state.storm.id, NOW, NAUTICAL, G)
-    assert seen == [NOW, NOW, NOW]
+    assert seen == [NOW, NOW]
 
 
 def test_map_marks_and_table_rows_go_stale_at_the_same_age() -> None:
@@ -342,17 +289,3 @@ def test_map_marks_and_table_rows_go_stale_at_the_same_age() -> None:
         )
         store.tide_series[gauge.id] = series
         assert adapt._tide_mark(store, gauge, NOW).stale is stale
-
-
-def test_the_wind_panel_hides_gusts_and_eye_of_a_forecast_advisory_older_than_the_feed() -> None:
-    store = Store(Config())
-    adv = advisories("5")
-    behind = replace(adv.forecast, adv_num=AdvNum(4), gust_kt=145, eye_diameter_nm=30)
-    storm = replace(make_storm("5"), intensity_kt=115, pressure_mb=950)
-    store.storms[storm.id] = StormState(storm, replace(adv, forecast=behind))
-    text = fmt.wind_panel(store, storm.id, NAUTICAL).plain
-    assert "115" in text and "gusts" not in text and "eye" not in text
-    current = replace(behind, adv_num=storm.adv_num)
-    store.storms[storm.id] = StormState(storm, replace(adv, forecast=current))
-    text = fmt.wind_panel(store, storm.id, NAUTICAL).plain
-    assert "gusts" in text and "145" in text and "eye" in text

@@ -8,23 +8,10 @@ from eyewall.config import load_config
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.help import HelpScreen
-from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.screens.search import SearchScreen
 from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from tests.ui_support import replay_app, scripted_app
-
-
-async def test_outlook_screen(journey, size) -> None:
-    async with journey(size) as j:
-        await j.keys("O")
-        assert isinstance(j.screen, OutlookScreen)
-        j.see("Tropical weather outlook", "Watchlist")
-        await j.shot("outlook")
-        await j.keys("plus", "minus", "f")
-        await j.shot("outlook-map-fitted")
-        await j.keys("O")
-        assert not isinstance(j.screen, OutlookScreen)
 
 
 async def test_alert_log(journey, size) -> None:
@@ -79,12 +66,12 @@ async def test_station_search_opens_a_buoy(journey, size) -> None:
         await j.shot("search-opened")
 
 
-async def test_help_screen_closes_three_ways(journey, size) -> None:
+async def test_help_screen_closes_two_ways(journey, size) -> None:
     async with journey(size) as j:
-        for key in ("escape", "question_mark", "q"):
+        for key in ("escape", "question_mark"):
             await j.keys("question_mark")
             assert isinstance(j.screen, HelpScreen)
-            j.see("Dashboard", "Storm detail", "Anywhere", "Replay")
+            j.see("Map", "Storm detail")  # the rest of the help is below, behind the scroll
             if key == "escape":
                 await j.shot("help", footer=False)
             await j.keys(key)
@@ -130,15 +117,11 @@ async def test_settings_edit_save_cancel_and_invalid(journey, size, tmp_path) ->
 
 async def test_quiet_day(size, journey) -> None:
     async with journey(size, app=scripted_app()) as j:
-        j.see("Area 1", "Atlantic, East Pacific: none")  # no storms: the outlook's area and the quiet basins
-        await j.shot("quiet-dashboard")
+        j.see("No tropical storms")  # no storms: the plain sentence, with the outlook and the replay offer under it
+        await j.shot("quiet-main")
         await j.keys("g")
         assert "Select a storm" in j.toasts()
-        await j.keys("O")
-        assert isinstance(j.screen, OutlookScreen)
-        j.see("Tropical weather outlook")
-        await j.shot("quiet-outlook")
-        await j.keys("escape", "b")
+        await j.keys("b")
         assert isinstance(j.screen, WatchlistScreen)  # no storm to look at, so b opens the watchlist
         await j.shot("quiet-watchlist")
         await j.keys("escape", "A")

@@ -285,13 +285,8 @@ def warning_sentences(state: StormState) -> list[Words]:
     if public is None:
         return []
     areas = list(enumerate(public.watches_warnings.in_effect))
-
-    def rank(item: tuple[int, WatchWarningArea]) -> tuple[int, int]:
-        key = (_area_hazard(item[1]), _area_level(item[1]))
-        return (_SEVERITY.index(key) if key in _SEVERITY else len(_SEVERITY), item[0])
-
     out: list[Words] = []
-    for index, area in sorted(areas, key=rank):
+    for index, area in sorted(areas, key=lambda item: (area_rank(item[1]), item[0])):
         if not area.areas:
             continue
         shown = " and ".join(area.areas[:2])
@@ -299,7 +294,7 @@ def warning_sentences(state: StormState) -> list[Words]:
         where = shown + (f", +{extra} more" if extra > 0 else "")
         hazard, level = _area_hazard(area), _area_level(area)
         source = f"{_BASE}.public.watches_warnings.in_effect[{index}]"
-        chance = "expected" if level == "warning" else "possible"
+        chance = area_chance(area) or "possible"
         if hazard is None or level is None:
             text = f"{area.label} is in effect in {where}."
         elif hazard == "storm surge":
@@ -319,7 +314,7 @@ def meaning_sentences(state: StormState) -> list[Words]:
     quoted = quoted_meanings(text)
     out: list[Words] = []
     seen: set[tuple[str, str]] = set()
-    for _, area in sorted(enumerate(public.watches_warnings.in_effect), key=lambda i: _meaning_rank(i[1])):
+    for _, area in sorted(enumerate(public.watches_warnings.in_effect), key=lambda i: area_rank(i[1])):
         hazard, level = _area_hazard(area), _area_level(area)
         if not area.areas or hazard is None or level is None or (hazard, level) in seen:
             continue
@@ -331,9 +326,25 @@ def meaning_sentences(state: StormState) -> list[Words]:
     return out
 
 
-def _meaning_rank(area: WatchWarningArea) -> int:
+def area_rank(area: WatchWarningArea) -> int:
+    """How serious an area is, 0 first: hurricane warning, hurricane watch, tropical storm warning and so on."""
     key = (_area_hazard(area), _area_level(area))
     return _SEVERITY.index(key) if key in _SEVERITY else len(_SEVERITY)
+
+
+def area_phrase(area: WatchWarningArea) -> str | None:
+    """`conditions expected`, `conditions possible`, `flooding possible`: what the area's watch or warning says, in
+    NHC's own terms, or None for a label eyewall cannot place."""
+    chance = area_chance(area)
+    if chance is None:
+        return None
+    return f"{'flooding' if _area_hazard(area) == 'storm surge' else 'conditions'} {chance}"
+
+
+def area_chance(area: WatchWarningArea) -> str | None:
+    """`expected` for a warning, `possible` for a watch, as NHC defines them; None for a label eyewall cannot place."""
+    level = _area_level(area)
+    return "expected" if level == "warning" else "possible" if level == "watch" else None
 
 
 # --------------------------------------------------------------------------------------------------- size and forecast

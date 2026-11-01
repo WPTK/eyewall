@@ -1,4 +1,5 @@
-"""SVG snapshots of the dashboard, one detail tab and the outlook over the saved replay and outlook payloads.
+"""SVG snapshots of the main screen (a storm, three sizes, and a quiet day) and the detail, buoy and settings screens
+over the saved replay and outlook payloads.
 
 Regenerate with `pytest tests/test_ui_snapshots.py --snapshot-update` after a deliberate layout change.
 """
@@ -32,16 +33,24 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
     return run_before
 
 
-def test_dashboard_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+def test_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app))
+
+
+def test_main_screen_small_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(replay_app(), terminal_size=(80, 24), run_before=_ready(replay_app))
+
+
+def test_main_screen_large_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(replay_app(), terminal_size=(200, 50), run_before=_ready(replay_app))
 
 
 def test_forecast_tab_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "2")))
 
 
-def test_outlook_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
-    assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app, ("O",)))
+def test_quiet_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app))
 
 
 def test_buoys_tab_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]

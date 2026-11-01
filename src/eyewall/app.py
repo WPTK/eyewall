@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
+import sys
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -33,6 +34,7 @@ from eyewall.render.canvas import Mode
 from eyewall.render.images import Depth, InlineBackend, inline_wanted, load_inline
 from eyewall.render.layers import MapOptions
 from eyewall.sources import protocol
+from eyewall.sources.bundle import DEMO, BundleError, resolve_bundle
 from eyewall.sources.protocol import DataSource
 from eyewall.sources.replay import ReplaySource
 from eyewall.state.alerts import AlertEngine
@@ -43,13 +45,12 @@ from eyewall.ui.chrome import ChromeScreen, FeedStatus, Health, ReplayStatus, he
 from eyewall.ui.glyphs import UiGlyphs, glyphs_for
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
-from eyewall.ui.screens.outlook import OutlookScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.screens.search import SearchChoice, SearchScreen
 from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.small import TooSmallScreen, too_small
@@ -72,7 +73,7 @@ FLOATER_TTL = 600.0  # seconds a NESDIS product listing is reused (its stills ar
 IMAGE_MEMORY = 48 * 1024 * 1024  # bytes of downloaded images kept in memory
 
 
-class EyewallApp(App[None]):
+class EyewallApp(App[bool]):
     CSS_PATH = "ui/app.tcss"
     TITLE = "eyewall"
     ENABLE_COMMAND_PALETTE = True
@@ -201,7 +202,7 @@ class EyewallApp(App[None]):
     # ---- lifecycle --------------------------------------------------------------------------------------------
 
     def get_default_screen(self) -> Screen[None]:
-        return DashboardScreen()
+        return MainScreen()
 
     def on_mount(self) -> None:
         self.register_theme(EYEWALL_THEME)
@@ -355,7 +356,7 @@ class EyewallApp(App[None]):
         while len(self.screen_stack) > 1:
             await self.pop_screen()
         root = self.screen
-        if isinstance(root, DashboardScreen):
+        if isinstance(root, MainScreen):
             root.show_map()
 
     def action_feeds(self) -> None:
@@ -425,10 +426,6 @@ class EyewallApp(App[None]):
         if not self._modal_open():
             self.push_screen(HelpScreen())
 
-    def action_outlook(self) -> None:
-        if not self._modal_open() and not isinstance(self.screen, OutlookScreen):
-            self.push_screen(OutlookScreen())
-
     def action_alerts(self) -> None:
         if not self._modal_open() and not isinstance(self.screen, AlertLogScreen):
             self.push_screen(AlertLogScreen())
@@ -438,6 +435,15 @@ class EyewallApp(App[None]):
         if self.replay is not None:
             await self._tick()
         self.notify("Refreshing every feed.", timeout=3)
+
+    def replay_available(self) -> bool:
+        """True when `R` can start the bundled replay: this is live data, and it has nothing to show."""
+        return self.replay is None and self.store.storms_loaded and not self.store.storms
+
+    def action_start_replay(self) -> None:
+        """End this app with a request for the replay; `run_app` starts it, so the live poller is closed first."""
+        if self.replay_available():
+            self.exit(True)
 
     def action_units(self) -> None:
         self.units = next_preset(self.units)
@@ -674,6 +680,8 @@ class EyewallApp(App[None]):
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
         if action in REPLAY_ACTIONS and self.replay is None:
             return False
+        if action == "start_replay":
+            return self.replay_available()
         if action == nav.BACK:
             return self._can_go_back()
         if action == nav.QUIT:
@@ -720,7 +728,7 @@ def run_app(
     inline = (
         load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
     )
-    EyewallApp(
+    wants_replay = EyewallApp(
         config,
         source,
         inline=inline,
@@ -730,3 +738,18 @@ def run_app(
         file_config=file_config,
         config_file_broken=config_file_broken,
     ).run()
+    if wants_replay:  # `R` on a quiet day: the live app has closed its feeds, now the recording gets the terminal
+        try:
+            demo = ReplaySource(resolve_bundle(DEMO))
+        except BundleError as exc:
+            print(f"eyewall: {exc}", file=sys.stderr)
+            return
+        EyewallApp(
+            config,
+            demo,
+            inline=inline,
+            state_dir=None,  # a replay never reads or writes the real seen set
+            config_path=config_path,
+            file_config=file_config,
+            config_file_broken=config_file_broken,
+        ).run()

@@ -55,15 +55,13 @@ class Key:
 
 # What each scope's section is called in the help. Scopes that share a title share a section.
 TITLES: dict[str, str] = {
-    "dashboard": "Dashboard",
-    "storm_list": "Dashboard",
-    "dashboard_map": "Map",
+    "main": "Map",
+    "main_map": "Map",
     "map": "Map",
     "detail": "Storm detail",
     "stations": "Storm detail",
     "buoy": "Buoy charts",
     "watch": "Watchlist",
-    "outlook": "Outlook",
     "gallery": "Graphics",
     "alerts": "Alert log",
     "app": "Anywhere",
@@ -72,26 +70,32 @@ TITLES: dict[str, str] = {
 
 K = Key
 KEYS: tuple[Key, ...] = (
-    # ---- the dashboard ----
-    K("dashboard", "j", "cursor(1)", "next storm"),
-    K("dashboard", "k", "cursor(-1)", "previous storm"),
-    K("dashboard", "enter", "open_detail", "detail", "previous or next storm; open its detail", footer=True),
-    K("dashboard", "tab", "app.focus_next", "focus", "move between the list, the map and the panels", bind=False),
-    K("dashboard", "1", "basin('AL')", "Atlantic"),
-    K("dashboard", "2", "basin('EP')", "East Pacific"),
-    K("dashboard", "3", "basin('CP')", "Central Pacific"),
-    K("dashboard", "a", "basin('')", "all basins", "Atlantic, East Pacific, Central Pacific, all"),
-    K("dashboard", "b", "buoys", "buoys", "buoys near the storm (the watchlist when there is none)", footer=True),
-    K("dashboard", "m", "toggle_map", "map", "map on or off", footer=True),
-    K("dashboard", "M", "full_map", "full map", "full-screen map; Esc leaves it"),
-    K("dashboard", "l", "layers", "layers", None),
-    K("dashboard", "plus,equals_sign", "zoom_in", "zoom", None, shown="+/-"),
-    K("dashboard", "minus", "zoom_out", "zoom out", None),
-    K("dashboard", "c", "center", "center", None),
-    K("dashboard", "f", "fit", "fit", None),
-    K("dashboard", "n", "mark(1)", "next mark", None),
-    K("dashboard", "N", "mark(-1)", "previous mark", None),
-    K("storm_list", "enter", "select", "detail", None, footer=True),
+    # ---- the main screen ----
+    K("main", "j", "cursor(1)", "next storm"),
+    K("main", "k", "cursor(-1)", "previous storm"),
+    K("main", "enter", "open_detail", "open", "previous or next storm; open its detail", footer=True),
+    K("main", "1", "basin('AL')", "Atlantic"),
+    K("main", "2", "basin('EP')", "East Pacific"),
+    K("main", "3", "basin('CP')", "Central Pacific"),
+    K("main", "a", "basin('')", "all basins", "Atlantic, East Pacific, Central Pacific, all"),
+    K("main", "b", "buoys", "buoys", "buoys near the storm (the watchlist when there is none)", footer=True),
+    K("main", "M", "full_map", "full map", "full-screen map; Esc leaves it"),
+    K(
+        "main",
+        "R",
+        "app.start_replay",
+        "replay",
+        "replay Hurricane Erin on these screens (only when nothing is active)",
+        footer=True,
+        menu="Replay Hurricane Erin",
+    ),
+    K("main", "l", "layers", "layers", None),
+    K("main", "plus,equals_sign", "zoom_in", "zoom", None, shown="+/-"),
+    K("main", "minus", "zoom_out", "zoom out", None),
+    K("main", "c", "center", "center", None),
+    K("main", "f", "fit", "fit", None),
+    K("main", "n", "mark(1)", "next mark", None),
+    K("main", "N", "mark(-1)", "previous mark", None),
     # ---- the map ----
     K("map", "plus,equals_sign", "zoom_in", "zoom", "zoom in", shown="+/-", footer=True),
     K("map", "minus", "zoom_out", "zoom out", "zoom out"),
@@ -104,8 +108,8 @@ KEYS: tuple[Key, ...] = (
     K("map", "N", "mark(-1)", "previous mark", "next or previous storm, buoy or gauge"),
     K("map", "enter", "open_mark", "open", "open the marked storm, buoy or gauge (or click it)", footer=True),
     K("map", "escape", "clear_mark", "clear", "clear the mark"),
-    K("dashboard_map", "c", "screen.center", "center", "center on the storm", footer=True),
-    K("dashboard_map", "l", "screen.layers", "layers", "map layers", footer=True),
+    K("main_map", "c", "screen.center", "center", "center on the storm", footer=True),
+    K("main_map", "l", "screen.layers", "layers", "map layers", footer=True),
     # ---- storm detail ----
     K("detail", "left", "tab(-1)", "previous tab", priority=True),
     K("detail", "right", "tab(1)", "next tab", "previous or next tab", priority=True),
@@ -122,13 +126,6 @@ KEYS: tuple[Key, ...] = (
     K("watch", "d,delete", "remove", "remove", "remove the selected station", shown="d", footer=True),
     K("watch", "tab", "other_table", "other table", "switch between buoys and gauges", footer=True, priority=True),
     K("watch", "w", "back", "back", None),
-    # ---- outlook ----
-    K("outlook", "O", "back", "back", None),
-    K("outlook", "plus,equals_sign", "zoom_in", "zoom", None, shown="+/-"),
-    K("outlook", "minus", "zoom_out", "zoom out", None),
-    K("outlook", "f", "fit", "fit", None),
-    K("outlook", "n", "mark(1)", "next mark", None),
-    K("outlook", "N", "mark(-1)", "previous mark", None),
     # ---- alert log ----
     K("alerts", "A", "back", "back", None),
     # ---- graphics ----
@@ -152,7 +149,6 @@ KEYS: tuple[Key, ...] = (
     K("app", "q", "quit_top", "quit", "quit, from the first screen only"),
     K("app", "m", "map", "map", "go to the map", menu="Go to the map"),
     K("app", "D", "feeds", "feeds", "feed health: each feed, its age and the next refresh", menu="Show feed health"),
-    K("app", "O", "outlook", "outlook", "tropical weather outlook", menu="Open the tropical weather outlook"),
     K("app", "w", "watchlist", "watchlist", "the buoy and tide gauge watchlist", menu="Open the watchlist"),
     K("app", "slash", "search", "find", "find a buoy or tide gauge by name or id", menu="Find a buoy or tide gauge"),
     K("app", "g", "graphics", "graphics", "graphics for the selected storm", menu="Open the selected storm's graphics"),
@@ -294,7 +290,8 @@ class EyewallCommands(Provider):
         if self._blocked():
             return found
         for entry in KEYS:
-            if entry.menu and entry.scope in ("app", "replay") and app.check_action(entry.action.split("(")[0], ()):
+            name = entry.action.removeprefix("app.").split("(")[0]
+            if entry.menu and entry.scope in ("app", "main", "replay") and app.check_action(name, ()):
                 found.append((entry.menu, self._runner(entry.action), f"{footer_name(entry)}  {entry.help or ''}"))
         for storm_id in app.store.storms:
             found.append(

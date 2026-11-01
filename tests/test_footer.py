@@ -8,8 +8,8 @@ from textual.widgets import TabbedContent
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.ui.chrome import FooterBar, footer_items
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import TABS
+from eyewall.ui.screens.main import MainScreen
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, settle
 
 SIZES = [(80, 24), (140, 45)]
@@ -41,55 +41,27 @@ def one_row(app, width: int) -> str:  # type: ignore[no-untyped-def]
     return row
 
 
-# ---- the dashboard --------------------------------------------------------------------------------------------
+# ---- the main screen ------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("size", SIZES)
-async def test_dashboard_footer_is_one_row_and_follows_the_focus(size: tuple[int, int]) -> None:
+async def test_main_footer_is_one_row_and_lists_the_map_keys(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
-        seen = {}
-        for _ in range(6):
-            await pilot.pause()
-            row = one_row(app, size[0])
-            seen.setdefault(type(app.focused).__name__, row)
-            await pilot.press("tab")
-        assert "enter detail" in seen["StormList"]
-        if size[0] >= 110:  # the map is on screen
-            assert "+/- zoom" in seen["DashboardMap"] and seen["DashboardMap"] != seen["StormList"]
-
-
-async def test_dashboard_map_lists_its_own_keys_and_the_list_does_not() -> None:
-    app = replay_app()
-    async with running(app, (140, 45)) as pilot:
-        await into_the_storm(pilot)
-        in_list = labels(app)
-        assert in_list == ["detail", "buoys", "map"]
-        app.screen.map_view.focus()
-        await pilot.pause()
-        assert "zoom" in bottom(app) and "center" in bottom(app) and "layers" in bottom(app)
-        assert labels(app)[:4] == ["zoom", "fit", "center", "layers"]
+        assert type(app.focused).__name__ == "MainMap"
+        one_row(app, size[0])
+        assert labels(app) == ["zoom", "fit", "center", "layers", "open", "buoys"]
 
 
 async def test_footer_follows_the_focus_without_waiting_for_the_clock() -> None:
     app = replay_app()
     async with running(app, (140, 45)) as pilot:
         await into_the_storm(pilot)
-        before = bottom(app)
-        app.screen.map_view.focus()
+        assert "zoom" in bottom(app)
+        app.screen.set_focus(None)
         await pilot.pause()  # no refresh_status call and no one-second pulse in between
-        assert bottom(app) != before and "zoom" in bottom(app)
-
-
-async def test_the_narrow_dashboard_tabs_list_the_same_keys_as_the_list() -> None:
-    app = replay_app()
-    async with running(app, (100, 30)) as pilot:
-        await into_the_storm(pilot)
-        app.screen.query_one("#side-tabs", TabbedContent).focus()
-        await pilot.pause()
-        assert labels(app) == ["detail", "buoys", "map"]
-        one_row(app, 100)
+        assert "zoom" not in bottom(app) and "open" in bottom(app)
 
 
 # ---- the storm detail tabs ------------------------------------------------------------------------------------
@@ -216,7 +188,7 @@ async def test_every_screen_rebuilds_its_footer_after_the_too_small_screen(scree
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
         await press(pilot, screen_key)
-        assert not isinstance(app.screen, DashboardScreen)
+        assert not isinstance(app.screen, MainScreen)
         await pilot.resize_terminal(59, 24)
         await settle(pilot)
         await pilot.resize_terminal(60, 16)

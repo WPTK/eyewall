@@ -115,6 +115,9 @@ class Journey:
     def text(self) -> str:
         return screen_text(self.app)
 
+    def top(self) -> str:
+        return self.text().splitlines()[0]
+
     def bottom(self) -> str:
         return self.text().splitlines()[-1]
 

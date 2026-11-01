@@ -7,34 +7,29 @@ from collections import Counter
 import pytest
 from rich.console import Console
 from textual.binding import Binding
-from textual.screen import Screen
 
 from eyewall.app import EyewallApp
 from eyewall.ui import nav
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardMap, DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.help import help_text
-from eyewall.ui.screens.outlook import OutlookScreen
+from eyewall.ui.screens.main import MainMap, MainScreen
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from eyewall.ui.widgets.gallery import GalleryPanel
 from eyewall.ui.widgets.map_view import MapView
 from eyewall.ui.widgets.station_table import StationTable
-from eyewall.ui.widgets.storm_list import StormList
 
 OWNERS: dict[str, type] = {
     "app": EyewallApp,
     "replay": EyewallApp,
-    "dashboard": DashboardScreen,
-    "dashboard_map": DashboardMap,
+    "main": MainScreen,
+    "main_map": MainMap,
     "map": MapView,
-    "storm_list": StormList,
     "detail": StormDetailScreen,
     "stations": StationTable,
     "buoy": BuoyDetailScreen,
     "watch": WatchlistScreen,
-    "outlook": OutlookScreen,
     "alerts": AlertLogScreen,
     "gallery": GalleryPanel,
 }
@@ -58,7 +53,7 @@ def test_every_scope_has_an_owner_and_a_help_title() -> None:
 @pytest.mark.parametrize("entry", nav.KEYS, ids=lambda e: f"{e.scope}:{e.keys}:{e.action}")
 def test_every_key_in_the_table_has_a_binding_on_its_owner(entry: nav.Key) -> None:
     owner = OWNERS[entry.scope]
-    bound = own_keys(Screen if entry.action.startswith("app.") else owner)  # Tab is the screen's own
+    bound = own_keys(owner)
     for key in entry.key_list:
         assert key in bound, f"{owner.__name__} does not bind {key!r}"
         if entry.bind or entry.action.startswith("app."):
@@ -72,7 +67,7 @@ def test_every_bound_action_exists_on_its_owner(entry: nav.Key) -> None:
         return  # runs on the screen or the app, which the other tests cover
     owner = OWNERS[entry.scope]
     candidates = [owner]
-    if entry.scope in ("dashboard", "outlook"):
+    if entry.scope in ("main",):
         candidates.append(MapView)  # these screens pass map keys on to their map
     assert any(hasattr(cls, f"action_{name}") for cls in candidates), f"{owner.__name__} has no action_{name}"
 
