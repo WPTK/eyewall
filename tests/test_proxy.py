@@ -93,7 +93,9 @@ async def test_without_proxy_variables_the_request_goes_straight_to_the_host(cle
         await origin.stop()
 
 
-@pytest.mark.parametrize("address", ["socks://127.0.0.1:1080", "socks5://127.0.0.1:1080", "ftp+weird://x:1"])
+@pytest.mark.parametrize(
+    "address", ["socks://127.0.0.1:1080", "socks5://127.0.0.1:1080", "ftp+weird://x:1", "http://127.0.0.1:port"]
+)
 async def test_a_proxy_httpx_cannot_use_means_direct_requests_not_a_startup_failure(
     clean_proxy_environment, tmp_path, address
 ):

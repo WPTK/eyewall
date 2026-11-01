@@ -217,13 +217,13 @@ class EnvTransport(httpx.AsyncBaseTransport):
     by HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and NO_PROXY, and on Windows and macOS the system proxy setting (httpx reads
     both through `urllib.request.getproxies`). A client given a transport of its own ignores them (httpx only reads the
     environment when it builds the transport itself), so the proxy routing lives in this inner client. A proxy address
-    httpx cannot use (an unknown scheme, or socks without the socksio package) is logged and skipped: the requests go
-    direct instead of the app failing to start. Redirects are left to the outer client."""
+    httpx cannot use (an unknown scheme, a malformed port, or socks without the socksio package) is logged and skipped:
+    the requests go direct instead of the app failing to start. Redirects are left to the outer client."""
 
     def __init__(self) -> None:
         try:
             self._client = httpx.AsyncClient(trust_env=True, follow_redirects=False)
-        except (ValueError, ImportError) as exc:
+        except (ValueError, ImportError, httpx.InvalidURL) as exc:
             log.warning("ignoring the configured proxy, requests go direct (%s)", type(exc).__name__)
             self._client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
 

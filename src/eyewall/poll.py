@@ -125,6 +125,9 @@ class _FeedState:
     polls: int = 0
     last_attempt: float | None = None
     not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
+    requested: float | None = (
+        None  # when a refresh asked for this feed's next poll, if it did so during the current one
+    )
 
 
 def _is_permanent(failure: Exception) -> bool:
@@ -215,7 +218,7 @@ class Poller:
         if returning:
             now = self.clock.monotonic()
             for index, name in enumerate(protocol.FEEDS):
-                self._feeds[name].next_at = now + index * RETURN_STAGGER_SECONDS
+                self._request(self._feeds[name], now + index * RETURN_STAGGER_SECONDS)
             if not self.polling:
                 self._wake.set()
 
@@ -281,6 +284,12 @@ class Poller:
 
     # ---- running ----------------------------------------------------------------------------------------------
 
+    @staticmethod
+    def _request(state: _FeedState, at: float) -> None:
+        """Ask for a feed's next poll at `at`, but not inside its Retry-After or backoff window. A poll in flight reads
+        `requested` when it ends, so a request made meanwhile is not overwritten by the schedule it computes."""
+        state.next_at = state.requested = max(at, state.not_before)
+
     def refresh(self, *, throttled: bool = False) -> None:
         """Make every feed due now and wake the loop. With `throttled` (the refresh key on live data) a feed attempted
         less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead."""
@@ -291,15 +300,16 @@ class Poller:
                 floor = max(floor, state.last_attempt + REFRESH_MIN_GAP)
             if throttled and floor > now:
                 state.next_at = min(state.next_at, floor)
+                state.requested = state.next_at
             else:
-                state.next_at = 0.0
+                state.next_at = state.requested = 0.0
         if not self.polling:
             self._wake.set()
 
     def refresh_feeds(self, *feeds: str) -> None:
         """Make just these feeds due now (the watchlist changed) and wake the loop."""
         for name in feeds:
-            self._feeds[name].next_at = 0.0
+            self._request(self._feeds[name], 0.0)
         if not self.polling:
             self._wake.set()
 
@@ -325,6 +335,7 @@ class Poller:
         error: Exception | None = None
         self.fetch_counts[feed] = self.fetch_counts.get(feed, 0) + 1
         state.last_attempt = self.clock.monotonic()
+        state.requested = None
         self.source.start_poll(feed)
         self._partial = []
         retry_after: float | None = None
@@ -359,6 +370,8 @@ class Poller:
             wait = max(wait, min(retry_after, self.config.backoff_max))
         state.next_at = self.clock.monotonic() + wait
         state.not_before = state.next_at if (state.failures or retry_after) else 0.0
+        if state.requested is not None and not state.not_before:  # asked for again while this poll was running
+            state.next_at = min(state.next_at, max(state.requested, self.clock.monotonic()))
         shown: list[Event] = []
         try:
             shown = self.engine.process(events, self.source.now()) if events else []
