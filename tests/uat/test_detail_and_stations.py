@@ -33,7 +33,7 @@ async def test_every_text_tab(journey, size, tab) -> None:
                 break
             await j.keys("right")
         assert j.screen.tab == tab
-        j.see("ERIN")
+        j.see("Erin")
         await j.shot(f"text-{tab}")
 
 
@@ -58,11 +58,11 @@ async def test_buoy_list_charts_ranges_and_follow(journey, size) -> None:
         await j.keys("enter")
         assert isinstance(j.screen, StationScreen)
         station = j.screen.station_id
-        j.see(station, f"{RANGES_H[0]} h")
+        j.see(station, f"-{RANGES_H[0]}h")
         await j.shot("charts-24h")
         for hours in (*RANGES_H[1:], RANGES_H[0]):
             await j.keys("h")
-            assert f"{hours} h" in " ".join(j.text().splitlines()[:6])
+            assert f"-{hours}h" in j.text()
             await j.shot(f"range-{hours}h")
         await j.keys("i")
         assert "average over about 8 minutes" in " ".join(j.text().split())

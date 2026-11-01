@@ -204,7 +204,7 @@ class GalleryPanel(Vertical, can_focus=True):
     def _empty_message(self) -> str:
         if self.storm_id not in self.eye.store.storms:
             return "This storm is no longer active."
-        return "No graphics yet."
+        return "No pictures yet."
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
         event.stop()
