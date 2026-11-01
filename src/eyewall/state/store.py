@@ -118,7 +118,8 @@ class Store:
         events: list[Event] = []
         changes: dict[str, object] = {} if key is None else {"fetched_key": key}  # None: tried again next poll
         if advisories is not None:
-            if _is_older(advisories, state.advisories):
+            stepped_back = _is_older(advisories, state.advisories)
+            if stepped_back:
                 pass  # the replay stepped back: show that advisory as it was, with no events and nothing newer mixed in
             else:
                 advisories = _keep_previous(state.advisories, advisories)
@@ -128,13 +129,15 @@ class Store:
             changes["advisories"] = advisories
             # The cone and the wind radii belong to one advisory; never show an older advisory's next to newer text.
             # Judged by base number against the newest product, so a retry that merges in the previous forecast, or an
-            # intermediate advisory (GIS 30A beside forecast 30), does not throw away a current cone.
+            # intermediate advisory (GIS 30A beside forecast 30), does not throw away a current cone. A replay that
+            # stepped back also drops a cone from a later advisory than the text it now shows.
             newest = ev.fetched_adv(advisories)
             if newest is not None:
-                if state.forecast_gis is not None and _older(state.forecast_gis.adv_num, newest):
-                    changes["forecast_gis"] = None
-                if state.radii_gis is not None and _older(state.radii_gis.adv_num, newest):
-                    changes["radii_gis"] = None
+                for field_name, gis in (("forecast_gis", state.forecast_gis), ("radii_gis", state.radii_gis)):
+                    if gis is not None and (
+                        _older(gis.adv_num, newest) or (stepped_back and _newer(gis.adv_num, newest))
+                    ):
+                        changes[field_name] = None
         if forecast_gis is not None:
             changes["forecast_gis"] = forecast_gis
         if radii_gis is not None:
@@ -304,6 +307,10 @@ def _is_older(new: AdvisorySet, old: AdvisorySet) -> bool:
 def _older(adv_num: AdvNum | None, newest: AdvNum) -> bool:
     """True when a product's advisory number is from an earlier advisory than `newest`; the suffix does not count."""
     return adv_num is not None and adv_num.number < newest.number
+
+
+def _newer(adv_num: AdvNum | None, newest: AdvNum) -> bool:
+    return adv_num is not None and adv_num.number > newest.number
 
 
 def _keep_previous(old: AdvisorySet, new: AdvisorySet) -> AdvisorySet:

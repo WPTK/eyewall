@@ -1,6 +1,7 @@
 """The poller on a virtual clock: intervals, backoff, away mode, change-triggered refetch and the gated fallback."""
 
 import asyncio
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -764,3 +765,43 @@ async def test_stalled_feeds_wait_out_their_deadlines_together_not_one_after_ano
     assert time.monotonic() - started < 0.55  # two deadlines in a row would take 0.6
     assert isinstance(results[protocol.BUOYS].error, TimeoutError)
     assert isinstance(results[protocol.TIDES].error, TimeoutError)
+
+
+async def test_a_storm_whose_product_hangs_does_not_starve_the_storms_after_it():
+    poller, source, store, _clock, _got = build()
+    poller.feed_deadline = 0.4
+    source.current = CurrentStorms(
+        (make_storm("1", storm_id="al012026"), make_storm("1", storm_id="al022026", name="Bea", lat=30.0))
+    )
+    source.texts["1"] = advisories("1")
+    original = source.forecast_gis
+
+    async def forecast_gis(storm):
+        if storm.id == "al012026":
+            await asyncio.Event().wait()
+        return await original(storm)
+
+    source.forecast_gis = forecast_gis
+    results = await poller.tick()
+    assert isinstance(results[0].error, TimeoutError)
+    assert store.storms["al022026"].fetched_key is not None  # the second storm was served
+    assert store.storms["al022026"].advisories.public is not None
+    assert store.storms["al012026"].fetched_key is None  # the first is asked again, and settles at the cap
+
+
+def test_a_replay_that_steps_back_drops_a_cone_from_a_later_advisory():
+    _, source, store, _, _ = build()
+    source.set_storm("30")
+    store.apply_storms(source.current, T0)
+    cone, radii = _gis("31")
+    store.apply_products("al012026", T0, key=None, advisories=advisories("31"), forecast_gis=cone, radii_gis=radii)
+    older = replace(advisories("30"), public=make_public("30", issued=T0 - timedelta(hours=6)))
+    older = replace(
+        older,
+        forecast=replace(older.forecast, issued=T0 - timedelta(hours=6)),
+        discussion=replace(older.discussion, issued=T0 - timedelta(hours=6)),
+    )
+    store.apply_products("al012026", T0, key=None, advisories=older)
+    state = store.storms["al012026"]
+    assert state.advisories.public.adv_num.number == 30  # type: ignore[union-attr]
+    assert state.forecast_gis is None and state.radii_gis is None

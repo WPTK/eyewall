@@ -5,7 +5,8 @@ the parsers knowing about it:
 
 - A GET whose URL is cached is sent with the saved `ETag` / `Last-Modified` as validators. A 304 comes back to the
   caller as the cached 200, so a feed that has not changed costs a header exchange and no body.
-- A 2xx answer replaces the cached copy, unless it is an HTML page where the copy is not (a 200 maintenance notice).
+- A 2xx answer replaces the cached copy, unless it is an HTML page where the copy is not
+  (a 200 maintenance notice): then the copy answers, marked stale.
   Writing also trims the oldest entries once the cache passes `MAX_TOTAL_BYTES`.
 - When the network fails (no connection, a timeout, a loss during the body) or the server answers 429 or 5xx, and a
   copy exists, the caller gets the copy and the current `StaleMarker` is set, so the live source can say the feed is
@@ -131,20 +132,29 @@ class Cache:
         """Delete the least recently refreshed entries until the bodies fit in `max_bytes`. Returns how many went."""
         entries: list[tuple[float, int, Path]] = []
         try:
-            for body_path in self.directory.glob("*/*.bin"):
-                stat = body_path.stat()
-                meta = body_path.with_suffix(".json")
-                entries.append((meta.stat().st_mtime if meta.exists() else 0.0, stat.st_size, body_path))
+            bodies = list(self.directory.glob("*/*.bin"))
         except OSError:
             return 0
+        for body_path in bodies:
+            try:  # a file that vanished or cannot be read is skipped, not a reason to stop
+                size = body_path.stat().st_size
+                meta = body_path.with_suffix(".json")
+                entries.append((meta.stat().st_mtime if meta.exists() else 0.0, size, body_path))
+            except OSError:
+                continue
         total = sum(size for _, size, _ in entries)
         removed = 0
         for _, size, body_path in sorted(entries):
             if total <= max_bytes:
                 break
-            for path in (body_path.with_suffix(".json"), body_path):
-                with contextlib.suppress(OSError):
-                    path.unlink()
+            with contextlib.suppress(OSError):
+                body_path.with_suffix(".json").unlink()
+            try:
+                body_path.unlink()
+            except FileNotFoundError:
+                pass  # already gone: the space is free
+            except OSError:
+                continue  # in use (Windows): it still counts against the cap
             total -= size
             removed += 1
         return removed
@@ -202,8 +212,8 @@ class Cache:
 
 def _is_page_over_data(entry: CacheEntry | None, response: httpx.Response) -> bool:
     """True when a 2xx answer is an HTML page where the cached copy is something else: a 200 maintenance notice."""
-    if entry is None:
-        return False
+    if entry is None or not entry.headers.get("content-type"):
+        return False  # nothing to compare with: take the answer
 
     def html(content_type: str | None) -> bool:
         return (content_type or "").split(";")[0].strip().lower() in {"text/html", "application/xhtml+xml"}
@@ -385,7 +395,12 @@ class CachingTransport(httpx.AsyncBaseTransport):
                 )
         await response.aclose()
         raw = b"".join(chunks)
-        if not _is_page_over_data(entry, response):  # a maintenance page must not replace the good copy
+        if entry is not None and _is_page_over_data(entry, response):
+            # A maintenance page where the copy is data: treat it like a 5xx and answer with the copy, marked stale.
+            served = await self._stale(request, entry)
+            if served is not None:
+                return served
+        else:
             await asyncio.to_thread(self.cache.store, url, raw, response.headers, datetime.now(UTC))
         headers = [(k, v) for k, v in response.headers.multi_items() if k.lower() != "content-length"]
         headers.append(("content-length", str(len(raw))))

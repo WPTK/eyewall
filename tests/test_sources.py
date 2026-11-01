@@ -483,8 +483,39 @@ async def test_an_html_page_with_status_200_does_not_replace_the_cached_data(tmp
     transport = CachingTransport(cache, origin)
     await fetch(transport)
     origin.html = True
-    assert (await fetch(transport)).content == b"<html>down</html>"  # the caller still sees the answer
-    assert cache.load(URL).body == b"{}"  # but the copy that serves an outage is the good one
+    with watch_stale() as marker:
+        assert (await fetch(transport)).content == b"{}"  # the good copy answers, as for a 5xx
+    assert marker.hit
+    assert cache.load(URL).body == b"{}"
+
+
+async def test_an_html_answer_over_a_copy_with_no_content_type_is_taken(tmp_path):
+    class Page(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            return httpx.Response(200, headers={"Content-Type": "text/html"}, content=b"<html>new</html>")
+
+    cache = Cache(tmp_path)
+    cache.store(URL, b"old", httpx.Headers(), NOW)
+    assert (await fetch(CachingTransport(cache, Page()))).content == b"<html>new</html>"
+    assert cache.load(URL).body == b"<html>new</html>"
+
+
+def test_trim_skips_a_file_that_vanished_and_does_not_count_one_it_could_not_delete(tmp_path, monkeypatch):
+    cache = Cache(tmp_path)
+    for n in range(3):
+        cache.store(f"https://x/{n}", b"0123456789", httpx.Headers(), NOW)
+        os.utime(cache._paths(f"https://x/{n}")[0], (n + 1, n + 1))
+    locked = cache._paths("https://x/0")[1]
+    real_unlink = type(locked).unlink
+
+    def unlink(self, *a, **kw):
+        if self == locked:
+            raise PermissionError("in use")
+        return real_unlink(self, *a, **kw)
+
+    monkeypatch.setattr(type(locked), "unlink", unlink)
+    assert cache.trim(20) == 1  # the oldest is in use and still counts, so the next one goes
+    assert cache.load("https://x/1") is None and cache.load("https://x/2") is not None
 
 
 def test_trim_deletes_the_least_recently_refreshed_entries_first(tmp_path):

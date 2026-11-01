@@ -318,7 +318,18 @@ class Poller:
             if self._due(first):
                 results.append(await self.poll_feed(first))
             # The rest are independent hosts and run together, so a stalled one costs only its own deadline.
-            results += await asyncio.gather(*(self.poll_feed(name) for name in others if self._due(name)))
+            outcomes = await asyncio.gather(
+                *(self.poll_feed(name) for name in others if self._due(name)), return_exceptions=True
+            )
+            for (
+                outcome
+            ) in outcomes:  # poll_feed catches everything but cancellation, which gather hands back as a value
+                if isinstance(outcome, PollResult):
+                    results.append(outcome)
+                elif isinstance(outcome, asyncio.CancelledError):
+                    raise outcome
+                else:
+                    log.error("a feed poll raised", exc_info=outcome)
         finally:
             self.polling = False
         return results
@@ -406,12 +417,17 @@ class Poller:
             events  # the store has moved on; these events must survive a failure or a deadline below
         )
         failure: Exception | None = None
-        for storm_id, state in list(self.store.storms.items()):
-            key = storm_key(state.storm)
-            if state.fetched_key == key:
-                continue
+        todo = [
+            (storm_id, key)
+            for storm_id, state in list(self.store.storms.items())
+            if state.fetched_key != (key := storm_key(state.storm))
+        ]
+        for storm_id, key in todo:
             try:
-                await self._fetch_products(storm_id, key)
+                # Each storm gets an equal share of the feed's deadline, so one whose host hangs counts as a failed
+                # attempt (and settles at PRODUCT_ATTEMPTS) instead of starving the storms after it.
+                async with asyncio.timeout(self.feed_deadline / len(todo)):
+                    await self._fetch_products(storm_id, key)
             except Exception as exc:  # one storm's bad product must not cost the others theirs, nor the events above
                 if self._attempts.get((storm_id, key), 0) >= PRODUCT_ATTEMPTS:
                     log.warning("giving up on the products of %s", storm_id, exc_info=True)
