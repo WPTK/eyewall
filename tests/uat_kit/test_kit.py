@@ -9,6 +9,10 @@ import pytest
 
 from tests.uat_kit import Terminal, unavailable_reason
 
+# The pywinpty kit is superseded by wxbrief's tui-test kit (e01891b), whose self-test is green on Windows, Linux and macOS.
+# This copy's own self-test times out on the macOS runner (pty echo), so it runs only with the real-input suite.
+pytestmark = pytest.mark.realinput
+
 ECHO = r"""
 import sys, os
 print("[?1000h[?1003h[?1006h" + "ready", flush=True)  # what a TUI sends to turn mouse reports on
