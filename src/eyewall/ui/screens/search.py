@@ -17,8 +17,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
+from eyewall.palette import ACCENT, DIM
 from eyewall.ui import stations as st
-from eyewall.ui.theme import DIM
 
 if TYPE_CHECKING:
     from eyewall.app import EyewallApp
@@ -89,7 +89,7 @@ class SearchScreen(ModalScreen[SearchChoice | None]):
             results.highlighted = 0
         note = self.query_one("#search-note", Static)
         if failed:
-            note.update(Text("The station catalogs could not be loaded; try again in a moment.", style="#ffa63d"))
+            note.update(Text("The station catalogs could not be loaded; try again in a moment.", style=ACCENT))
         elif not query.strip():
             note.update(Text(f"{len(store.stations)} buoys and {len(store.tide_stations)} tide gauges.", style=DIM))
         elif not self.hits:

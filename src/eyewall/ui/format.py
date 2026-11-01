@@ -20,19 +20,24 @@ from eyewall.models.storm import Classification, Storm
 from eyewall.models.watches import WatchWarningAlert
 from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import (
+    ACCENT,
+    DIM,
+    FRESHNESS_CUES,
+    HEADING,
     NEUTRAL,
+    SEVERITY_CUES,
+    WARN,
     WATCH_WARNING_COLORS,
     category_color,
     category_for_knots,
     risk_color,
-    wind_band_color,
+    storm_force,
 )
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.sources import protocol
 from eyewall.state.store import Store, StormState
 from eyewall.ui import stations as st
 from eyewall.ui.glyphs import UiGlyphs
-from eyewall.ui.theme import DIM, FRESHNESS_COLORS
 from eyewall.units import MISSING, Preset
 
 BASIN_NAMES = {"AL": "Atlantic", "EP": "East Pacific", "CP": "Central Pacific"}
@@ -55,7 +60,7 @@ EVENT_TITLES: dict[EventKind, str] = {
     EventKind.BUOY_THRESHOLD: "Buoy",
     EventKind.BUOY_SILENT: "Buoy silent",
 }
-SEVERITY_COLORS = {Severity.INFO: "#8fd3ff", Severity.NOTICE: "#ffe94a", Severity.WARNING: "#ff4d4d"}
+SEVERITY_COLORS = {severity: SEVERITY_CUES[severity.value].color for severity in Severity}
 
 
 # ----------------------------------------------------------------------------------------------------- small helpers
@@ -189,7 +194,7 @@ def _storm_row(state: StormState, now: datetime, preset: Preset, g: UiGlyphs) ->
     detail = Text(no_wrap=True, overflow="ellipsis")
     detail.append(f"     {movement_text(storm, preset)} {g.sep} ", style=DIM)
     detail.append(f"adv {adv}" if adv else "no advisory", style=DIM)
-    detail.append(f" {g.sep} {age}", style="#ffa63d" if old else DIM)
+    detail.append(f" {g.sep} {age}", style=ACCENT if old else DIM)
     kind = "ptc" if storm.classification is Classification.PTC else "storm"
     return Row(kind, storm.id, Text("\n").join([head, detail]), storm.basin.value if storm.basin else "")
 
@@ -227,7 +232,7 @@ def build_rows(
         if not states and not invests:
             empty.append(code)
             continue
-        header = Text(f" {BASIN_NAMES[code].upper()}", style="bold #8fd3ff", no_wrap=True)
+        header = Text(f" {BASIN_NAMES[code].upper()}", style=f"bold {HEADING}", no_wrap=True)
         rows.append(Row("header", f"header:{code}", header, code))
         rows.extend(_storm_row(state, now, preset, g) for state in states)
         for index, (row_id, area) in enumerate(invests, start=1):
@@ -286,7 +291,7 @@ def headline_panel(store: Store, selected: str | None, basins: tuple[str, ...]) 
         covered = [b for b in text_basins(text) if b in basins]
         if not covered:
             continue
-        out.append(f"{' / '.join(BASIN_NAMES[b] for b in covered)}\n", style="bold #8fd3ff")
+        out.append(f"{' / '.join(BASIN_NAMES[b] for b in covered)}\n", style=f"bold {HEADING}")
         out.append(collapse(text.summary) + "\n")
         if text.active_systems:
             out.append(collapse(text.active_systems) + "\n", style=DIM)
@@ -328,7 +333,7 @@ def ww_panel(store: Store, selected: str | None, g: UiGlyphs, now: datetime) -> 
             out.append(f"{g.sep} {collapse(change)}\n", style=DIM)
     alerts = store.active_alerts(now)
     if alerts:
-        out.append("\nNWS alerts\n", style="bold #8fd3ff")
+        out.append("\nNWS alerts\n", style=f"bold {HEADING}")
         for alert in alerts[:MAX_PANEL_ALERTS]:
             out.append(f"{g.chip} ", style=_alert_color(alert))
             out.append(f"{alert.event}: ", style="bold")
@@ -412,7 +417,7 @@ def surge_panel(store: Store, selected: str | None) -> Text:
         return out
     for title, body in public.hazards:
         if "SURGE" in title.upper():
-            out.append(f"{collapse(title).title()}\n", style="bold #8fd3ff")
+            out.append(f"{collapse(title).title()}\n", style=f"bold {HEADING}")
             out.append(_cut(collapse(body), 600))
             break
     return out
@@ -435,7 +440,7 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
             out.append(f" {st.NOT_REPORTING}\n", style=DIM)
             continue
         wind_kt = None if obs is None or obs.wind_speed_mps is None else obs.wind_speed_mps / 0.514444
-        out.append(preset.fmt_wind(wind_kt).rjust(7), style=wind_band_color(wind_kt) or "")
+        out.append(preset.fmt_wind(wind_kt).rjust(7), style=category_color(wind_kt) if storm_force(wind_kt) else "")
         pressure = None if obs is None else obs.pressure_hpa
         out.append(" " + preset.fmt_pressure(pressure, "hpa").rjust(8))
         tendency = store.tendency(entry.station.id, now)
@@ -512,7 +517,7 @@ def status_bar(
         for index in (0, 1):  # full names, then three-letter ones
             text = Text()
             for item in trouble:
-                color = FRESHNESS_COLORS[item.freshness.state]
+                color = FRESHNESS_CUES[item.freshness.state.value].color
                 text.append(f" {feed_glyph(item.freshness, g)} ", style=color)
                 text.append(FEED_LABELS[item.feed][index], style=color)
                 if item.freshness.age is not None:
@@ -520,25 +525,25 @@ def status_bar(
             variants.append(text)
         segments["trouble"] = variants
     elif any(f.freshness.state is FreshnessState.LOADING for f in active):
-        segments["feeds"] = [Text(f" {g.loading} loading", style=FRESHNESS_COLORS[FreshnessState.LOADING])]
+        segments["feeds"] = [Text(f" {g.loading} loading", style=FRESHNESS_CUES["loading"].color)]
     elif active:
-        segments["feeds"] = [Text(f" {g.fresh} sources ok", style=FRESHNESS_COLORS[FreshnessState.FRESH])]
+        segments["feeds"] = [Text(f" {g.fresh} sources ok", style=FRESHNESS_CUES["fresh"].color)]
     if any(f.freshness.from_cache and f.active for f in feeds):
-        segments["offline"] = [Text("OFFLINE: cached data", style="bold #ffe94a")]
+        segments["offline"] = [Text("OFFLINE: cached data", style=f"bold {WARN}")]
     if next_poll is not None:
         segments["next"] = [Text(f"next {format_age(next_poll)}", style=DIM)]
     if away:
-        segments["away"] = [Text("idle", style="#ffe94a")]
+        segments["away"] = [Text("idle", style=WARN)]
     if alert_count:
         noun = "alert" if alert_count == 1 else "alerts"
-        segments["alerts"] = [Text(f"{alert_count} {noun}", style="bold #ffa63d")]
+        segments["alerts"] = [Text(f"{alert_count} {noun}", style=f"bold {ACCENT}")]
     if replay is not None:
         mark = g.pause if replay.paused else g.play
         speed = "over" if replay.over else f"{replay.speed}x"
-        full = Text(f"{mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style="bold #8fd3ff")
+        full = Text(f"{mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style=f"bold {HEADING}")
         if replay.adv:
-            full.append(f" adv {replay.adv}", style="#8fd3ff")
-        segments["replay"] = [full, Text(f"{mark} replay {speed}", style="bold #8fd3ff")]
+            full.append(f" adv {replay.adv}", style=HEADING)
+        segments["replay"] = [full, Text(f"{mark} replay {speed}", style=f"bold {HEADING}")]
 
     level = dict.fromkeys(segments, 0)
 

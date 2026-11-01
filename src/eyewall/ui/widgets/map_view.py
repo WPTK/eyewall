@@ -21,12 +21,22 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from eyewall.geo import LatLon
+from eyewall.palette import (
+    DIM,
+    HEADING,
+    PATTERN_SAMPLES,
+    RING_KNOTS,
+    RING_PATTERNS,
+    WATCH_WARNING_CUES,
+    Pattern,
+    WatchWarning,
+    category_color,
+)
 from eyewall.render.basemap import is_detailed
 from eyewall.render.canvas import ASCII_GLYPHS, UNICODE_GLYPHS, Mode
 from eyewall.render.layers import DEFAULT_MAP_STYLE, EMPTY_SCENE, MapOptions, MapScene, render_map
 from eyewall.render.projection import Viewport
 from eyewall.ui.adapt import basin_points
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.strips import blank, canvas_strips
 
 ZOOM_STEP = 2.0
@@ -213,6 +223,33 @@ class MapView(Widget, can_focus=True):
 
     # ---- legend -----------------------------------------------------------------------------------------------
 
+    def _pattern_key(self) -> list[list[tuple[str, str]]]:
+        """Names the line patterns on the map: the wind rings by strength, then watch, warning and surge lines. Only
+        what the scene draws is listed, so the key reads the same without color."""
+        ascii_mode = self.mode is Mode.ASCII
+        storms = self.scene.storms
+
+        def sample(pattern: Pattern) -> str:
+            return PATTERN_SAMPLES[pattern][1 if ascii_mode else 0]
+
+        items: list[list[tuple[str, str]]] = []
+        if self.options.radii and any(storm.radii for storm in storms):
+            parts = [(" rings", DIM)]
+            for knots in RING_KNOTS:
+                parts += [(f" {knots}kt ", DIM), (sample(RING_PATTERNS[knots]), category_color(knots))]
+            items.append(parts)
+        if self.options.warnings and any(storm.warnings or storm.surge for storm in storms):
+            parts = [(" lines", DIM)]
+            for name, kind in (
+                ("watch", WatchWarning.TROPICAL_STORM_WATCH),
+                ("warning", WatchWarning.TROPICAL_STORM_WARNING),
+                ("surge", WatchWarning.SURGE_WARNING),
+            ):
+                cue = WATCH_WARNING_CUES[kind]
+                parts += [(f" {name} ", DIM), (sample(cue.pattern), cue.color)]
+            items.append(parts)
+        return items
+
     def legend(self, width: int) -> Text:
         """The marks, then the zoom and the cursor. Items that do not fit the width go on the next line."""
         glyphs = ASCII_GLYPHS if self.mode is Mode.ASCII else UNICODE_GLYPHS
@@ -230,7 +267,7 @@ class MapView(Widget, can_focus=True):
             items.append(
                 [
                     (f"  {view.deg_per_dot:.2f} deg/dot ", DIM),
-                    ("10m coast" if is_detailed(view) else "overview", "#8fd3ff"),
+                    ("10m coast" if is_detailed(view) else "overview", HEADING),
                 ]
             )
         if self.cursor is not None and width >= 80:
@@ -239,16 +276,25 @@ class MapView(Widget, can_focus=True):
                 [(f"  {abs(lat):.2f}{'N' if lat >= 0 else 'S'} {abs(lon):.2f}{'E' if lon >= 0 else 'W'}", DIM)]
             )
         out = Text(no_wrap=True, overflow="ellipsis")
-        used = 0
-        for item in items:
-            size = sum(cell_len(text) for text, _ in item)
-            if used and used + size > width:
-                out.append("\n")
-                used = 0
-            for text, style in item:
-                out.append(text, style=style)
-            used += size
+        _flow(out, items, width)
+        key = self._pattern_key()
+        if key:  # on its own rows, so the cursor joining the line above never changes how many rows the legend takes
+            out.append("\n")
+            _flow(out, key, width)
         return out
+
+
+def _flow(out: Text, items: list[list[tuple[str, str]]], width: int) -> None:
+    """Append items to a line, moving any that do not fit the width to the next one."""
+    used = 0
+    for item in items:
+        size = sum(cell_len(text) for text, _ in item)
+        if used and used + size > width:
+            out.append("\n")
+            used = 0
+        for text, style in item:
+            out.append(text, style=style)
+        used += size
 
 
 class MapPane(Vertical):

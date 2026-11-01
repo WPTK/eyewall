@@ -110,9 +110,10 @@ async def test_the_legend_never_changes_height_when_the_cursor_is_set() -> None:
             assert view.legend(width).plain.count("\n") == lines, width
         view.cursor = None
         legend, before = app.screen.query_one(".legend"), view.size
+        rows = legend.size.height
         await pilot.click(view, offset=(5, 5))
         await pilot.pause()
-        assert view.cursor is not None and view.size == before and legend.size.height == 1
+        assert view.cursor is not None and view.size == before and legend.size.height == rows
 
 
 @pytest.mark.parametrize(

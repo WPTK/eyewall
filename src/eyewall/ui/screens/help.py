@@ -10,6 +10,8 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eyewall.palette import ACCENT, HEADING
+
 HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     (
         "Dashboard",
@@ -63,14 +65,14 @@ NOT_OFFICIAL = (
 
 def help_text() -> Table:
     table = Table.grid(padding=(0, 2))
-    table.add_column(style="bold #ffa63d", no_wrap=True)
+    table.add_column(style=f"bold {ACCENT}", no_wrap=True)
     table.add_column()
     for title, keys in HELP:
-        table.add_row(Text(title, style="bold #8fd3ff"), Text(""))
+        table.add_row(Text(title, style=f"bold {HEADING}"), Text(""))
         for key, text in keys:
             table.add_row(key, text)
     table.add_row(Text(""), Text(""))
-    table.add_row(Text("Not official", style="bold #8fd3ff"), Text(""))
+    table.add_row(Text("Not official", style=f"bold {HEADING}"), Text(""))
     table.add_row("", NOT_OFFICIAL)
     return table
 

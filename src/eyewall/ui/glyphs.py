@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from eyewall.palette import FRESHNESS_CUES, PRESSURE_TREND_CUES
+
 
 @dataclass(frozen=True, slots=True)
 class UiGlyphs:
@@ -28,16 +30,16 @@ class UiGlyphs:
 
 
 UNICODE = UiGlyphs(
-    fresh="●",
-    stale="◐",
-    error="✕",
-    loading="○",
+    fresh=FRESHNESS_CUES["fresh"].glyph,
+    stale=FRESHNESS_CUES["stale"].glyph,
+    error=FRESHNESS_CUES["error"].glyph,
+    loading=FRESHNESS_CUES["loading"].glyph,
     play="▶",
     pause="⏸",
     chip="■",
-    rising="↑",
-    falling="↓",
-    steady="→",
+    rising=PRESSURE_TREND_CUES["rise"].glyph,
+    falling=PRESSURE_TREND_CUES["fall"].glyph,
+    steady=PRESSURE_TREND_CUES["steady"].glyph,
     sep="·",
     ellipsis="…",
     alert="!",
@@ -45,16 +47,16 @@ UNICODE = UiGlyphs(
 )
 
 ASCII = UiGlyphs(
-    fresh="*",
-    stale="~",
-    error="x",
-    loading="o",
+    fresh=FRESHNESS_CUES["fresh"].ascii_glyph,
+    stale=FRESHNESS_CUES["stale"].ascii_glyph,
+    error=FRESHNESS_CUES["error"].ascii_glyph,
+    loading=FRESHNESS_CUES["loading"].ascii_glyph,
     play=">",
     pause="||",
     chip="#",
-    rising="^",
-    falling="v",
-    steady="=",
+    rising=PRESSURE_TREND_CUES["rise"].ascii_glyph,
+    falling=PRESSURE_TREND_CUES["fall"].ascii_glyph,
+    steady=PRESSURE_TREND_CUES["steady"].ascii_glyph,
     sep="|",
     ellipsis="...",
     alert="!",

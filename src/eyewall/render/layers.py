@@ -15,12 +15,19 @@ from typing import NamedTuple
 
 from eyewall.geo import destination
 from eyewall.palette import (
-    NEUTRAL,
-    WATCH_WARNING_COLORS,
+    BUOY,
+    CONE_EDGE,
+    CONE_FILL,
+    CURSOR,
+    MAP_LABEL,
+    RING_PATTERNS,
+    STALE,
+    TIDE_GAUGE,
+    WATCH_WARNING_CUES,
     WatchWarning,
     category_color,
     risk_color,
-    wind_band_color,
+    storm_force,
 )
 from eyewall.render.basemap import DEFAULT_STYLE, BasemapStyle, basemap_canvas, ensure_matches
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
@@ -165,16 +172,15 @@ class MapStyle:
     """Colors for the parts of the map that carry no meaning of their own. Meaningful colors come from palette."""
 
     basemap: BasemapStyle = DEFAULT_STYLE
-    cone_fill: str = "#66758a"
+    cone_fill: str = CONE_FILL
     cone_shade: Shade = Shade.SPARSE
-    cone_edge: str = "#e6edf5"
-    label: str = "#c9d3de"
-    buoy: str = "#8fd3ff"
-    tide_gauge: str = "#5eead4"
-    stale: str = "#566273"
-    cursor: str = "#ffffff"
+    cone_edge: str = CONE_EDGE
+    label: str = MAP_LABEL
+    buoy: str = BUOY
+    tide_gauge: str = TIDE_GAUGE
+    stale: str = STALE
+    cursor: str = CURSOR
     forecast_dash: tuple[int, int] = (4, 2)
-    radii_dash: tuple[int, int] = (3, 3)
 
 
 DEFAULT_OPTIONS = MapOptions()
@@ -273,7 +279,8 @@ def _draw_segments(
     for kind in order:
         for segment in segments:
             if segment.kind is kind:
-                canvas.polyline(view.project_path(segment.points), WATCH_WARNING_COLORS[kind], prio, width=2)
+                cue = WATCH_WARNING_CUES[kind]
+                canvas.polyline(view.project_path(segment.points), cue.color, prio, dash=cue.pattern, width=2)
 
 
 def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapStyle) -> None:
@@ -303,8 +310,7 @@ def _draw_radii(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSty
             if quadrants is None or not any(quadrants):
                 continue
             outline = view.project_path(_radii_outline(radii.lat, radii.lon, quadrants))
-            color = wind_band_color(knots) or NEUTRAL
-            canvas.polyline(outline, color, Priority.RADII, dash=style.radii_dash if knots == 34 else None, closed=True)
+            canvas.polyline(outline, category_color(knots), Priority.RADII, dash=RING_PATTERNS[knots], closed=True)
 
 
 def _draw_stations(
@@ -317,7 +323,7 @@ def _draw_stations(
     labels: list[_Label] | None,
 ) -> None:
     for station in stations:
-        band = None if station.stale else wind_band_color(station.wind_kt)
+        band = None if station.stale or not storm_force(station.wind_kt) else category_color(station.wind_kt)
         color = style.stale if station.stale else band or base_color
         cell = canvas.marker(
             *view.to_dot(station.lat, station.lon), glyph, color, Priority.STATION, bold=band is not None

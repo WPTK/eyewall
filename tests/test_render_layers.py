@@ -12,15 +12,15 @@ from eyewall.geo import destination, haversine_nm
 from eyewall.palette import (
     CATEGORY_COLORS,
     NEUTRAL,
+    RING_PATTERNS,
     WATCH_WARNING_COLORS,
     Category,
     WatchWarning,
     category_color,
     risk_color,
-    wind_band_color,
 )
 from eyewall.render import layers
-from eyewall.render.canvas import Canvas, Mode, Shade
+from eyewall.render.canvas import Canvas, Mode, Shade, Style
 from eyewall.render.layers import (
     ForecastPoint,
     MapOptions,
@@ -200,7 +200,7 @@ def test_surge_lines_sit_below_coastal_warnings():
 def test_warning_lines_are_two_dots_thick():
     line = ((30.0, -80.0), (30.0, -75.0))
     view = Viewport(30.0, -77.5, 0.05, 80, 20)
-    canvas = render_map(view, MapScene(storms=(StormScene(warnings=(WarningSegment(WatchWarning.HURRICANE_WATCH, line),)),)),
+    canvas = render_map(view, MapScene(storms=(StormScene(warnings=(WarningSegment(WatchWarning.HURRICANE_WARNING, line),)),)),
                         options=MapOptions(land=False, coast=False, borders=False))  # fmt: skip
     x = view.width // 2
     assert sum(canvas.dot(x, y) for y in range(view.height)) == 2
@@ -271,21 +271,50 @@ def test_each_wind_radius_ring_passes_through_its_quadrant_radius():
         for bearing, radius in zip((45.0, 135.0, 225.0, 315.0), quadrants, strict=True):
             x, y = ZOOMED.dot_at(*destination(CENTER, bearing, radius))
             nearby = {canvas.cell((x + i) // 2, (y + j) // 4)[1].fg for i in (-1, 0, 1) for j in (-1, 0, 1)}
-            assert wind_band_color(knots) in nearby, (knots, bearing)
+            assert category_color(knots) in nearby, (knots, bearing)
 
 
-def test_the_34_knot_ring_is_dashed_and_the_others_are_solid():
-    storm = StormScene(radii=(RADII,))
-    dashed = render_map(ZOOMED, MapScene(storms=(storm,)), options=OPEN_SEA)
-    solid = render_map(ZOOMED, MapScene(storms=(storm,)), options=OPEN_SEA, style=MapStyle(radii_dash=(1, 0)))
+def test_each_ring_has_its_own_pattern_so_the_strengths_differ_without_color():
+    quadrants = (150.0, 150.0, 150.0, 150.0)
+    counts = {}
+    for knots, field in ((34, "kt34"), (50, "kt50"), (64, "kt64")):
+        radii = WindRadii(*CENTER, **{field: quadrants})
+        canvas = render_map(ZOOMED, MapScene(storms=(StormScene(radii=(radii,)),)), options=OPEN_SEA)
+        counts[knots] = dot_count(canvas)
+    assert counts[34] < counts[50] < counts[64]
+    assert RING_PATTERNS[64] is None  # the strongest ring is solid
 
-    def outer_dots(canvas):  # the 34 kt ring is the only thing beyond the 50 kt ring's largest radius
-        cx, cy = ZOOMED.width // 2, ZOOMED.height // 2
-        limit = (110 / 60 / 0.03) ** 2
-        return sum(canvas.dot(x, y) for y in range(ZOOMED.height) for x in range(ZOOMED.width)
-                   if (x - cx) ** 2 + (y - cy) ** 2 > limit)  # fmt: skip
 
-    assert 0.35 < outer_dots(dashed) / outer_dots(solid) < 0.75
+def test_the_ring_key_and_the_rings_use_the_same_wind_scale():
+    for knots in (34, 50, 64):
+        assert category_color(knots) in colors(
+            render_map(ZOOMED, MapScene(storms=(StormScene(radii=(RADII,)),)), options=OPEN_SEA)
+        )
+
+
+@pytest.mark.parametrize(
+    ("kind", "pattern"),
+    [
+        (WatchWarning.HURRICANE_WARNING, "solid"),
+        (WatchWarning.HURRICANE_WATCH, "dashed"),
+        (WatchWarning.SURGE_WATCH, "dotted"),
+    ],
+)
+def test_warning_watch_and_surge_lines_wear_solid_dashed_and_dotted_patterns(kind, pattern):
+    view = Viewport(30.0, -77.5, 0.05, 100, 30)
+    line = tuple((30.0, -80.0 + i * 0.1) for i in range(40))
+    segments = {"warnings" if kind is not WatchWarning.SURGE_WATCH else "surge": (WarningSegment(kind, line),)}
+    canvas = render_map(view, MapScene(storms=(StormScene(**segments),)), options=OPEN_SEA)
+    dots = dot_count(canvas)
+    solid = dot_count(
+        render_map(
+            view,
+            MapScene(storms=(StormScene(warnings=(WarningSegment(WatchWarning.HURRICANE_WARNING, line),)),)),
+            options=OPEN_SEA,
+        )
+    )
+    ratio = dots / solid
+    assert {"solid": ratio == 1.0, "dashed": 0.4 < ratio < 0.8, "dotted": 0.1 < ratio < 0.4}[pattern], ratio
 
 
 def test_a_quadrant_without_wind_collapses_to_the_center():
@@ -331,7 +360,7 @@ def test_outlook_areas_are_hatched_by_risk_and_labelled():
     row = next(r for r, line in enumerate(labelled.lines()) if "70%" in line)
     col = labelled.lines()[row].index("70%")
     assert abs(col + 1 - 50) <= 2 and abs(row - 15) <= 1  # at the middle of the box
-    assert labelled.cell(col, row)[1] == (risk_color("high"), None, True)
+    assert labelled.cell(col, row)[1] == Style(risk_color("high"), None, True)
 
 
 def test_unknown_risk_is_neutral_and_lightly_hatched():
@@ -353,16 +382,16 @@ def test_buoys_are_colored_by_wind_and_dim_when_stale():
     buoys = (StationMark(30.0, -75.0, 50.0), StationMark(31.0, -75.0, 20.0), StationMark(32.0, -75.0, None),
              StationMark(29.0, -75.0, 70.0, stale=True))  # fmt: skip
     canvas = render_map(view, MapScene(buoys=buoys), options=OPEN_SEA)
-    assert cell_of(canvas, view, 30.0, -75.0) == ("●", (wind_band_color(50.0), None, True))
-    assert cell_of(canvas, view, 31.0, -75.0) == ("●", (STYLE.buoy, None, False))
+    assert cell_of(canvas, view, 30.0, -75.0) == ("●", Style(category_color(50.0), None, True))
+    assert cell_of(canvas, view, 31.0, -75.0) == ("●", Style(STYLE.buoy, None, False))
     assert cell_of(canvas, view, 32.0, -75.0)[1].fg == STYLE.buoy
-    assert cell_of(canvas, view, 29.0, -75.0) == ("●", (STYLE.stale, None, False))
+    assert cell_of(canvas, view, 29.0, -75.0) == ("●", Style(STYLE.stale, None, False))
 
 
 def test_tide_gauges_have_their_own_glyph_and_color():
     view = Viewport(30.0, -75.0, 0.1, 100, 30)
     canvas = render_map(view, MapScene(tide_gauges=(StationMark(30.0, -75.0),)), options=OPEN_SEA)
-    assert cell_of(canvas, view, 30.0, -75.0) == ("▲", (STYLE.tide_gauge, None, False))
+    assert cell_of(canvas, view, 30.0, -75.0) == ("▲", Style(STYLE.tide_gauge, None, False))
     ascii_canvas = render_map(Viewport(30.0, -75.0, 0.2, 100, 30, 1, 2),
                               MapScene(tide_gauges=(StationMark(30.0, -75.0),), buoys=(StationMark(31.0, -75.0),)),
                               Mode.ASCII, OPEN_SEA)  # fmt: skip
@@ -394,7 +423,10 @@ def test_a_label_with_no_room_is_dropped_not_squeezed_in():
 def test_the_cursor_is_the_top_layer():
     view = Viewport(30.0, -75.0, 0.1, 100, 30)
     scene = MapScene(buoys=(StationMark(30.0, -75.0, 60.0),), cursor=(30.0, -75.0))
-    assert cell_of(render_map(view, scene, options=OPEN_SEA), view, 30.0, -75.0) == ("┼", (STYLE.cursor, None, True))
+    assert cell_of(render_map(view, scene, options=OPEN_SEA), view, 30.0, -75.0) == (
+        "┼",
+        Style(STYLE.cursor, None, True),
+    )
     ascii_view = Viewport(30.0, -75.0, 0.2, 100, 30, 1, 2)
     assert "+" in render_map(ascii_view, MapScene(cursor=(30.0, -75.0)), Mode.ASCII, OPEN_SEA).to_text()
 

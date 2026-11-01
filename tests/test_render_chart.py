@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from eyewall.render.canvas import Mode
+from eyewall.render.canvas import Mode, Style
 from eyewall.render.chart import (
     ChartSeries,
     ChartStyle,
@@ -136,7 +136,7 @@ def test_series_are_colored_and_the_legend_names_each_one():
     assert {GREEN, ORANGE} <= found
     assert canvas.lines()[0].startswith("■ wind kt  ■ gust kt")
     legend = [canvas.cell(c, 0) for c in range(canvas.cols)]
-    assert ("■", (GREEN, None, False)) in legend and ("■", (ORANGE, None, False)) in legend
+    assert ("■", Style(GREEN, None, False)) in legend and ("■", Style(ORANGE, None, False)) in legend
 
 
 def test_a_gap_in_the_data_breaks_the_line():

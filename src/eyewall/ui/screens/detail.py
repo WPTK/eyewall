@@ -14,10 +14,10 @@ from textual.screen import Screen
 from textual.widgets import DataTable, OptionList, Static, TabbedContent, TabPane
 
 from eyewall.config import watchlist_ids
+from eyewall.palette import ACCENT, DIM
 from eyewall.ui import format as fmt
 from eyewall.ui import products
 from eyewall.ui import stations as st
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.gallery import GalleryPanel
 from eyewall.ui.widgets.station_table import StationTable
 
@@ -114,7 +114,7 @@ class StormDetailScreen(Screen[None]):
         title = self.query_one("#detail-title", Static)
         if state is None:
             title.update(
-                Text(f" {self.storm_id.upper()} is no longer active. Press Esc to go back.", style="bold #ffa63d")
+                Text(f" {self.storm_id.upper()} is no longer active. Press Esc to go back.", style=f"bold {ACCENT}")
             )
             return
         now, preset, tz, g = eye.now(), eye.preset, eye.local_tz, eye.glyphs

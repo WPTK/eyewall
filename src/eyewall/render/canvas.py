@@ -87,11 +87,13 @@ _PATTERNS: dict[Shade, tuple[tuple[bool, ...], ...]] = {
 
 
 class Style(NamedTuple):
-    """How a run of text is drawn. Colors are hex strings such as '#ff4d4d'; None is the terminal default."""
+    """How a run of text is drawn. Colors are hex strings from the palette; None is the terminal default."""
 
     fg: str | None = None
     bg: str | None = None
     bold: bool = False
+    underline: bool = False
+    reverse: bool = False
 
 
 Run = tuple[str, Style]

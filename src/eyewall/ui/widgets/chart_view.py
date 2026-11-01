@@ -11,9 +11,9 @@ from textual.message import Message
 from textual.strip import Strip
 from textual.widget import Widget
 
+from eyewall.palette import DIM
 from eyewall.render.canvas import Mode
 from eyewall.render.chart import ChartSeries, Tick, gutter_width, render_chart
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.strips import blank, canvas_strips
 
 

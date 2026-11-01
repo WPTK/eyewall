@@ -1,12 +1,87 @@
-"""Colors and categories for storms, watches and warnings, invest risk and buoy winds.
+"""Every color and every non-color cue the interface uses. This is the only module that holds a hex literal.
+
+Each meaningful state (category, watch or warning kind, outlook risk, freshness, alert severity, tide difference,
+pressure trend) is a `Cue`: a color plus a word, a short word, a Unicode and an ASCII glyph, a line pattern for the map
+and an emphasis. Colour never carries a meaning alone, so with `NO_COLOR` set the words, glyphs, patterns and emphasis
+still tell the states apart.
 
 Category order follows the Saffir-Simpson scale. The hex values are tuned for dark terminals; watch and warning colors
 follow the conventional NHC reading (tropical storm watch yellow, warning blue, hurricane watch pink, warning red).
+One wind scale: a wind of X knots is `category_color(X)` everywhere (panel label, ring, track, buoy number), and it is
+neutral below 34 knots.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
+
+# Line patterns as (dots on, dots off); None is solid. Each map element that needs telling apart without colour gets
+# its own: rings by strength, watch and warning lines by kind.
+Pattern = tuple[int, int] | None
+SOLID: Pattern = None
+DASHED: Pattern = (6, 3)
+DOTTED: Pattern = (1, 3)
+
+# A sample stroke of each pattern for the map key, as (Unicode, ASCII).
+PATTERN_SAMPLES: dict[Pattern, tuple[str, str]] = {
+    SOLID: ("───", "---"),
+    DASHED: ("╌╌╌", "- -"),
+    DOTTED: ("┈┈┈", "..."),
+}
+
+# Chrome.
+BACKGROUND = "#0d1117"
+SURFACE = "#121a24"
+PANEL = "#17212d"
+FOREGROUND = "#e6edf5"
+DIM = "#7d8a99"
+ACCENT = "#ffa63d"
+GOOD = "#3ddc84"
+WARN = "#ffe94a"
+BAD = "#ff4d4d"
+INFO = "#4aa3ff"
+HEADING = "#8fd3ff"
+NEUTRAL = "#9aa4b2"
+
+# Map tones that carry no meaning of their own.
+LAND = "#3a4658"
+COAST = "#9fb3c8"
+BORDER = "#6e7f94"
+STATE_LINE = "#4a5668"
+CONE_FILL = "#66758a"
+CONE_EDGE = "#e6edf5"
+MAP_LABEL = "#c9d3de"
+BUOY = "#8fd3ff"
+TIDE_GAUGE = "#5eead4"
+STALE = "#566273"
+CURSOR = "#ffffff"
+
+# Chart furniture and series.
+CHART_AXIS = "#8b98a9"
+CHART_GRID = "#2b3544"
+CHART_TEXT = "#c9d3de"
+PRESSURE_SERIES = INFO
+WIND_SERIES = GOOD
+GUST_SERIES = ACCENT
+WAVE_SERIES = HEADING
+
+
+@dataclass(frozen=True, slots=True)
+class Cue:
+    """One meaningful state in every form it can take. `emphasis` is a rich style word such as 'bold'."""
+
+    color: str
+    word: str
+    short: str
+    glyph: str = ""
+    ascii_glyph: str = ""
+    pattern: Pattern = SOLID
+    emphasis: str = ""
+
+    def style(self) -> str:
+        """The rich style string: emphasis first, then the color."""
+        return f"{self.emphasis} {self.color}".strip()
 
 
 class Category(StrEnum):
@@ -40,15 +115,21 @@ def category_for_knots(wind_kt: float | None) -> Category | None:
     return Category.TD
 
 
-CATEGORY_COLORS: dict[Category, str] = {
-    Category.TD: "#4aa3ff",
-    Category.TS: "#3ddc84",
-    Category.H1: "#ffe94a",
-    Category.H2: "#ffa63d",
-    Category.H3: "#ff4d4d",
-    Category.H4: "#ff4fd8",
-    Category.H5: "#b36bff",
+CATEGORY_CUES: dict[Category, Cue] = {
+    Category.TD: Cue(NEUTRAL, "Tropical Depression", "TD"),
+    Category.TS: Cue("#3ddc84", "Tropical Storm", "TS"),
+    Category.H1: Cue("#ffe94a", "Hurricane Category 1", "Cat 1"),
+    Category.H2: Cue("#ffa63d", "Hurricane Category 2", "Cat 2"),
+    Category.H3: Cue("#ff4d4d", "Hurricane Category 3", "Cat 3"),
+    Category.H4: Cue("#ff4fd8", "Hurricane Category 4", "Cat 4"),
+    Category.H5: Cue("#b36bff", "Hurricane Category 5", "Cat 5"),
 }
+CATEGORY_COLORS: dict[Category, str] = {category: cue.color for category, cue in CATEGORY_CUES.items()}
+
+# The wind radii rings, by the speed they enclose: each gets its own pattern, and the map key names them.
+RING_KNOTS = (34, 50, 64)
+RING_PATTERNS: dict[int, Pattern] = {34: DOTTED, 50: DASHED, 64: SOLID}
+RING_PATTERN_NAMES: dict[int, str] = {34: "dotted", 50: "dashed", 64: "solid"}
 
 
 class WatchWarning(StrEnum):
@@ -62,38 +143,75 @@ class WatchWarning(StrEnum):
     SURGE_WARNING = "SURGE_WARNING"
 
 
-WATCH_WARNING_COLORS: dict[WatchWarning, str] = {
-    WatchWarning.TROPICAL_STORM_WATCH: "#ffe94a",
-    WatchWarning.TROPICAL_STORM_WARNING: "#4aa3ff",
-    WatchWarning.HURRICANE_WATCH: "#ff8fcf",
-    WatchWarning.HURRICANE_WARNING: "#ff4d4d",
-    WatchWarning.SURGE_WATCH: "#c8a8ff",
-    WatchWarning.SURGE_WARNING: "#9b4dff",
+# A warning is solid, a watch dashed and a surge line dotted.
+WATCH_WARNING_CUES: dict[WatchWarning, Cue] = {
+    WatchWarning.TROPICAL_STORM_WATCH: Cue("#ffe94a", "Tropical Storm Watch", "TS watch", pattern=DASHED),
+    WatchWarning.TROPICAL_STORM_WARNING: Cue("#4aa3ff", "Tropical Storm Warning", "TS warning"),
+    WatchWarning.HURRICANE_WATCH: Cue("#ff8fcf", "Hurricane Watch", "Hurr watch", pattern=DASHED),
+    WatchWarning.HURRICANE_WARNING: Cue("#ff4d4d", "Hurricane Warning", "Hurr warning"),
+    WatchWarning.SURGE_WATCH: Cue("#c8a8ff", "Storm Surge Watch", "Surge watch", pattern=DOTTED),
+    WatchWarning.SURGE_WARNING: Cue("#9b4dff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
+}
+WATCH_WARNING_COLORS: dict[WatchWarning, str] = {kind: cue.color for kind, cue in WATCH_WARNING_CUES.items()}
+
+# NHC's outlook risk labels for the 2-day and 7-day formation chance. The map shades them by hatch density.
+RISK_CUES: dict[str, Cue] = {
+    "low": Cue("#ffe94a", "Low", "low"),
+    "medium": Cue("#ffa63d", "Medium", "medium"),
+    "high": Cue("#ff4d4d", "High", "high"),
+}
+RISK_COLORS: dict[str, str] = {risk: cue.color for risk, cue in RISK_CUES.items()}
+
+# Freshness of a feed, keyed by `poll.FreshnessState` value.
+FRESHNESS_CUES: dict[str, Cue] = {
+    "fresh": Cue(GOOD, "ok", "ok", "●", "*"),
+    "stale": Cue(WARN, "stale", "stale", "◐", "~"),
+    "error": Cue(BAD, "failing", "fail", "✕", "x"),
+    "loading": Cue(DIM, "loading", "load", "○", "o"),
 }
 
-# NHC's outlook risk labels for the 2-day and 7-day formation chance.
-RISK_COLORS: dict[str, str] = {"low": "#ffe94a", "medium": "#ffa63d", "high": "#ff4d4d"}
+# Alert severity, keyed by `models.events.Severity` value.
+SEVERITY_CUES: dict[str, Cue] = {
+    "info": Cue(HEADING, "Info", "info"),
+    "notice": Cue(WARN, "Notice", "notice"),
+    "warning": Cue(BAD, "Warning", "warn", "!", "!"),
+}
 
-NEUTRAL = "#9aa4b2"
+# A three hour pressure change: falling by a hectopascal or more is flagged, by three or more is rapid.
+PRESSURE_TREND_CUES: dict[str, Cue] = {
+    "rapid fall": Cue(BAD, "falling fast", "fall fast", "↓", "v", emphasis="bold"),
+    "fall": Cue(ACCENT, "falling", "falling", "↓", "v", emphasis="bold"),
+    "steady": Cue(DIM, "steady", "steady", "→", "="),
+    "rise": Cue(DIM, "rising", "rising", "↑", "^"),
+}
+
+# Tide gauge height above the predicted tide, in feet, largest first; at or below -1 ft is its own state.
+TIDE_DIFFERENCE_CUES: tuple[tuple[float, Cue], ...] = (
+    (4.0, Cue(BAD, "4 ft or more above", "+4 ft", emphasis="bold")),
+    (2.0, Cue(ACCENT, "2 ft or more above", "+2 ft", emphasis="bold")),
+    (1.0, Cue(WARN, "1 ft or more above", "+1 ft", emphasis="bold")),
+)
+TIDE_BELOW_CUE = Cue(HEADING, "1 ft or more below", "-1 ft")
+
+
+def risk_cue(risk: str | None) -> Cue | None:
+    """The cue for an outlook risk label such as Low, Medium or High; None for an unknown label."""
+    return RISK_CUES.get((risk or "").strip().lower())
 
 
 def risk_color(risk: str | None) -> str:
     """Color for an outlook risk label such as Low, Medium or High. Unknown labels are neutral."""
-    return RISK_COLORS.get((risk or "").strip().lower(), NEUTRAL)
+    cue = risk_cue(risk)
+    return NEUTRAL if cue is None else cue.color
 
 
 def category_color(wind_kt: float | None) -> str:
-    """Color for a wind speed in knots through its storm category. Neutral when the wind is unknown."""
+    """The one wind color scale: a wind of this many knots, for a mark, track, ring, number or label. Neutral below
+    34 knots and when the wind is unknown."""
     category = category_for_knots(wind_kt)
     return NEUTRAL if category is None else CATEGORY_COLORS[category]
 
 
-def wind_band_color(wind_kt: float | None) -> str | None:
-    """Color for a buoy or station wind against NHC's 34, 50 and 64 knot thresholds. None below 34 kt."""
-    if wind_kt is None or wind_kt < 34:
-        return None
-    if wind_kt < 50:
-        return "#ffe94a"
-    if wind_kt < 64:
-        return "#ffa63d"
-    return "#ff4d4d"
+def storm_force(wind_kt: float | None) -> bool:
+    """Whether a wind reaches tropical storm strength (34 knots), where the wind scale starts to color it."""
+    return wind_kt is not None and wind_kt >= 34.0

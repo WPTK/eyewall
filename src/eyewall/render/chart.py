@@ -11,6 +11,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from eyewall.palette import CHART_AXIS, CHART_GRID, CHART_TEXT
 from eyewall.render.canvas import Canvas, Mode, Priority
 
 Point = tuple[float, float | None]  # (x, y); a y of None is a gap in the trace
@@ -31,9 +32,9 @@ class Tick:
 
 @dataclass(frozen=True)
 class ChartStyle:
-    axis: str = "#8b98a9"
-    grid: str = "#2b3544"
-    text: str = "#c9d3de"
+    axis: str = CHART_AXIS
+    grid: str = CHART_GRID
+    text: str = CHART_TEXT
 
 
 DEFAULT_STYLE = ChartStyle()

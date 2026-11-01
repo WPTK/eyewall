@@ -20,9 +20,9 @@ from textual.widgets import Static
 
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
+from eyewall.palette import ACCENT, DIM, HEADING
 from eyewall.providers.base import ParseError
 from eyewall.ui import stations as st
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.units import LABELS
 
@@ -130,13 +130,13 @@ class BuoyDetailScreen(Screen[None]):
         station = store.stations.get(self.station_id)
         state = st.buoy_state(store, self.station_id, now)
         head = Text(no_wrap=True, overflow="ellipsis")
-        head.append(f" {self.station_id} ", style="bold #8fd3ff")
+        head.append(f" {self.station_id} ", style=f"bold {HEADING}")
         head.append(" ".join(station.name.split()) if station else "", style="bold")
         if station is not None:
             head.append(f"  {abs(station.lat):.2f}{'N' if station.lat >= 0 else 'S'} ", style=DIM)
             head.append(f"{abs(station.lon):.2f}{'E' if station.lon >= 0 else 'W'}", style=DIM)
         if state in ("silent", "dark"):
-            head.append(f"  {st.NOT_REPORTING}", style="bold #ffa63d")
+            head.append(f"  {st.NOT_REPORTING}", style=f"bold {ACCENT}")
         elif state == "waiting":
             head.append("  waiting for data", style=DIM)
         head.append(f"  {self.hours} h", style=DIM)

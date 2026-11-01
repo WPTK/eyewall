@@ -29,6 +29,7 @@ from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
 from eyewall.net import FetchError
+from eyewall.palette import DIM
 from eyewall.render.canvas import Mode
 from eyewall.render.images import (
     Depth,
@@ -41,7 +42,6 @@ from eyewall.render.images import (
     render_fallback,
 )
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.strips import blank, centered
 from eyewall.urls import is_noaa_url
 
