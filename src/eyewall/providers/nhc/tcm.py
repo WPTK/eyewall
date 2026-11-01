@@ -26,6 +26,7 @@ from eyewall.models.wind import QuadrantRadii, SeasRadii, WindRadii
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.ids import parse_adv_num
 from eyewall.providers.nhc.times import parse_header_time, resolve_day_time
+from eyewall.textclean import printable
 
 # Longest first, so POTENTIAL TROPICAL CYCLONE is not read as TROPICAL CYCLONE.
 _KINDS = (
@@ -147,7 +148,7 @@ def parse_tcm(text: str | bytes) -> ForecastAdvisory:
     """Parse a forecast/advisory. Raises ParseError when the text is not one (no heading or no center line)."""
     if isinstance(text, bytes):
         text = text.decode("utf-8", errors="replace")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = printable(text.replace("\r\n", "\n").replace("\r", "\n"))
     heading = _HEADING.search(text)
     center = _CENTER.search(text)
     if heading is None or center is None:

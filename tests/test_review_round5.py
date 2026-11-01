@@ -179,7 +179,7 @@ def test_words_and_wrapped_text_are_cleaned():
 def test_a_manifest_with_escapes_in_its_names_is_cleaned(tmp_path):
     from eyewall.sources.bundle import Manifest, read_manifest, write_manifest
 
-    manifest = Manifest("demo[2J", "al052025", "ERIN]0;x", "AT5", T0, T0, title="Title")
+    manifest = Manifest("demo\x1b[2J", "al052025", "ERIN\x1b]0;x", "AT5", T0, T0, title="T\x1bitle")
     write_manifest(tmp_path, manifest)
     read = read_manifest(tmp_path)
     assert (read.name, read.storm_name, read.title) == ("demo[2J", "ERIN]0;x", "Title")
@@ -196,3 +196,19 @@ async def test_toasts_are_shown_as_plain_text(monkeypatch):
         monkeypatch.setattr(app, "notify", lambda message, **kw: seen.append({"message": message, **kw}))
         app._show_events([event])
     assert seen and all(call["markup"] is False for call in seen)
+
+
+def test_escape_sequences_in_advisory_bodies_are_stripped_at_parse():
+    from eyewall.providers.nhc.tcm import parse_tcm
+    from eyewall.providers.nhc.text import parse_tcd, parse_tcp, parse_two
+    from tests.nhc_fixtures import nhc_text
+
+    raw = nhc_text("tcp/erin_030.txt")
+    dirty = raw.replace("SUMMARY OF", "\x1b[2J\x07SUMMARY OF", 1).replace("HURRICANE", "HURRI\x1b]0;x\x07CANE")
+    assert "\x1b" in dirty
+    public = parse_tcp(dirty)
+    assert "\x1b" not in repr(public) and "\x07" not in repr(public)
+    for fixture, parser in (("tcd/erin_030.txt", parse_tcd), ("tcm/erin_030.txt", parse_tcm)):
+        body = nhc_text(fixture).replace("ERIN ", "ERIN\x1b\x07 ", 1)
+        assert "\x1b" not in repr(parser(body))
+    assert callable(parse_two)

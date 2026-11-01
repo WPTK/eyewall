@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from eyewall.textclean import printable
+
 _STORM_ID = re.compile(r"\b(?P<id>(?:AL|EP|CP)\d{6})\b", re.IGNORECASE)
 _NUMBERED = re.compile(r"^\s*(?P<number>\d+)\.\s+")
 _FORECASTER = re.compile(r"^\s*Forecasters?\s+(?P<name>\S.*?)\s*$", re.IGNORECASE | re.MULTILINE)
@@ -12,7 +14,7 @@ _FORECASTER = re.compile(r"^\s*Forecasters?\s+(?P<name>\S.*?)\s*$", re.IGNORECAS
 def normalize_newlines(text: str | bytes) -> str:
     if isinstance(text, bytes):
         text = text.decode("utf-8", errors="replace")
-    return text.replace("\r\n", "\n").replace("\r", "\n")
+    return printable(text.replace("\r\n", "\n").replace("\r", "\n"))  # no escape sequence reaches a screen
 
 
 def collapse(text: str) -> str:
