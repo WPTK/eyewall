@@ -192,3 +192,14 @@ async def test_an_outlook_area_leaves_out_the_panels_with_nothing_to_show(size) 
         assert "Select a storm" not in screen_text(app)
         if size[0] >= 110:
             assert panels["headline"].region.height <= panels["headline"].body.outer_size.height + 2  # no empty band
+
+
+async def test_the_wind_panel_never_ends_on_the_radii_header_alone() -> None:
+    app = replay_app()
+    async with running(app, (120, 30)) as pilot:
+        await into_the_storm(pilot)
+        wind = _stack(app)["wind"]
+        shown = str(wind.body.render()).splitlines()[: wind.size.height]
+        assert any(line.startswith("Radii") for line in shown)
+        header = next(i for i, line in enumerate(shown) if line.startswith("Radii"))
+        assert header + 1 < len(shown) and shown[header + 1].split()[0].isdigit()  # a threshold row follows it

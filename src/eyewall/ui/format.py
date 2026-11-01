@@ -389,7 +389,8 @@ def wind_panel(store: Store, selected: str | None, preset: Preset) -> Text:
     out.append("\n")
     if tcm is not None and not tcm.radii.empty:
         unit = preset.distance
-        out.append(f"\nRadii ({unit})".ljust(11) + "  NE   SE   SW   NW\n", style=DIM)
+        # No blank line above the header: a short panel scrolls, and a blank row could leave it alone at the bottom.
+        out.append(f"Radii ({unit})".ljust(10) + "  NE   SE   SW   NW\n", style=DIM)
         for kt in (34, 50, 64):
             radii = tcm.radii.for_threshold(kt)
             if radii is not None:
@@ -500,7 +501,7 @@ def status_bar(
     width: int,
     g: UiGlyphs,
 ) -> Text:
-    """The feed health, the offline marker, the alert count, the replay transport, the away marker and the next
+    """The feed health, the offline marker, the alert count, the replay transport, the idle marker and the next
     poll on one line that fits `width` cells.
 
     Nothing is truncated: a segment first takes a shorter wording, then goes whole, lowest priority first (see
@@ -529,9 +530,10 @@ def status_bar(
     if next_poll is not None:
         segments["next"] = [Text(f"next {format_age(next_poll)}", style=DIM)]
     if away:
-        segments["away"] = [Text("away", style="#ffe94a")]
+        segments["away"] = [Text("idle", style="#ffe94a")]
     if alert_count:
-        segments["alerts"] = [Text(f"{g.alert}{alert_count}", style="bold #ffa63d")]
+        noun = "alert" if alert_count == 1 else "alerts"
+        segments["alerts"] = [Text(f"{alert_count} {noun}", style="bold #ffa63d")]
     if replay is not None:
         mark = g.pause if replay.paused else g.play
         speed = "over" if replay.over else f"{replay.speed}x"
