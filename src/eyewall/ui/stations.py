@@ -6,6 +6,7 @@ unit NOAA reported and are converted here through a `units.Preset`.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, tzinfo
@@ -328,6 +329,14 @@ def chart_series(
         "wind": [line("wind", WIND_SERIES, wind), line("gust", GUST_SERIES, gust)],
         "wave": [line("wave", WAVE_SERIES, wave)],
     }
+
+
+def speed_range(series: Sequence[ChartSeries]) -> tuple[float, float] | None:
+    """The y axis for a wind chart: zero to the strongest gust or wind with a tenth of headroom, and never less than
+    10, so a calm day does not stretch a breath of wind over the whole plot. The auto axis rounds up to a tick, which
+    on a chart this short is 50 or 100 for a 60 kt gust. None when there is nothing to plot."""
+    peak = max((y for s in series for _, y in s.points if y is not None), default=None)
+    return None if peak is None else (0.0, max(10.0, float(math.ceil(peak * 1.1))))
 
 
 def has_points(series: Sequence[ChartSeries]) -> bool:
