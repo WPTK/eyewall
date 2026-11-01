@@ -24,7 +24,7 @@ from eyewall.app import EyewallApp
 from eyewall.ui.screens.small import TooSmallScreen
 from tests.ui_support import press, screen_text, settle
 
-SIZES = [(80, 24), (120, 30)]  # the floor and the main size; most scenarios run at both
+SIZES = [(80, 24), (100, 40), (120, 30)]  # the floor, a tall-narrow size and the main size; most scenarios run at all
 EXTRA_SIZES = [(100, 50), (200, 50), (280, 70)]  # tall-narrow and large terminals, for the every-screen sweep
 STATUS_IDS = (
     "#status",

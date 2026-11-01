@@ -29,6 +29,7 @@
 - Add place names and a scale bar to the map ([`863e5b0`](https://github.com/WPTK/eyewall/commit/863e5b0), [#118](https://github.com/WPTK/eyewall/pull/118))
 - Add hover names, drag to pan and `n`, `N` and `Enter` stepping to the map's marks ([`6c85034`](https://github.com/WPTK/eyewall/commit/6c85034), [#119](https://github.com/WPTK/eyewall/pull/119))
 - Keep bold, underline and reverse video on the map and charts when `NO_COLOR` is set ([`cb806d9`](https://github.com/WPTK/eyewall/commit/cb806d9), [#117](https://github.com/WPTK/eyewall/pull/117))
+- Add `Tab` on the Station screen to show the next chart when the screen is too short for all of them ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
 - Add the last traceback to the feed canary issue ([`0ac3d0b`](https://github.com/WPTK/eyewall/commit/0ac3d0b), [#25](https://github.com/WPTK/eyewall/pull/25))
 
 ### Removed
@@ -38,6 +39,14 @@
 
 ### Fixed
 
+- Fix a corrupt NHC zip raising `NotImplementedError` instead of a parse error ([`ec6c656`](https://github.com/WPTK/eyewall/commit/ec6c656), [#123](https://github.com/WPTK/eyewall/pull/123))
+- Fix the alert log order, which followed arrival instead of the time of each event ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the map legend, which did not name the marked storm or station and put each line sample after its label ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix station charts not fitting short screens and chart legends cut mid-name ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix feed failures shown as raw error text; the feed list and the main screen now say in plain words why, and when the next try is ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the offline wording on the main screen and feed list, which now says the saved copy is shown because the network is not answering ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the Pictures layout: hide the list when there is one picture, keep the keys working there and drop recording paths ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
+- Fix the dim purple surge warning heading under `NO_COLOR` ([`4d5deff`](https://github.com/WPTK/eyewall/commit/4d5deff), [#126](https://github.com/WPTK/eyewall/pull/126))
 - Fix the track line leaving a gap when the storm center is newer than the last best-track fix ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
 - Fix a watchlisted tide gauge missing from the CO-OPS catalog showing "waiting" instead of "unknown" ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))
 - Fix duplicate storm ids in the CurrentStorms feed and uncapped shapefile zip members ([`82daa00`](https://github.com/WPTK/eyewall/commit/82daa00), [#26](https://github.com/WPTK/eyewall/pull/26))

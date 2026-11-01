@@ -82,6 +82,7 @@ On the other screens:
 | Buoys and gauges | `Enter` | Open the highlighted station |
 | Buoys and gauges | `f`, `s`, `Tab` | Follow or stop following; change the order; switch tabs |
 | Station | `f`, `m` | Follow or stop following; show the station on the map |
+| Station | `Tab` | On a short screen, show the next chart |
 | Station | `h`, `r`, `i` | 24, 48 or 72 hours; charts or readings; how buoy winds differ from the storm's |
 | Pictures | `o`, `y` | Open the picture's address in a browser; copy it |
 | Pictures | `[`, `]`, `Space` | Step through a loop; play or pause |
