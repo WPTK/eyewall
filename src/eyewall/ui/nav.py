@@ -182,6 +182,14 @@ KEYS: tuple[Key, ...] = (
     K("station", "f", "follow", "follow", "follow or stop following this station", footer=True),
     K("station", "h", "range", "24/48/72 h", "show 24, 48 or 72 hours", footer=True),
     K("station", "r", "view", "readings", "switch between the charts and the table of readings", footer=True),
+    K(
+        "station",
+        "tab",
+        "next_chart",
+        "more charts",
+        "when the screen is too short for every chart, show the next one",
+        priority=True,
+    ),
     K("station", "m", "show_on_map", "map", "show this station on the map", footer=True),
     K("station", "i", "about", "about winds", "how buoy winds differ from the storm's winds", footer=True),
     # ---- alert log ----

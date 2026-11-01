@@ -54,7 +54,9 @@ class View:
     ascii: bool = False
     rich: bool = False  # the wide tier: a card says more
     storms_old: bool = False  # the storm feed has stopped updating: what is shown is the last it said
-    storms_age: float | None = None  # seconds since the storm feed last answered
+    storms_age: float | None = None  # seconds since the storm feed last answered; None when the copy is a cached one
+    no_color: bool = False  # NO_COLOR is set: colors are shown as greys by brightness, so a cue must not rely on one
+    storms_cached: bool = False  # the storm feed is answering from the disk cache: its age is not known
 
     @classmethod
     def of(cls, eye: EyewallApp, states: tuple[StormState, ...], *, rich: bool = False) -> View:
@@ -73,7 +75,9 @@ class View:
             basins=eye.basin_view,
             replay_offer=DEMO_TITLE if eye.replay_available() else None,
             storms_old=old,
-            storms_age=fresh.age,
+            storms_age=None if fresh.from_cache else fresh.age,
+            storms_cached=fresh.from_cache,
+            no_color=eye.no_color,
             storms_known=eye.store.storms_loaded,
             failed=failed,
             ascii=eye.config.map.glyph_set == "ascii",

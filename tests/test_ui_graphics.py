@@ -146,7 +146,7 @@ async def pick(pilot, panel: GalleryPanel, title: str) -> None:  # type: ignore[
 # ---- the pictures screen -----------------------------------------------------------------------------------------------
 
 
-async def test_the_pictures_screen_lists_the_images_and_draws_the_cone_with_its_address() -> None:
+async def test_the_pictures_screen_lists_the_images_and_draws_the_cone() -> None:
     source = ImageSource()
     app = app_for(source)
     async with running(app) as pilot:
@@ -159,7 +159,7 @@ async def test_the_pictures_screen_lists_the_images_and_draws_the_cone_with_its_
         titles = current_titles(panel)
         assert titles[0] == "Cone, 5 day"
         assert "GEOCOLOR still" in titles and "GEOCOLOR loop" in titles
-        assert "replay:graphics/cone_038.png" in caption(panel)
+        assert "replay:" not in caption(panel)  # a recording's address means nothing to a reader
         assert view_text(panel).strip()  # the fallback drew cells
         assert source.fetched == ["replay:graphics/cone_038.png"]
 

@@ -99,7 +99,7 @@ class ImageView(Widget):
         return centered(self._lines[index], width)
 
 
-class GalleryPanel(Vertical):
+class GalleryPanel(Vertical, can_focus=True):
     """One storm's images. `set_active` says whether it is on screen; nothing is fetched or played while it is not."""
 
     NAV_SCOPES = ("gallery",)
@@ -183,9 +183,23 @@ class GalleryPanel(Vertical):
                 listing.highlighted = index
         finally:
             self._populating = False
+        self._show_list(len(items) > 1)
         if not items:
             self._drop_picture()
             self._say(self._empty_message())
+
+    def _show_list(self, show: bool) -> None:
+        """The list is there to choose between pictures; with one (or none) the picture takes the whole width."""
+        listing = self.query_one("#gal-list", OptionList)
+        had_focus = listing.has_focus
+        listing.display = show
+        if had_focus and not show:
+            self.focus()  # the keys of the gallery belong to the panel; they need focus somewhere inside it
+
+    def focus_list(self) -> None:
+        """Put the focus where the gallery's keys work: on the list when it is shown, else on the panel."""
+        listing = self.query_one("#gal-list", OptionList)
+        (listing if listing.display else self).focus()
 
     def _empty_message(self) -> str:
         if self.storm_id not in self.eye.store.storms:
@@ -377,7 +391,8 @@ class GalleryPanel(Vertical):
                 text.append(f"   frame {cursor.index + 1}/{cursor.count} {state}", style=DIM)
             elif loading:
                 text.append("   loading", style=DIM)
-            text.append(f"\n {item.url}", style=DIM)
+            if item.url.startswith(("http://", "https://")):  # a recording's address means nothing to a reader
+                text.append(f"\n {item.url}", style=DIM)
         self.query_one("#gal-caption", Static).update(text)
 
     def _update_hint(self) -> None:

@@ -88,6 +88,19 @@ class FreshnessState(StrEnum):
     ERROR = "error"
 
 
+def plain_reason(error: Exception) -> str:
+    """A failed fetch in words a person can read: what went wrong, not which class raised it or which URL."""
+    if isinstance(error, RateLimited):
+        return "NOAA asked eyewall to slow down"
+    if isinstance(error, HttpError):
+        return f"NOAA answered with an error (HTTP {error.status})"
+    if isinstance(error, ParseError):
+        return "NOAA sent something eyewall could not read"
+    if isinstance(error, TimeoutError | FetchError):
+        return "could not reach NOAA"
+    return "the feed could not be read"
+
+
 @dataclass(frozen=True, slots=True)
 class Freshness:
     state: FreshnessState = FreshnessState.LOADING
@@ -96,6 +109,7 @@ class Freshness:
     failures: int = 0
     error: str | None = None
     from_cache: bool = False
+    reason: str | None = None  # the failure in plain words, for the feed list: no exception names or addresses
 
     @property
     def data_old(self) -> bool:
@@ -251,6 +265,10 @@ class Poller:
         waits = [self._feeds[n].next_at for n in protocol.FEEDS if self._enabled(n)]
         return max(0.0, min(waits) - self.clock.monotonic()) if waits else None
 
+    def seconds_until(self, feed: str) -> float:
+        """Seconds until this feed is due again."""
+        return max(0.0, self._feeds[feed].next_at - self.clock.monotonic())
+
     def freshness(self, feed: str) -> Freshness:
         state = self._feeds[feed]
         age = None if state.last_ok is None else max(0.0, self.clock.monotonic() - state.last_ok)
@@ -266,7 +284,8 @@ class Poller:
         error = None
         if state.last_error is not None and state.failures:
             error = f"{type(state.last_error).__name__}: {state.last_error}"
-        return Freshness(kind, age, stale_after, state.failures, error, state.from_cache)
+        reason = plain_reason(state.last_error) if state.last_error is not None and state.failures else None
+        return Freshness(kind, age, stale_after, state.failures, error, state.from_cache, reason)
 
     def active(self, feed: str) -> bool:
         """Whether the feed is being polled now: alerts only during a US threat, stations while a storm exists or the
