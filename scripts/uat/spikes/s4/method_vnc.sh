@@ -17,6 +17,8 @@ run nc -vz 127.0.0.1 5900
 run lsof -nP -iTCP:5900
 } > "$OUT/vnc_enable.txt" 2>&1
 cat "$OUT/vnc_enable.txt"
+"$S4PY" "$S4/rfb_probe.py" > "$OUT/rfb_probe.txt" 2>&1; cat "$OUT/rfb_probe.txt"
+screencapture -x "$OUT/vnc_console_before.png"
 export VNC_SERVER="127.0.0.1::5900" VNC_PW="$PW"
 best=0; export VNC_USER=vncuser
 for u in vncuser runner; do

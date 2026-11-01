@@ -178,8 +178,10 @@ def main():
         script = NL.join(['tell application "Terminal"', "activate", 'do script "' + inner + '"',
                            "set bounds of front window to {40, 60, 900, 660}", "end tell"])
     else:
+        # iTerm opens a default window on launch; reuse it and start the app in its shell (launch only, not the input under test)
         script = NL.join(['tell application id "com.googlecode.iterm2"', "activate",
-                           'create window with default profile command "/bin/bash ' + inner + '"',
+                           "if (count of windows) is 0 then create window with default profile",
+                           'tell current session of current window to write text "exec /bin/bash ' + inner + '"',
                            "set bounds of current window to {40, 60, 900, 660}", "end tell"])
     rc, o = sh(["osascript", "-e", script], timeout=25)
     if rc != 0:
