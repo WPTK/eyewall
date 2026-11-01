@@ -8,8 +8,8 @@ from textual.pilot import Pilot
 
 from eyewall.render.hits import Mark
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.widgets.map_view import MapView, MarkChooser
 from tests.ui_support import into_the_storm, press, replay_app, running, settle
 
@@ -18,11 +18,9 @@ STORM = Mark("storm", "al052025")
 
 
 async def map_of(pilot: Pilot[None]) -> MapView:
-    """The dashboard map, shown (at 80 columns the map is behind the m key)."""
+    """The main screen's map."""
     await into_the_storm(pilot)
     view = pilot.app.screen.query_one(MapView)
-    if view.size.width < 1:
-        await press(pilot, "m")
     assert view.size.width > 10 and view.hits.drawn
     return view
 
@@ -54,7 +52,7 @@ def crowded_cell(view: MapView) -> tuple[int, int]:
 
 async def back(pilot: Pilot[None]) -> None:
     await press(pilot, "escape")
-    assert isinstance(pilot.app.screen, DashboardScreen)
+    assert isinstance(pilot.app.screen, MainScreen)
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -101,7 +99,7 @@ async def test_a_click_two_cells_from_any_mark_only_moves_the_cursor(size: tuple
         view = await map_of(pilot)
         await pilot.click(MapView, offset=empty_cell(view))
         await settle(pilot)
-        assert isinstance(pilot.app.screen, DashboardScreen) and view.cursor is not None
+        assert isinstance(pilot.app.screen, MainScreen) and view.cursor is not None
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -121,7 +119,7 @@ async def test_a_click_on_overlapping_marks_asks_which(size: tuple[int, int]) ->
         if second.kind == "buoy":
             assert isinstance(screen, BuoyDetailScreen) and screen.station_id == second.id.upper()
         else:
-            assert isinstance(screen, DashboardScreen)  # a gauge is pinned; it has no page yet
+            assert isinstance(screen, MainScreen)  # a gauge is pinned; it has no page yet
 
 
 async def test_escape_leaves_the_chooser_without_opening_anything() -> None:
@@ -131,7 +129,7 @@ async def test_escape_leaves_the_chooser_without_opening_anything() -> None:
         await settle(pilot)
         assert isinstance(pilot.app.screen, MarkChooser)
         await press(pilot, "escape")
-        assert isinstance(pilot.app.screen, DashboardScreen)
+        assert isinstance(pilot.app.screen, MainScreen)
         assert view.focused_mark is None
 
 
@@ -147,7 +145,7 @@ async def test_clicking_a_gauge_says_what_it_reads_and_changes_nothing() -> None
         notes = list(pilot.app._notifications)[shown:]
         assert len(notes) == 1 and f"Gauge {mark.id}" in notes[0].message
         assert pilot.app.config is before  # type: ignore[attr-defined]  # nothing was pinned
-        assert isinstance(pilot.app.screen, DashboardScreen)
+        assert isinstance(pilot.app.screen, MainScreen)
 
 
 async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click() -> None:
@@ -165,17 +163,6 @@ async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click(
         assert isinstance(pilot.app.screen, BuoyDetailScreen)
 
 
-async def test_a_map_with_no_room_has_no_marks_and_clicks_nothing() -> None:
-    async with running(replay_app(), (80, 24)) as pilot:
-        await into_the_storm(pilot)
-        view = pilot.app.screen.query_one(MapView)
-        assert view.size.width < 1
-        assert view.hits.drawn == () and view.hits.order == ()
-        view.action_mark(1)
-        view.action_open_mark()
-        assert view.focused_mark is None and isinstance(pilot.app.screen, DashboardScreen)
-
-
 @pytest.mark.parametrize("size", SIZES)
 async def test_dragging_pans_the_map_and_is_not_a_click(size: tuple[int, int]) -> None:
     async with running(replay_app(), size) as pilot:
@@ -191,7 +178,7 @@ async def test_dragging_pans_the_map_and_is_not_a_click(size: tuple[int, int]) -
         assert after is not None and not view.auto_fit
         assert after.center_lon < before.center_lon  # pulled east, so the view moved west
         assert after.center_lat > before.center_lat  # pulled south, so the view moved north
-        assert isinstance(pilot.app.screen, DashboardScreen)  # releasing the button opened nothing
+        assert isinstance(pilot.app.screen, MainScreen)  # releasing the button opened nothing
         moved = view.hits.cell_of(mark)  # the mark followed the pointer, give or take a dot of rounding
         assert moved is not None and max(abs(moved[0] - col - 3), abs(moved[1] - row - 2)) <= 1
 

@@ -1,15 +1,15 @@
-"""Replay start, stepping and ticks, and the dashboard: panels, storm selection, the map and its layers."""
+"""Replay start, stepping and ticks, and the main screen: panels, storm selection, the map and its layers."""
 
 from __future__ import annotations
 
 from datetime import timedelta
 
-from textual.widgets import OptionList, SelectionList, TabbedContent
+from textual.widgets import SelectionList
 
 from eyewall.app import REPLAY_SPEEDS, REPLAY_TICK
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.layers import LayerMenu
-from eyewall.ui.widgets.panels import PANEL_KINDS
+from eyewall.ui.screens.main import MainScreen
 from tests.uat.harness import Journey
 
 
@@ -22,8 +22,8 @@ async def test_replay_start_and_stepping(journey, size) -> None:
     async with journey(size, storm=False) as j:
         await j.shot("start")
         assert j.app.replay is not None and j.app.paused
-        j.see("ERIN")  # the replay opens on the first advisory, not the empty hours before it
-        assert j.app.glyphs.pause in j.bottom() and "replay 300x" in j.bottom()
+        j.see("Erin")  # the replay opens on the first advisory, not the empty hours before it
+        assert j.app.glyphs.pause in j.top()
         first = moment(j)
         await j.keys("right_square_bracket")
         assert moment(j) > first
@@ -39,17 +39,17 @@ async def test_replay_speed_and_pause(journey, size) -> None:
     async with journey(size) as j:
         app = j.app
         await j.keys("greater_than_sign")
-        assert app.speed_index == 2 and f"{REPLAY_SPEEDS[2]}x" in j.bottom()
+        assert app.speed_index == 2
         await j.keys("greater_than_sign", "greater_than_sign")
         assert app.speed_index == len(REPLAY_SPEEDS) - 1  # clamped at the fastest
         await j.shot("fastest")
         await j.keys("less_than_sign", "less_than_sign", "less_than_sign", "less_than_sign")
-        assert app.speed_index == 0 and "60x" in j.bottom()
+        assert app.speed_index == 0
         await j.keys("space")
-        assert not app.paused and app.glyphs.play in j.bottom()
+        assert not app.paused and app.glyphs.play in j.top()
         await j.shot("playing")
         await j.keys("space")
-        assert app.paused and app.glyphs.pause in j.bottom()
+        assert app.paused and app.glyphs.pause in j.top()
         await j.shot("paused")
 
 
@@ -77,25 +77,21 @@ async def test_replay_runs_out_and_steps_back(journey, size) -> None:
         await app._replay_tick()
         await j.settle()
         assert app.replay_over and app.paused
-        assert "replay is over" in j.toasts() and "over" in j.bottom()
+        assert "replay is over" in j.toasts() and "over" in j.top()
         await j.shot("replay-over")
         await j.keys("left_square_bracket")
         assert not app.replay_over
         await j.shot("stepped-back")
 
 
-async def test_dashboard_panels(journey, size) -> None:
+async def test_main_screen_panels(journey, size) -> None:
     async with journey(size) as j:
-        j.see("Storms", "ERIN", "H2")
-        if size[0] >= 110:
-            j.see("Headline", "Watches and warnings", "Wind", "Storm surge")
-            await j.shot("panels")
+        j.see("Hurricane Erin")
+        if size[0] >= 100 and size[1] >= 30:
+            j.see("NAMED STORMS", "WATCHES AND WARNINGS")
         else:
-            tabs = j.screen.query_one("#side-tabs", TabbedContent)
-            for kind, _title, _short in PANEL_KINDS:
-                tabs.active = f"tab-{kind}"
-                await j.shot(f"tab-{kind}")
-                assert tabs.active == f"tab-{kind}"
+            j.see("Erin")
+        await j.shot("main")
 
 
 async def test_storm_selection_and_basins(journey, size) -> None:
@@ -106,12 +102,12 @@ async def test_storm_selection_and_basins(journey, size) -> None:
         assert app.selected == "al052025"
         await j.keys("2")
         assert app.basin_filter == "EP"
-        j.not_see("ERIN")
+        j.not_see("Hurricane Erin")
         await j.shot("east-pacific-only")
         await j.keys("3")
         await j.shot("central-pacific-only")
         await j.keys("1")
-        j.see("ERIN")
+        j.see("Hurricane Erin")
         await j.shot("atlantic-only")
         await j.keys("a")
         assert app.basin_filter is None
@@ -119,13 +115,8 @@ async def test_storm_selection_and_basins(journey, size) -> None:
         assert isinstance(app.screen, StormDetailScreen)
         await j.shot("detail-opened")
         await j.keys("escape")
-        assert isinstance(app.screen.query_one("#storms"), OptionList)
-        await j.shot("back-on-the-dashboard")
-
-
-async def test_the_quiet_basins_line_names_both_basins(journey, size) -> None:
-    async with journey(size) as j:
-        j.see("Pacific: none")  # the quiet basins share one line, abbreviated to fit the narrowest list
+        assert isinstance(app.screen, MainScreen)
+        await j.shot("back-on-the-main-screen")
 
 
 async def test_map_zoom_fit_centre_and_full_screen(journey, size) -> None:

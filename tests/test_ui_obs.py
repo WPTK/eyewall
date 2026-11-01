@@ -23,7 +23,6 @@ from eyewall.models.obs import (
 from eyewall.models.obs import Parsed as ObsParsed
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.detail import StormDetailScreen
-from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.screens.search import SearchScreen
 from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.watchlist import WatchlistScreen
@@ -347,18 +346,14 @@ class QuietDaySource(ScriptedSource):
         return TideSeries(station.id, datum, water_level=ObsParsed((WaterLevelReading(moment, 3.2),)))
 
 
-async def test_a_quiet_day_polls_the_watchlist_and_the_outlook_lists_it() -> None:
+async def test_a_quiet_day_polls_the_watchlist_and_the_main_screen_counts_it() -> None:
     app = scripted_app(QuietDaySource())
     async with running(app) as pilot:
-        await press(pilot, "O")
-        assert isinstance(app.screen, OutlookScreen)
         await wait_until(pilot, lambda: "41010" in app.store.latest)
         await settle(pilot)
-        text = screen_text(app)
-        assert "Watchlist" in text
-        assert "41010" in text
-        assert "42001" in text
-        assert "not reporting" in text or "waiting" in text
+        text = " ".join(screen_text(app).split())
+        assert "YOUR STATIONS" in text and "tide gauge" in text
+        assert "Highest wind" in text or "not reporting" in text
 
 
 async def test_the_watchlist_screen_on_a_quiet_day_opens_a_buoy_with_enter() -> None:

@@ -69,7 +69,7 @@ async def test_buoy_list_charts_ranges_and_pin(journey, size) -> None:
         await j.shot("charts-24h")
         for hours in (*RANGES_H[1:], RANGES_H[0]):
             await j.keys("h")
-            assert f"{hours} h" in j.text().splitlines()[0]
+            assert f"{hours} h" in " ".join(j.text().splitlines()[:3])
             await j.shot(f"range-{hours}h")
         if size[0] < 110:
             await j.keys("i")

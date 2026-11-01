@@ -11,8 +11,8 @@ import pytest
 from eyewall.app import EyewallApp
 from eyewall.config import Config, GraphicsConfig
 from eyewall.net import FetchError
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.screens.small import TooSmallScreen
 from eyewall.ui.widgets.gallery import GalleryPanel, ImageView
 from tests.test_ui_graphics import STILL, ImageSource
@@ -119,7 +119,7 @@ async def test_a_failed_image_says_so(journey, size) -> None:
 async def test_footer_follows_the_focus(journey, size) -> None:
     wide = size[0] >= 110
     async with journey(size) as j:
-        j.footer_has("enter detail")
+        j.footer_has("enter open")
         await j.shot("list-focused")
         if wide:
             await j.keys("tab")
@@ -146,7 +146,7 @@ async def test_footer_follows_the_focus(journey, size) -> None:
 async def test_every_screen_at_the_large_and_tall_sizes(journey, size) -> None:
     async with journey(size) as j:
         await j.shot("dashboard")
-        for key, step in (("O", "outlook"), ("w", "watchlist"), ("A", "alerts")):
+        for key, step in (("w", "watchlist"), ("A", "alerts")):
             await j.keys(key)
             await j.shot(step, footer=key != "A")
             await j.keys("escape")
@@ -166,16 +166,16 @@ async def test_every_screen_at_the_large_and_tall_sizes(journey, size) -> None:
 async def test_resize_across_the_layout_thresholds(journey) -> None:
     async with journey((200, 50)) as j:
         await j.shot("200x50")
-        steps = [(120, 30, False, False), (109, 30, True, False), (89, 30, True, True), (80, 24, True, True)]
-        for width, height, narrow, compact in steps:
+        steps = [(120, 30, "medium"), (109, 30, "medium"), (99, 40, "small"), (80, 24, "small")]
+        for width, height, tier in steps:
             await j.resize(width, height)
-            dash = j.screen
-            assert isinstance(dash, DashboardScreen)
-            assert dash.has_class("narrow") is narrow and dash.has_class("compact") is compact
-            j.see("ERIN")
+            main = j.screen
+            assert isinstance(main, MainScreen)
+            assert main.has_class(f"tier-{tier}")
+            j.see("Erin")
             await j.shot(f"{width}x{height}")
         await j.resize(280, 70)
-        assert not j.screen.has_class("narrow")
+        assert j.screen.has_class("tier-large")
         await j.shot("280x70")
 
 
@@ -195,7 +195,7 @@ async def test_live_resize_through_too_small_and_back(journey) -> None:
         assert not isinstance(j.screen, TooSmallScreen)
         await j.shot("floor", footer=False)
         await j.resize(120, 30)
-        j.see("ERIN")
+        j.see("Erin")
         await j.shot("restored", footer=False)
 
 
@@ -204,7 +204,6 @@ async def test_live_resize_through_too_small_and_back(journey) -> None:
     [
         pytest.param(("enter",), id="detail"),
         pytest.param(("w",), id="watchlist"),
-        pytest.param(("O",), id="outlook"),
         pytest.param(("g",), id="graphics"),
     ],
 )
@@ -228,7 +227,7 @@ async def test_too_small_shows_the_notice(journey, small, make) -> None:
         assert isinstance(j.screen, TooSmallScreen)
         j.see("Needs at least 60x16")
         await j.shot("notice", footer=False)
-        await j.keys("question_mark", "S", "O")  # keys must not crash it
+        await j.keys("question_mark", "S", "A")  # keys must not crash it
         await j.shot("after-keys", footer=False)
         j.expect_small = False
 

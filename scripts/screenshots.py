@@ -2,9 +2,9 @@
 
     python scripts/screenshots.py [--out docs/images]
 
-It drives the real app headless at 140x42 over the recording, takes three pictures (the dashboard, the storm detail's
-Forecast tab and a buoy's charts) and converts each with `msedge --headless=new --screenshot`. Without Edge the SVG
-files are kept.
+It drives the real app headless at 140x42 over the recording, takes three pictures (the main screen, still named
+dashboard so the README links hold, the storm detail's Forecast tab and a buoy's charts) and converts each with
+`msedge --headless=new --screenshot`. Without Edge the SVG files are kept.
 
 It clears NO_COLOR (some shells and agent sessions set it, which makes Textual render monochrome) and asks for
 truecolor before eyewall or Textual is imported, then exits non-zero if a picture has no chromatic colour.

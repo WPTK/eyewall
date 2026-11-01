@@ -148,6 +148,7 @@ def write_manifest(directory: Path, manifest: Manifest) -> None:
 
 DEMO = "demo"
 DEMO_NAME = "erin2025"
+DEMO_TITLE = "Hurricane Erin (August 2025)"  # what the replay offer calls the bundled recording
 
 
 def demo_bundle_path() -> Path:

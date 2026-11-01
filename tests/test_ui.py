@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import timedelta
 
@@ -13,11 +14,10 @@ from eyewall.app import EyewallApp
 from eyewall.config import Config
 from eyewall.state.store import storm_key
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.help import HelpScreen, help_text
 from eyewall.ui.screens.layers import LayerMenu
-from eyewall.ui.screens.outlook import OutlookScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.widgets.map_view import MapView
 from tests.ui_support import (
     EDT,
@@ -41,26 +41,25 @@ def _adv(app: EyewallApp) -> str | None:
 
 
 @pytest.mark.parametrize("size", SIZES, ids=["80x24", "140x45"])
-async def test_dashboard_shows_the_storm_and_the_status_bar(size: tuple[int, int]) -> None:
+async def test_the_main_screen_shows_the_storm_and_the_status_bar(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size):
         text = screen_text(app)
-        assert isinstance(app.screen, DashboardScreen)
-        assert "ERIN" in text
-        assert "ATLANTIC" in text
+        assert isinstance(app.screen, MainScreen)
+        assert "Hurricane Erin" in text
         assert "replay" in text
         assert app.selected is not None
 
 
-async def test_wide_dashboard_has_map_and_panels_and_narrow_folds_them() -> None:
+async def test_a_wide_main_screen_has_a_column_beside_the_map_and_a_small_one_a_strip() -> None:
     wide = replay_app()
     async with running(wide, (140, 45)):
-        assert wide.screen.has_class("narrow") is False
-        assert wide.screen.query_one(MapView).display is True
+        assert wide.screen.has_class("tier-medium") and wide.screen.query_one("#side").display is True
+        assert wide.screen.query_one("#strip").display is False
     small = replay_app()
     async with running(small, (80, 24)):
-        assert small.screen.has_class("compact")
-        assert small.screen.query_one("#map-pane").display is False
+        assert small.screen.has_class("tier-small") and small.screen.query_one("#side").display is False
+        assert small.screen.query_one(MapView).display is True
 
 
 async def test_enter_opens_detail_and_tabs_switch() -> None:
@@ -82,7 +81,7 @@ async def test_enter_opens_detail_and_tabs_switch() -> None:
         await press(pilot, "0")
         assert tabs.active == "tab-history"
         await press(pilot, "escape")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
 
 
 async def test_stepping_advisories_moves_the_replay_and_stops_at_the_ends() -> None:
@@ -125,16 +124,13 @@ async def test_overlay_screens_open_and_close() -> None:
         await press(pilot, "question_mark")
         assert isinstance(app.screen, HelpScreen)
         await press(pilot, "escape")
-        await press(pilot, "O")
-        assert isinstance(app.screen, OutlookScreen)
-        await press(pilot, "escape")
         await press(pilot, "A")
         assert isinstance(app.screen, AlertLogScreen)
         await press(pilot, "escape")
         await press(pilot, "l")
         assert isinstance(app.screen, LayerMenu)
         await press(pilot, "escape")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
 
 
 async def test_layer_menu_toggle_reaches_the_map() -> None:
@@ -145,7 +141,7 @@ async def test_layer_menu_toggle_reaches_the_map() -> None:
         await press(pilot, "l")
         await press(pilot, "down", "down", "space")
         await press(pilot, "enter")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
         assert app.map_options.cone is False
 
 
@@ -181,24 +177,22 @@ async def test_basin_filter_and_units() -> None:
     app = replay_app()
     async with running(app) as pilot:
         await press(pilot, "2")
-        assert "ERIN" not in screen_text(app).split("Headline")[0].split("╮")[0]
+        assert "Hurricane Erin" not in screen_text(app)
+        assert "No tropical storms in the East Pacific" in screen_text(app)
         assert app.basin_filter == "EP"
         await press(pilot, "a")
-        assert "ERIN" in screen_text(app)
+        assert "Hurricane Erin" in screen_text(app)
         preset = app.units
         await press(pilot, "u")
         assert app.units != preset
 
 
-async def test_quiet_source_shows_outlook_areas_and_opens_the_outlook() -> None:
+async def test_quiet_source_says_so_and_shows_the_outlook_areas() -> None:
     app = scripted_app()
-    async with running(app) as pilot:
-        text = screen_text(app)
-        assert "Atlantic, East Pacific: none" in text
-        assert "Area 1" in text
-        await press(pilot, "O")
-        assert isinstance(app.screen, OutlookScreen)
-        assert "Central Pacific" in screen_text(app) or "Hawaiian" in screen_text(app)
+    async with running(app):
+        text = " ".join(screen_text(app).split())
+        assert "No tropical storms in the Atlantic" in text
+        assert "NHC is watching 1 area" in text
 
 
 async def test_a_dead_network_marks_feeds_stale_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,10 +205,8 @@ async def test_a_dead_network_marks_feeds_stale_without_crashing(monkeypatch: py
         source.fail = True
         await press(pilot, "r")
         await wait_until(pilot, lambda: app.poller.freshness("storms").failures > 0, 15)
-        assert isinstance(app.screen, DashboardScreen)
-        assert "Area 1" in screen_text(app)  # the last good outlook stays on screen
-        await press(pilot, "O")
-        assert isinstance(app.screen, OutlookScreen)
+        assert isinstance(app.screen, MainScreen)
+        assert "NHC is watching 1 area" in " ".join(screen_text(app).split())  # the last good outlook stays on screen
 
 
 async def test_tab_arrows_work_while_a_table_has_focus() -> None:
@@ -263,13 +255,16 @@ async def test_stepping_and_ticks_share_the_lock_and_the_replay_stops_at_the_end
         app.replay.clock.set(end - timedelta(seconds=1))
         app.paused = False
         # The app's own half-second timer also ticks, and a tick that finds the lock held returns without advancing, so
-        # drive the ticks until the replay reports it is over instead of assuming one call moves the clock.
-        for _ in range(200):
+        # keep driving ticks until the replay reports it is over, up to a time limit rather than a count of tries.
+
+        async def tick() -> bool:
             await app._replay_tick()
-            if app.replay_over:
-                break
-            await pilot.pause(0.01)
-        assert app.replay_over
+            return app.replay_over
+
+        deadline = asyncio.get_running_loop().time() + 30
+        while not await tick():
+            assert asyncio.get_running_loop().time() < deadline, "the replay did not reach its end in 30 s"
+            await pilot.pause(0.05)
         assert app.replay.now() == end
         assert app.paused and app.replay_over
         await app._replay_tick()  # paused and over: nothing moves
@@ -289,12 +284,12 @@ async def test_every_mouse_event_counts_as_presence() -> None:
         assert app._idle_seconds() < 5
 
 
-async def test_no_network_and_no_cache_says_so_on_the_storm_list() -> None:
+async def test_no_network_and_no_cache_says_so_on_the_main_screen() -> None:
     source = ScriptedSource()
     source.fail = True
     app = scripted_app(source)
     async with running(app) as pilot:
-        await wait_until(pilot, lambda: "no connection" in screen_text(app), 15)
+        await wait_until(pilot, lambda: "Storm data unavailable" in screen_text(app), 15)
 
 
 async def test_the_first_live_run_names_the_settings_file(tmp_path) -> None:

@@ -8,10 +8,10 @@ from textual.widgets import Input
 
 from eyewall.ui.chrome import ChromeBar, FooterBar, TopBar
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.help import HelpScreen
+from eyewall.ui.screens.main import MainScreen
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from tests.ui_support import into_the_storm, press, replay_app, running, scripted_app, settle, wait_until
 
@@ -41,7 +41,7 @@ async def click(pilot: Pilot[None], bar: type[ChromeBar], action: str) -> None:
 
 
 @pytest.mark.parametrize("size", SIZES)
-async def test_dashboard_chrome_at_each_size(size: tuple[int, int]) -> None:
+async def test_main_chrome_at_each_size(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
@@ -49,7 +49,7 @@ async def test_dashboard_chrome_at_each_size(size: tuple[int, int]) -> None:
         assert "replay" in top(app).rstrip().split("  ")[-1]  # the health slot, whole, at the right edge
         foot = bottom(app).rstrip()
         assert foot.endswith("? help  ^p menu  q quit"), foot
-        assert "enter detail" in foot and "esc" not in foot  # nothing to go back to on the first screen
+        assert "enter open" in foot and "esc" not in foot  # nothing to go back to on the first screen
         assert len(foot) <= size[0]
 
 
@@ -78,7 +78,7 @@ async def test_every_screen_has_both_bars() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
-        for key in ("O", "A", "w"):
+        for key in ("A", "w"):
             await press(pilot, key)
             assert len(app.screen.query(TopBar)) == 1 and len(app.screen.query(FooterBar)) == 1
             assert "? help" in bottom(app)
@@ -98,9 +98,9 @@ async def test_esc_goes_back_and_q_quits_only_on_the_first_screen() -> None:
         await press(pilot, "q")
         assert isinstance(app.screen, StormDetailScreen) and not app._exit
         await press(pilot, "escape")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
         await press(pilot, "escape")
-        assert isinstance(app.screen, DashboardScreen) and not app._exit  # nothing to go back to
+        assert isinstance(app.screen, MainScreen) and not app._exit  # nothing to go back to
         await press(pilot, "q")
         assert app._exit
 
@@ -116,15 +116,14 @@ async def test_esc_leaves_the_full_screen_map_before_anything_else() -> None:
         assert "q quit" in bottom(app)
 
 
-@pytest.mark.parametrize(("size", "toggled"), [((80, 24), True), ((140, 45), False)])
-async def test_m_goes_to_the_map_from_any_screen(size: tuple[int, int], toggled: bool) -> None:
+@pytest.mark.parametrize("size", [(80, 24), (140, 45)])
+async def test_m_goes_to_the_map_from_any_screen(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "enter")
         await press(pilot, "m")
-        assert isinstance(app.screen, DashboardScreen)
-        assert app.screen._map_toggled is toggled  # the map is showing: toggled on when it is hidden by default
+        assert isinstance(app.screen, MainScreen)
         assert app.screen.map_view.display
 
 
@@ -135,9 +134,6 @@ async def test_clicking_a_footer_key_does_what_the_key_does() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
-        before = app.screen._map_toggled  # type: ignore[attr-defined]
-        await click(pilot, FooterBar, "key:m")
-        assert app.screen._map_toggled is not before  # type: ignore[attr-defined]
         await click(pilot, FooterBar, "key:enter")
         assert isinstance(app.screen, StormDetailScreen)
 
@@ -152,7 +148,7 @@ async def test_clicking_the_pinned_keys() -> None:
         await press(pilot, "enter")
         assert isinstance(app.screen, StormDetailScreen)
         await click(pilot, FooterBar, "app:back")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
 
 
 async def test_clicking_a_breadcrumb_goes_back_to_it() -> None:
@@ -168,7 +164,7 @@ async def test_clicking_a_breadcrumb_goes_back_to_it() -> None:
         await click(pilot, TopBar, "app:crumb(1)")
         assert isinstance(app.screen, StormDetailScreen)
         await click(pilot, TopBar, "app:crumb(0)")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
 
 
 async def test_clicking_the_health_slot_opens_the_feed_list_and_d_does_too() -> None:
@@ -180,7 +176,7 @@ async def test_clicking_the_health_slot_opens_the_feed_list_and_d_does_too() -> 
         await press(pilot, "D")
         assert isinstance(app.screen, FeedsScreen)
         await press(pilot, "D")
-        assert isinstance(app.screen, DashboardScreen)
+        assert isinstance(app.screen, MainScreen)
 
 
 # ---- the command palette ----------------------------------------------------------------------------------------
