@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.widgets import Input, Switch
 
-from eyewall.config import load_config
+from eyewall.config import Config, load_config
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoys import BuoysScreen
 from eyewall.ui.screens.help import HelpScreen
@@ -36,7 +36,17 @@ async def test_follow_unfollow_and_open_from_your_stations(journey, size) -> Non
         assert "41002" in app.config.watchlist.ndbc
         await j.keys("tab")
         await j.shot("your-stations")
-        assert [r.key for r in j.screen.query_one(StationList).rows] == ["ndbc:41002"]
+        rows = j.screen.query_one(StationList).rows
+        # Your stations lists the default watchlist too, so the one just followed is among them, not alone.
+        assert "ndbc:41002" in [r.key for r in rows]
+        assert {r.key for r in rows} == {
+            *(f"ndbc:{i}" for i in Config().watchlist.ndbc),
+            *(f"coops:{i}" for i in Config().watchlist.coops),
+            "ndbc:41002",
+        }
+        stations = j.screen.query_one(StationList)
+        stations.highlighted = [r.key for r in stations.rows].index("ndbc:41002")
+        await j.settle()
         await j.keys("enter")
         assert isinstance(j.screen, StationScreen)
         await j.shot("opened-from-your-stations")

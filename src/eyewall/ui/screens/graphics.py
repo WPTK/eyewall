@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class GraphicsScreen(ChromeScreen):
-    CRUMB = "Graphics"
+    CRUMB = "Pictures"
 
     def __init__(self, storm_id: str) -> None:
         super().__init__()

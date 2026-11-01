@@ -61,7 +61,7 @@ eyewall --headless --until +12h   # no interface; print events as they happen
 Other flags: `--config PATH` and `--no-config` for the settings file, `--state-dir DIR` for where seen events are kept,
 `--version`, and `--help` for the full list.
 
-Keys: `Enter` opens the selected storm's detail and `Esc` goes back. `g` shows graphics, `O` the tropical weather
+Keys: `Enter` opens the selected storm's detail and `Esc` goes back. `g` shows pictures, `O` the tropical weather
 outlook, `w` the watchlist, `/` finds a station, `A` the alert log, `u` changes units, `r` refreshes, `S` opens the
 settings, `?` lists every key and `q` quits. In a replay, `Space` pauses, `<` and `>` change the speed, and `[` and `]`
 step between advisories.
