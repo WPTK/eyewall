@@ -68,7 +68,7 @@ jobs:
           # This run is still in progress, so the completed runs are the earlier ones, newest first.
           bad="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow canary.yml --status completed --limit 2 \
             --json conclusion --jq '[.[] | select(.conclusion != "success")] | length')"
-          echo "Earlier runs not successful (of the last 2): $bad"
+          echo "Earlier runs not successful (of the last 2 scheduled): $bad"
           if [ "$bad" -ge 2 ]; then echo "raise=yes" >> "$GITHUB_OUTPUT"; else echo "raise=no" >> "$GITHUB_OUTPUT"; fi
 
       - name: Open or update the issue

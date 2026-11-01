@@ -19,7 +19,11 @@ WATCH_INTERVAL_SECONDS = 0.25
 
 @pytest.fixture(scope="session", autouse=True)
 def _memory_limit() -> Iterator[None]:
-    limit = int(os.environ.get("EYEWALL_TEST_RSS_MB", RSS_LIMIT_MB)) * 1024 * 1024
+    raw = os.environ.get("EYEWALL_TEST_RSS_MB", str(RSS_LIMIT_MB))
+    try:
+        limit = int(raw) * 1024 * 1024
+    except ValueError:
+        raise pytest.UsageError(f"EYEWALL_TEST_RSS_MB must be a whole number of megabytes, got {raw!r}") from None
     if limit <= 0:
         yield
         return
@@ -30,6 +34,9 @@ def _memory_limit() -> Iterator[None]:
         while not stop.wait(WATCH_INTERVAL_SECONDS):
             rss = process.memory_info().rss
             if rss > limit:
+                # os._exit skips pytest's summary and the coverage flush, but a watcher thread cannot interrupt the
+                # test that is eating the memory any other way. Only this process is measured: under xdist each
+                # worker has its own watcher, and the controller's dead-worker report fails the run.
                 message = (
                     f"\nFATAL: test process {process.pid} is using {rss >> 20} MB, over the {limit >> 20} MB limit\n"
                 )

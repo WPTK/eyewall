@@ -2,7 +2,7 @@
 
     python scripts/spot_check_nhc.py [--delay SECONDS] [--floater-product]
 
-It reads the real services, so it is a format-drift check, not a test: run it before a release and from the weekly
+It reads the real services, so it is a format-drift check, not a test: run it before a release and from the daily
 canary. Exit status is 1 when any endpoint parses wrongly or a structural assertion fails (a line starting
 `FAIL`), and 2 when the only problems are endpoints that were down, unreachable or empty (`DOWN`): an outage is not a
 format change. A quiet day is fine: the storm list is then empty, and the checks that need a storm use the most recent
@@ -100,7 +100,16 @@ def _missing(response: Response[Any]) -> str | None:
 async def check_active_storms(client: NhcClient, report: Report, delay: float, current: CurrentStorms) -> None:
     for storm in current.storms:
         label = f"{storm.id} {storm.name}"
-        advisory_set = await client.advisory(storm)
+        advisory_holder: list[Any] = []
+
+        async def fetch_advisory(storm: Any = storm, holder: list[Any] = advisory_holder) -> str:
+            holder.append(await client.advisory(storm))
+            return "advisory products fetched"
+
+        await report.run(f"{label} advisory", fetch_advisory, delay)
+        if not advisory_holder:
+            continue  # the fetch failed and is already reported; the other storms still get checked
+        advisory_set = advisory_holder[0]
         found = [
             name
             for name, product in (
@@ -279,8 +288,7 @@ async def check_graphics(client: NhcClient, report: Report, delay: float, floate
     async def floater_root() -> str:
         response = await client.fetch_floater_storms()
         storms.extend(response.value or ())
-        if not storms:
-            raise Empty("no storm directories listed")
+        assert storms, "no storm directories listed"  # the page answered, so an empty parse is a format change
         return f"{len(storms)} storm directories, newest {storms[-1]}"
 
     await report.run("NESDIS FLOATER/data/", floater_root, delay)
@@ -308,11 +316,7 @@ async def check_graphics(client: NhcClient, report: Report, delay: float, floate
 
 async def main_async(delay: float, floater_product: bool) -> int:
     report = Report()
-    try:
-        await run_checks(report, delay, floater_product)
-    except FetchError as exc:  # a fetch made outside Report.run
-        report.outages += 1
-        print(f"DOWN {type(exc).__name__}: {exc}", flush=True)
+    await run_checks(report, delay, floater_product)
     print(f"\n{report.checks - report.failures - report.outages} of {report.checks} checks passed")
     if report.outages:
         print(f"{report.outages} endpoint(s) down or empty")

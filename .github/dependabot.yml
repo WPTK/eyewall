@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    versioning-strategy: increase
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       python-dependencies:
         patterns: ["*"]
@@ -11,6 +15,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
     groups:
       github-actions:
         patterns: ["*"]

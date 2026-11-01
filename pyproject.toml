@@ -69,7 +69,7 @@ packages = ["src/eyewall"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-timeout = 120  # seconds per test; a hung test fails with a stack dump instead of stalling the run (--timeout=0 turns it off)
+timeout = 120  # seconds per test; see docs/development.md for what happens when it passes (--timeout=0 turns it off)
 addopts = "-m 'not uat'"  # the UAT suite takes minutes: run it with `pytest tests/uat -m uat`
 markers = [
     "live: hits the real NOAA endpoints; skipped unless EYEWALL_LIVE=1",
