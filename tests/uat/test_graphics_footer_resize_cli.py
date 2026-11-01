@@ -59,7 +59,10 @@ async def test_graphics_gallery_stills_and_animation(journey, size) -> None:
         await j.keys("g")
         assert isinstance(j.screen, GraphicsScreen)
         panel = await gallery_ready(j, "Cone, 5 day")
-        j.see("Cone, 5 day", "replay:graphics/cone_038.png")
+        j.see("Cone, 5 day")
+        # A recording's address means nothing to a reader, so the caption leaves it out.
+        assert panel.current is not None and panel.current.url == "replay:graphics/cone_038.png"
+        assert "replay:graphics" not in j.text()
         await j.shot("cone")
         await pick(j, panel, "GEOCOLOR still")
         j.see(STILL.rsplit("/", 1)[0].split("//")[1][:10])
@@ -84,9 +87,9 @@ async def test_graphics_gallery_stills_and_animation(journey, size) -> None:
 
 async def test_graphics_tab_and_open_key(journey, size) -> None:
     async with journey(size, app=gallery_app()) as j:
-        await j.keys("enter", "9")
+        await j.keys("enter", "g")
         panel = await gallery_ready(j, "Cone, 5 day")
-        await j.shot("graphics-tab")
+        await j.shot("pictures-from-storm")
         await j.keys("o")
         assert "part of the recording" in j.toasts()
         assert panel.active

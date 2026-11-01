@@ -27,7 +27,7 @@ From the map you reach six more screens. Each is a click or a key away, and `Esc
   or name, and follow the ones you care about.
 - **Station** (open a buoy or tide gauge): a plain sentence, trends, pressure, wind and wave charts over 24, 48 or 72
   hours, and a table of readings.
-- **Pictures** (`g`, titled Graphics in the top bar): NOAA's cone and satellite pictures for the storm, with loops.
+- **Pictures** (`g`): NOAA's cone and satellite pictures for the storm, with loops.
 - **Help** (`?`): every key, and what the top bar says about the health of the feeds.
 
 ![Pressure, wind and wave charts for buoy 41001 with its latest readings](docs/images/buoy.png)

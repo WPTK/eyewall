@@ -79,16 +79,16 @@ def test_short_age(seconds: float | None, text: str) -> None:
 
 
 def test_the_breadcrumb_shortens_the_middle_first_and_keeps_the_last() -> None:
-    labels = ["Home", "Erin", "Buoy 41047", "Graphics"]
+    labels = ["Home", "Erin", "Buoy 41047", "Pictures"]
     assert [t for t, _ in fit_crumbs(labels, 80)] == labels
-    assert [t for t, _ in fit_crumbs(labels, 30)] == ["Home", "…", "Graphics"]
-    assert [t for t, _ in fit_crumbs(labels, 14)] == ["…", "Graphics"]
+    assert [t for t, _ in fit_crumbs(labels, 30)] == ["Home", "…", "Pictures"]
+    assert [t for t, _ in fit_crumbs(labels, 14)] == ["…", "Pictures"]
     cut = fit_crumbs(labels, 6)
     assert len(cut) == 1 and cut[0][0].endswith("…") and cut[0][1] == 3
 
 
 def test_an_ellipsis_crumb_goes_back_one_step() -> None:
-    assert fit_crumbs(["Home", "Erin", "Buoy 41047", "Graphics"], 30)[1] == ("…", 2)
+    assert fit_crumbs(["Home", "Erin", "Buoy 41047", "Pictures"], 30)[1] == ("…", 2)
 
 
 # ---- the top bar ------------------------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def test_the_top_bar_always_ends_with_the_whole_health_slot(width: int) -> None:
 
 def test_the_top_bar_makes_the_earlier_crumbs_and_the_slot_clickable() -> None:
     slot = health(feeds(), None, UNICODE)
-    row = top_bar(["Home", "Erin", "Graphics"], slot, [], 120, UNICODE)
+    row = top_bar(["Home", "Erin", "Pictures"], slot, [], 120, UNICODE)
     actions = [t.action for t in row.targets]
     assert actions == ["app:crumb(0)", "app:crumb(1)", "app:feeds"]
     home = row.targets[0]
@@ -114,11 +114,11 @@ def test_the_top_bar_makes_the_earlier_crumbs_and_the_slot_clickable() -> None:
 
 def test_extras_are_dropped_before_the_breadcrumb_is_shortened() -> None:
     slot = health(feeds(), None, UNICODE)
-    crumbs = ["Home", "Erin", "Graphics"]
+    crumbs = ["Home", "Erin", "Pictures"]
     wide = top_bar(crumbs, slot, [("3 alerts", "app:alerts")], 100, UNICODE)
     assert "3 alerts" in wide.text.plain and "app:alerts" in [t.action for t in wide.targets]
     tight = top_bar(crumbs, slot, [("3 alerts", "app:alerts")], 36, UNICODE)
-    assert "alerts" not in tight.text.plain and "Home › Erin › Graphics" in tight.text.plain
+    assert "alerts" not in tight.text.plain and "Home › Erin › Pictures" in tight.text.plain
 
 
 # ---- the footer -------------------------------------------------------------------------------------------------

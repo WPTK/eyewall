@@ -83,7 +83,7 @@ async def test_every_screen_has_both_bars() -> None:
             assert "? help" in bottom(app)
             await press(pilot, "escape")
         await press(pilot, "enter", "g")
-        assert top(app).startswith(" Home › Erin › Graphics")
+        assert top(app).startswith(" Home › Erin › Pictures")
 
 
 # ---- esc, q and m -----------------------------------------------------------------------------------------------
