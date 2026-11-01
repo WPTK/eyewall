@@ -18,10 +18,11 @@ OUT_ENV = "EYEWALL_UAT_OUT"
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Everything under tests/uat carries the `uat` marker."""
+    """Everything under tests/uat carries the `uat` marker and a longer time limit than the unit tests."""
     for item in items:
         if "tests/uat/" in item.nodeid.replace("\\", "/"):
             item.add_marker(pytest.mark.uat)
+            item.add_marker(pytest.mark.timeout(300))
 
 
 @pytest.fixture(autouse=True)

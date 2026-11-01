@@ -36,6 +36,12 @@ is nearly certain about, so a report means a real leftover.
 
 - The suite never touches the network. Parsers are tested against saved real payloads in `tests/fixtures/`, recorded with
   the scripts in `scripts/`. Add a fixture for every odd case you handle (a missing field, a fill value, a dark station).
+- A test that runs past 120 seconds (300 for UAT) is stopped by `pytest-timeout`. Windows has no `SIGALRM`, so the
+  plugin uses its thread method there: it prints every thread's stack and ends the whole pytest process, which fails the
+  run but reports no summary. On Linux and macOS, `--timeout-method=signal` fails only the one test. A test process
+  whose memory passes 2 GB is killed with exit status 70 and no summary (a watcher thread in `tests/conftest.py`;
+  `resource.setrlimit` does not exist on Windows). The full suite peaks under 700 MB and its slowest test takes about 11 s. `EYEWALL_TEST_RSS_MB=0` turns the memory
+  watch off and `--timeout=0` the time limit.
 - HTTP is mocked with `respx`. Time comes from `eyewall.clock.VirtualClock`, never from `sleep`.
 - Tests marked `live` call the real NOAA services and run only with `EYEWALL_LIVE=1`:
 
@@ -126,9 +132,11 @@ distribution and the five standalone binaries (`binaries.yml`, which also runs o
 can be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog
 section as its notes. The Linux and macOS binaries are built to ship as `.tar.gz` archives so they keep the executable
 bit. The binaries are built with the pins in `scripts/binary-constraints.txt`; refresh them with
-`python scripts/update_constraints.py` (`--check` shows drift) before a release. The Linux x86_64 binary is built inside
+`python scripts/update_constraints.py` (`--check` shows drift; Dependabot does not touch that file) before a release. The Linux x86_64 binary is built inside
 `python:3.12-bullseye` so it runs on glibc 2.31 or newer. `canary.yml` is a scheduled workflow, which GitHub disables
-after 60 days without repository activity; run it by hand to re-enable it. `scripts/build_exe.ps1` builds the Windows
+after 60 days without repository activity; run it by hand to re-enable it. It runs daily and never on pull
+requests: a format failure opens or comments on a `feed-drift` issue at once, while a feed that is only down or empty
+(spot check exit status 2) raises a `feed-down` issue after three failed runs in a row. `scripts/build_exe.ps1` builds the Windows
 binary locally.
 
 Before announcing a release, run the binary for each platform on a machine with no Python and check:

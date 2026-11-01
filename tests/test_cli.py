@@ -69,6 +69,43 @@ def test_config_warnings_reach_stderr_and_the_app_starts(tmp_path, capsys, monke
     assert launched[0][2]["closer"] is not None  # the live source is closed on exit
 
 
+def test_a_terminal_user_sees_config_warnings_before_the_app_covers_them(tmp_path, monkeypatch):
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: None)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    monkeypatch.setattr("sys.stderr.isatty", lambda: True, raising=False)
+    asked = []
+    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or "")
+    path = tmp_path / "config.toml"
+    path.write_text('[units]\npreset = "cubits"\n', encoding="utf-8")
+    assert main(["--config", str(path)]) == 0
+    assert len(asked) == 1
+    asked.clear()
+    path.write_text("", encoding="utf-8")
+    assert main(["--config", str(path)]) == 0 and asked == []  # nothing to read, nothing to wait for
+
+
+def test_ctrl_c_at_the_config_warning_prompt_exits_cleanly(tmp_path, monkeypatch):
+    launched = []
+    monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append(1))
+    monkeypatch.setattr("eyewall.cli._interactive", lambda: True)
+
+    def interrupt(prompt=""):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", interrupt)
+    path = tmp_path / "config.toml"
+    path.write_text('[units]\npreset = "cubits"\n', encoding="utf-8")
+    assert main(["--config", str(path)]) == 130
+    assert launched == []
+
+
+def test_a_missing_stdin_is_not_a_terminal(monkeypatch):
+    from eyewall.cli import _interactive
+
+    monkeypatch.setattr("sys.stdin", None)
+    assert _interactive() is False
+
+
 def test_replay_starts_the_app_without_a_state_dir(monkeypatch):
     launched = []
     monkeypatch.setattr("eyewall.app.run_app", lambda config, source, **kw: launched.append((source, kw)))

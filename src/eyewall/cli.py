@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import importlib.resources
 import sys
 from collections.abc import Sequence
@@ -213,6 +214,14 @@ def _run_app(args: argparse.Namespace, config: Config, loaded: LoadResult | None
     return 0
 
 
+def _interactive() -> bool:
+    """True when both stdin and stderr are terminals (either can be None or closed, as under pythonw)."""
+    try:
+        return bool(sys.stdin and sys.stderr and sys.stdin.isatty() and sys.stderr.isatty())
+    except (ValueError, OSError, AttributeError):
+        return False
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.selftest:
@@ -230,4 +239,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _summary(args, config)
     if args.headless:
         return _headless(args, config)
+    if warnings and _interactive():
+        # The full-screen app covers stderr at once, and the settings behind these warnings are in effect as defaults.
+        try:
+            with contextlib.suppress(EOFError):
+                input("eyewall: press Enter to start with these settings ")
+        except KeyboardInterrupt:
+            return 130
     return _run_app(args, config, loaded)

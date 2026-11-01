@@ -240,7 +240,7 @@ class FakeSource:
         return self.alert_result
 
     async def ndbc_stations(self) -> tuple[Station, ...]:
-        self.calls.append("ndbc_stations")
+        self._call("ndbc_stations")
         return self.stations
 
     async def ndbc_latest(self) -> tuple[LatestObservation, ...]:
@@ -256,7 +256,7 @@ class FakeSource:
         return Parsed()
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
-        self.calls.append("coops_stations")
+        self._call("coops_stations")
         return self.tide_stations
 
     async def coops_series(self, station: TideStation, datum: str) -> TideSeries:

@@ -12,6 +12,7 @@ from eyewall.coops.data import (
     parse_wind,
 )
 from eyewall.models.obs import Prediction, TidePressure, TideWind, WaterLevelReading
+from eyewall.providers.base import ParseError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "coops"
 
@@ -141,8 +142,6 @@ def test_extra_fields_and_seconds_in_the_time_are_tolerated():
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ("<html>gateway error</html>", "invalid CO-OPS JSON"),
-        ("[1, 2]", "unexpected CO-OPS payload"),
         ("{}", "CO-OPS payload has no 'data'"),
         ('{"data": 5}', "CO-OPS 'data' is not a list"),
         ('{"error": {}}', "CO-OPS reported an error"),
@@ -152,6 +151,12 @@ def test_unusable_payloads_give_a_message_and_no_records(text, message):
     parsed = parse_water_level(text)
     assert parsed.items == ()
     assert parsed.message == message
+
+
+@pytest.mark.parametrize("text", ["<html>gateway error</html>", '{"data": [{"t": "2026', "[1, 2]"])
+def test_a_body_that_is_not_a_co_ops_answer_raises_instead_of_reading_as_an_empty_one(text):
+    with pytest.raises(ParseError):
+        parse_water_level(text)
 
 
 # --- request parameters -----------------------------------------------------------------------------------------
