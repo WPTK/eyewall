@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from textual.widgets import DataTable, SelectionList, Switch
 
-from eyewall.ui.screens.detail import TABS
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, scripted_app, wait_until
 
 
@@ -25,14 +24,14 @@ async def test_full_map_refits_to_the_wider_pane() -> None:
         assert right_part.strip()  # something is drawn in the columns the old width did not have
 
 
-async def test_every_detail_tab_is_visible_at_80x24() -> None:
+async def test_every_nhc_text_tab_is_visible_at_80x24() -> None:
     app = replay_app()
     async with running(app, (80, 24)) as pilot:
         await into_the_storm(pilot)
-        await press(pilot, "enter")
-        bar = screen_text(app).splitlines()[2]  # under the top bar and the storm line
-        for _tab_id, title in TABS:
-            assert title in bar
+        await press(pilot, "enter", "t")
+        bar = screen_text(app).splitlines()[1]  # under the top bar
+        for _tab_id, title in app.screen.tabs:  # type: ignore[attr-defined]
+            assert title in bar, (title, bar)
         assert len(bar) <= 80
 
 

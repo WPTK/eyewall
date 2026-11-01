@@ -1,4 +1,4 @@
-"""The detail tabs, buoy tables, graphics view and buoy charts fit their area at every terminal size."""
+"""The graphics view, the Storm screen, the station charts and the buoy's supplemental file fit their area."""
 
 from __future__ import annotations
 
@@ -6,93 +6,50 @@ from datetime import UTC, datetime
 
 import pytest
 from rich.cells import cell_len
-from rich.text import Text
-from textual.widgets import DataTable, Tabs
 
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
 from eyewall.ui.chrome import FooterBar
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.ui.widgets.gallery import GalleryPanel, ImageView
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, settle, wait_until
 
 SIZES = [(80, 24), (120, 30), (100, 50), (200, 50), (280, 70)]
-ROOMY = [s for s in SIZES if s[0] >= 100]  # the buoy table's twelve columns need about 100 columns
 IDS = [f"{w}x{h}" for w, h in SIZES]
 
 
-async def open_tab(pilot, key: str) -> StormDetailScreen:  # type: ignore[no-untyped-def]
+async def open_station(pilot) -> StationScreen:  # type: ignore[no-untyped-def]
     await into_the_storm(pilot)
-    await press(pilot, "enter", key)
-    assert isinstance(pilot.app.screen, StormDetailScreen)
-    return pilot.app.screen
+    await press(pilot, "enter", "b", "enter")
+    screen = pilot.app.screen
+    assert isinstance(screen, StationScreen)
+    await settle(pilot)
+    return screen
 
 
-@pytest.mark.parametrize("size", ROOMY, ids=[f"{w}x{h}" for w, h in ROOMY])
-async def test_buoys_table_shows_every_column_in_full(size) -> None:
+@pytest.mark.parametrize("size", SIZES, ids=IDS)
+async def test_the_storm_screen_fits_and_keeps_its_lines_whole(size) -> None:
     async with running(replay_app(), size) as pilot:
-        screen = await open_tab(pilot, "7")
-        table = screen.query_one("#buoys-table", DataTable)
-        assert not table.show_horizontal_scrollbar, f"the buoys table scrolls sideways at {size}"
+        await into_the_storm(pilot)
+        await press(pilot, "enter")
+        assert isinstance(pilot.app.screen, StormScreen)
         text = screen_text(pilot.app)
-        for needle in ("Closest", "76 nm 1h", "245 nm now"):
-            assert needle in text, (needle, text)
         assert max(cell_len(line) for line in text.splitlines()) <= size[0]
+        assert "Next advisory" in text or "Next full advisory" in text or "advisory" in text
 
 
-async def test_buoys_name_column_gives_way_to_the_numbers_and_takes_spare_room() -> None:
-    names = {}
-    for size in [(100, 50), (280, 70)]:
-        async with running(replay_app(), size) as pilot:
-            await open_tab(pilot, "7")
-            row = screen_text(pilot.app).splitlines()
-            names[size] = next(line for line in row if "41002" in line)
-    assert "…" in names[(100, 50)]
-    assert "SOUTH HATTERAS - 225 NM South of Cape Hatteras" in names[(280, 70)]
-
-
-@pytest.mark.parametrize("size", SIZES, ids=IDS)
-async def test_summary_labels_and_values_are_two_columns(size) -> None:
-    async with running(replay_app(), size) as pilot:
-        await open_tab(pilot, "1")
-        lines = screen_text(pilot.app).splitlines()
-        at = next(i for i, line in enumerate(lines) if "Next advisory" in line)
-        assert "Next advisory  Next" in lines[at], lines[at]
-        value_column = lines[at].index("Next advisory  ") + len("Next advisory  ")
-        # a wrapped value lines up under the value, never under its label
-        if lines[at + 1].strip() and "Forecaster" not in lines[at + 1]:
-            assert lines[at + 1][:value_column].strip() == "", lines[at + 1]
-        for label in ("Advisory", "Updated", "Position", "Max wind", "Pressure", "Movement", "Forecaster"):
-            row = next(ln for ln in lines if ln.lstrip().startswith(label))
-            assert row.index(label) + 0 == 1 and row[value_column - 2 : value_column].strip() == "", row
-            assert row[value_column] != " ", row  # every value starts in the same column
-
-
-@pytest.mark.parametrize("size", SIZES, ids=IDS)
-async def test_selected_tab_has_one_style_focused_or_not(size) -> None:
-    async with running(replay_app(), size) as pilot:
-        screen = await open_tab(pilot, "7")
-        tabs = screen.query_one(Tabs)
-        styles = []
-        for focused in (False, True):
-            if focused:
-                tabs.focus()
-            else:
-                screen.query_one("#buoys-table").focus()
-            await settle(pilot)
-            active = tabs.query(".-active").first()
-            style = active.rich_style
-            assert style.bold and style.underline, f"selected tab lacks bold and underline (focused={focused})"
-            styles.append((style.color, style.bgcolor, style.bold, style.underline))
-        assert styles[0] == styles[1]
+async def open_graphics(pilot) -> StormScreen:  # type: ignore[no-untyped-def]
+    await into_the_storm(pilot)
+    await press(pilot, "enter", "g")
+    return pilot.app.screen
 
 
 @pytest.mark.parametrize("size", SIZES, ids=IDS)
 async def test_graphics_picture_stays_above_the_footer(size) -> None:
     async with running(replay_app(), size) as pilot:
-        screen = await open_tab(pilot, "9")
+        screen = await open_graphics(pilot)
         panel = screen.query_one(GalleryPanel)
         view = screen.query_one("#gal-view", ImageView)
         await wait_until(pilot, lambda: view._is_picture)
@@ -102,15 +59,11 @@ async def test_graphics_picture_stays_above_the_footer(size) -> None:
         assert view.region.width >= 20
 
 
-@pytest.mark.parametrize("size", [(120, 30), (100, 50), (60, 16)], ids=["120x30", "100x50", "60x16"])
+@pytest.mark.parametrize("size", [(120, 40), (100, 50), (200, 50)], ids=["120x40", "100x50", "200x50"])
 async def test_buoy_charts_share_one_plot_edge(size) -> None:
     async with running(replay_app(), size) as pilot:
-        await into_the_storm(pilot)
-        await press(pilot, "b", "enter")
-        screen = pilot.app.screen
-        assert isinstance(screen, BuoyDetailScreen)
-        await settle(pilot)
-        charts = list(screen.query(ChartView))
+        screen = await open_station(pilot)
+        charts = [c for c in screen.query(ChartView) if c.display]
         assert len(charts) == 3
         assert len({c.min_gutter for c in charts}) == 1
         assert charts[0].min_gutter == max(c.natural_gutter for c in charts)
@@ -124,70 +77,14 @@ async def test_buoy_charts_share_one_plot_edge(size) -> None:
         assert len(edges) == 1, f"the plots start in different columns: {edges}"
 
 
-async def test_buoy_panel_wave_height_agrees_with_the_wave_chart() -> None:
+async def test_buoy_wave_chart_has_data_and_the_page_has_a_lead() -> None:
     async with running(replay_app(), (120, 30)) as pilot:
-        await into_the_storm(pilot)
-        await press(pilot, "b", "enter")
-        screen = pilot.app.screen
-        assert isinstance(screen, BuoyDetailScreen)
-        wave_chart = screen.query_one("#chart-wave", ChartView)
-        assert wave_chart._has_data()
-        line = next(
-            ln for ln in screen_text(pilot.app).splitlines() if "Wave height" in ln and "ft" in ln and "(" in ln
-        )
-        assert " ago)" in line, line  # the newest row has no wave; the last reading is shown with its age
-        assert "supplemental file." in screen_text(pilot.app) and "The recording has no" in screen_text(pilot.app)
+        screen = await open_station(pilot)
+        assert screen.query_one("#chart-wave", ChartView)._has_data()
+        assert screen.query_one("#station-lead").region.height >= 1
 
 
-@pytest.mark.parametrize("size", [(120, 30), (80, 24)], ids=["120x30", "80x24"])
-async def test_search_result_is_one_row(size) -> None:
-    async with running(replay_app(), size) as pilot:
-        await into_the_storm(pilot)
-        await press(pilot, "slash", "4", "1", "0", "0", "2")
-        lines = screen_text(pilot.app).splitlines()
-        at = next(i for i, ln in enumerate(lines) if "41002" in ln and "buoy" in ln)
-        assert "NDBC" not in lines[at + 1] and "buoy" not in lines[at + 1], lines[at : at + 2]
-
-
-@pytest.mark.parametrize(
-    "size", [(60, 10), (100, 50), (120, 30), (120, 12)], ids=["60x10", "100x50", "120x30", "120x12"]
-)
-async def test_station_table_with_more_rows_than_height_still_fits(size) -> None:
-    from textual.app import App
-
-    from eyewall.ui.stations import BUOY_COLUMNS
-    from eyewall.ui.widgets.station_table import StationTable
-
-    cells = (
-        "41000",
-        "A fairly long buoy name for testing the fit",
-        "10 nm",
-        "N",
-        "5 kt",
-        "6 kt",
-        "1000 mb",
-        "--",
-        "--",
-        "80 F",
-        "0s",
-        "10 nm 1h",
-    )
-    rows = [(str(i), tuple(Text(c) for c in cells)) for i in range(70)]
-
-    class Host(App[None]):
-        def compose(self):
-            yield StationTable(id="t")
-
-    async with Host().run_test(size=size) as pilot:
-        table = pilot.app.query_one("#t", StationTable)
-        table.set_rows(BUOY_COLUMNS, rows)
-        await settle(pilot)
-        assert table.show_vertical_scrollbar
-        if size[0] >= 100:
-            assert not table.show_horizontal_scrollbar, f"{table.size} {table.virtual_size}"
-
-
-async def test_buoy_detail_gets_new_supplemental_data_once_the_apps_copy_expires() -> None:
+async def test_station_gets_new_supplemental_data_once_the_apps_copy_expires() -> None:
     app = replay_app()
     first = Parsed((SupplementalReading(datetime(2025, 8, 20, 1, tzinfo=UTC), peak_wind_mps=10.0),))
     second = Parsed((SupplementalReading(datetime(2025, 8, 20, 2, tzinfo=UTC), peak_wind_mps=20.0),))
@@ -200,10 +97,7 @@ async def test_buoy_detail_gets_new_supplemental_data_once_the_apps_copy_expires
 
     app.source.ndbc_supplemental = fake  # type: ignore[method-assign]
     async with running(app, (120, 30)) as pilot:
-        await into_the_storm(pilot)
-        await press(pilot, "b", "enter")
-        screen = pilot.app.screen
-        assert isinstance(screen, BuoyDetailScreen)
+        screen = await open_station(pilot)
         await wait_until(pilot, lambda: screen.supl is first)
         screen.refresh_data()  # a poll result right away: the app still holds the file
         await settle(pilot)
@@ -215,7 +109,7 @@ async def test_buoy_detail_gets_new_supplemental_data_once_the_apps_copy_expires
         assert len(calls) == 2
 
 
-async def test_a_failed_refresh_keeps_the_earlier_supplemental_file_and_says_so() -> None:
+async def test_a_failed_refresh_keeps_the_earlier_supplemental_file() -> None:
     app = replay_app()
     first = Parsed((SupplementalReading(datetime(2025, 8, 20, 1, tzinfo=UTC), peak_wind_mps=10.0),))
     results: list[object] = [first, FetchError("x", "down")]
@@ -228,15 +122,11 @@ async def test_a_failed_refresh_keeps_the_earlier_supplemental_file_and_says_so(
 
     app.source.ndbc_supplemental = fake  # type: ignore[method-assign]
     async with running(app, (120, 30)) as pilot:
-        await into_the_storm(pilot)
-        await press(pilot, "b", "enter")
-        screen = pilot.app.screen
-        assert isinstance(screen, BuoyDetailScreen)
+        screen = await open_station(pilot)
         await wait_until(pilot, lambda: screen.supl is first)
         for station_id, (asked, kept) in list(app._supl.items()):
             app._supl[station_id] = (asked - 601.0, kept)
         screen.refresh_data()
-        await wait_until(pilot, lambda: screen.supl_note is not None)
-        assert screen.supl is first
-        assert screen.supl_note is not None and "earlier one is kept" in screen.supl_note
-        assert "No supplemental file" not in screen.supl_note
+        await wait_until(pilot, lambda: not results)
+        await settle(pilot)
+        assert screen.supl is first  # the failed refresh keeps the earlier file

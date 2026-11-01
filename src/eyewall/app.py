@@ -20,6 +20,7 @@ from pathlib import Path
 
 from textual import events
 from textual.app import App
+from textual.command import CommandPalette
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
@@ -27,6 +28,7 @@ from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
 from eyewall.models.events import Event, Severity
 from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
+from eyewall.models.storm import Classification
 from eyewall.net import FetchError
 from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, FreshnessState, Poller, PollResult
 from eyewall.providers.base import ParseError
@@ -38,23 +40,23 @@ from eyewall.sources.bundle import DEMO, BundleError, resolve_bundle
 from eyewall.sources.protocol import DataSource
 from eyewall.sources.replay import ReplaySource
 from eyewall.state.alerts import AlertEngine
-from eyewall.state.store import Store
+from eyewall.state.store import Store, StormState
 from eyewall.ui import format as fmt
 from eyewall.ui import nav
 from eyewall.ui.chrome import ChromeScreen, FeedStatus, Health, ReplayStatus, health
 from eyewall.ui.glyphs import UiGlyphs, glyphs_for
 from eyewall.ui.screens.alerts import AlertLogScreen
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.buoys import BuoysScreen
 from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.main import MainScreen
-from eyewall.ui.screens.search import SearchChoice, SearchScreen
+from eyewall.ui.screens.nhc_text import NhcTextScreen
 from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.small import TooSmallScreen, too_small
-from eyewall.ui.screens.watchlist import WatchlistScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
 from eyewall.ui.widgets.map_view import MapView
 from eyewall.units import PRESETS, Preset, next_preset
@@ -363,9 +365,52 @@ class EyewallApp(App[bool]):
         if not self._modal_open():
             self.push_screen(FeedsScreen())
 
-    def open_detail(self, storm_id: str | None, tab: str | None = None) -> None:
-        if storm_id is not None and not isinstance(self.screen, StormDetailScreen):
-            self.push_screen(StormDetailScreen(storm_id, tab))
+    def storm_states(self) -> tuple[StormState, ...]:
+        """The storms of the basins in view, strongest first (a potential cyclone after the named storms)."""
+        shown = [
+            s
+            for s in self.store.storms.values()
+            if s.storm.basin is not None and s.storm.basin.value in self.basin_view
+        ]
+        shown.sort(key=lambda s: (s.storm.classification is Classification.PTC, -(s.storm.intensity_kt or 0)))
+        return tuple(shown)
+
+    def _can_open(self, kind: type[Screen[None]]) -> bool:
+        """False under a dialog, and when the top screen is already this kind (a repeated key opens nothing twice)."""
+        return not isinstance(self.screen, ModalScreen | kind)
+
+    def open_storm(self, storm_id: str | None) -> None:
+        if storm_id is not None and storm_id in self.store.storms and self._can_open(StormScreen):
+            self.selected = storm_id
+            self.push_screen(StormScreen(storm_id))
+
+    def open_text(self, storm_id: str | None, tab: str | None = None) -> None:
+        """The NHC text: a storm's products, or the outlook alone when there is no storm."""
+        if self._can_open(NhcTextScreen):
+            self.push_screen(NhcTextScreen(storm_id if storm_id in self.store.storms else None, tab))
+
+    def open_buoys(self, storm_id: str | None, tab: str | None = None) -> None:
+        """The stations near a storm and the ones you follow; just the latter when there is no storm."""
+        if self._can_open(BuoysScreen):
+            self.push_screen(BuoysScreen(storm_id if storm_id in self.store.storms else None, tab))
+
+    def open_station(self, kind: str, station_id: str) -> None:
+        screen = self.screen
+        if isinstance(screen, ModalScreen) or (
+            isinstance(screen, StationScreen) and screen.station_id == station_id.upper() and screen.kind == kind
+        ):
+            return
+        self.push_screen(StationScreen(kind, station_id))
+
+    async def show_on_map(self, lat: float, lon: float, label: str) -> None:
+        """`m` on a station: back to the map, centred on it."""
+        while len(self.screen_stack) > 1:
+            await self.pop_screen()
+        root = self.screen
+        if isinstance(root, MainScreen):
+            root.show_map()
+            root.map_view.center_on((lat, lon))
+            self.notify(f"{label} is at the centre of the map.", timeout=3)
 
     def open_graphics(self, storm_id: str | None) -> None:
         screen = self.screen
@@ -374,37 +419,16 @@ class EyewallApp(App[bool]):
         elif not isinstance(screen, ModalScreen | GraphicsScreen):
             self.push_screen(GraphicsScreen(storm_id))
 
-    def open_buoy(self, station_id: str) -> None:
-        screen = self.screen
-        if isinstance(screen, ModalScreen) or (
-            isinstance(screen, BuoyDetailScreen) and screen.station_id == station_id.upper()
-        ):
-            return
-        self.push_screen(BuoyDetailScreen(station_id))
-
     def on_map_view_mark_opened(self, message: MapView.MarkOpened) -> None:
-        """A mark on the map was opened: a storm opens its detail, a buoy its page, a gauge is pinned (it has no page
-        of its own yet)."""
+        """A mark on the map was opened: a storm opens its page, a buoy or a tide gauge its station page."""
         message.stop()
         mark = message.mark
         if mark.kind == "storm":
-            if mark.id in self.store.storms:
-                self.open_detail(mark.id)
+            self.open_storm(mark.id)
         elif mark.kind == "buoy":
-            self.open_buoy(mark.id)
-        elif not self._modal_open():
-            self.notify(self.gauge_summary(mark.id), timeout=6)  # pinning is a deliberate act, not a side effect
-
-    def gauge_summary(self, gauge_id: str) -> str:
-        """One line for a gauge clicked on the map: its name and newest water level."""
-        gauge = next((g for g in self.store.tide_stations if g.id.upper() == gauge_id.upper()), None)
-        head = f"Gauge {gauge_id}" + (f" {gauge.name}" if gauge is not None else "")
-        series = self.store.tide_series.get(gauge_id) or self.store.tide_series.get(gauge_id.upper())
-        latest = series.water_level.items[0] if series is not None and series.water_level.items else None
-        if latest is None or latest.level_ft is None:
-            return f"{head}: no water level yet."
-        level = self.preset.fmt_length(latest.level_ft, "ft")
-        return f"{head}: water level {level} above {series.datum if series is not None else 'datum'}."
+            self.open_station("ndbc", mark.id)
+        else:
+            self.open_station("coops", mark.id)
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:
@@ -419,7 +443,7 @@ class EyewallApp(App[bool]):
 
     def action_graphics(self) -> None:
         screen = self.screen
-        storm_id = getattr(screen, "storm_id", None) if isinstance(screen, StormDetailScreen) else self.selected
+        storm_id = getattr(screen, "storm_id", None) if isinstance(screen, StormScreen) else self.selected
         self.open_graphics(storm_id)
 
     def action_help(self) -> None:
@@ -453,23 +477,15 @@ class EyewallApp(App[bool]):
         self._for_screens("refresh_data")
         self.notify(f"Units: {self.units}", timeout=3)
 
-    def action_watchlist(self) -> None:
-        if not self._modal_open() and not isinstance(self.screen, WatchlistScreen):
-            self.push_screen(WatchlistScreen())
-
     def action_search(self) -> None:
-        if self._modal_open():
+        """`/`: the menu, with only buoys and tide gauges to find."""
+        if self._modal_open() or CommandPalette.is_open(self):  # type: ignore[arg-type]
             return
-
-        def picked(choice: SearchChoice | None) -> None:
-            if choice is None:
-                return
-            if choice.pin or choice.kind == "coops":  # a gauge has no page of its own, so opening it pins it
-                self.watch_in_background(choice.kind, choice.id, True)
-            else:
-                self.open_buoy(choice.id)
-
-        self.push_screen(SearchScreen(), picked)
+        self.push_screen(
+            CommandPalette(
+                providers=[nav.StationCommands], placeholder="Find a buoy or tide gauge by name or number..."
+            )
+        )
 
     def action_settings(self) -> None:
         if self._modal_open():
@@ -633,15 +649,16 @@ class EyewallApp(App[bool]):
         return found is not None and (kept is None or kept[1] != found)
 
     async def toggle_watch(self, kind: str, station_id: str) -> None:
-        """Pin a station to the watchlist, or unpin it when it is there already."""
+        """Follow a station, or stop following it when it is followed already."""
         station_id = station_id.upper()
         updated, watched = toggle_watch(self.config, kind, station_id)
         if watched and station_id not in watchlist_ids(updated, kind):
-            self.notify("The watchlist is full.", severity="warning", timeout=4)
+            self.notify(
+                "You follow as many stations as can be kept. Stop following one first.", severity="warning", timeout=4
+            )
             return
         self.apply_config(updated)
-        verb = "Pinned" if watched else "Removed"
-        self.notify(f"{verb} {station_id} {'to' if watched else 'from'} the watchlist.", timeout=3)
+        self.notify(f"Following {station_id}." if watched else f"Stopped following {station_id}.", timeout=3)
         if not watched:
             return
         if kind == "coops":
@@ -650,14 +667,14 @@ class EyewallApp(App[bool]):
             self.poller.refresh_feeds(protocol.BUOYS)
 
     def watch_in_background(self, kind: str, station_id: str, wanted: bool) -> None:
-        """Pin or unpin from a key press. A failure is logged and shown as a toast, never an app crash."""
+        """Follow or unfollow from a key press. A failure is logged and shown as a toast, never an app crash."""
 
         async def work() -> None:
             try:
                 await self.set_watch(kind, station_id, wanted)
             except Exception as exc:
-                log.exception("could not %s %s", "pin" if wanted else "unpin", station_id)
-                self.notify(f"Could not change the watchlist: {exc}", severity="error", timeout=8)
+                log.exception("could not %s %s", "follow" if wanted else "unfollow", station_id)
+                self.notify(f"Could not change the stations you follow: {exc}", severity="error", timeout=8)
 
         self.run_worker(work(), exclusive=False, exit_on_error=False)
 
@@ -692,8 +709,6 @@ class EyewallApp(App[bool]):
                 return True  # nothing else works there, so q must
             # The first screen only, and not inside its full-screen map, where Esc is the way out.
             return len(self.screen_stack) == 1 and not self._can_go_back()
-        if action == "command_palette":
-            return not isinstance(self.screen, SearchScreen)  # there Ctrl+P pins the station, as the search says
         return True
 
     def action_play_pause(self) -> None:

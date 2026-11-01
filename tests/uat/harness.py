@@ -18,7 +18,7 @@ from rich.cells import cell_len
 from textual.pilot import Pilot
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import TabbedContent, Tabs
+from textual.widgets import Tabs
 
 from eyewall.app import EyewallApp
 from eyewall.ui.screens.small import TooSmallScreen
@@ -28,11 +28,8 @@ SIZES = [(80, 24), (120, 30)]  # the floor and the main size; most scenarios run
 EXTRA_SIZES = [(100, 50), (200, 50), (280, 70)]  # tall-narrow and large terminals, for the every-screen sweep
 STATUS_IDS = (
     "#status",
-    "#detail-status",
-    "#buoy-status",
     "#graphics-status",
     "#outlook-status",
-    "#watch-status",
     "#alert-status",
 )
 SCROLLING = ("auto", "scroll")
@@ -154,10 +151,6 @@ class Journey:
         assert cell_len(row) <= self.size[0], f"footer wider than the terminal: {row!r}"
         assert row.endswith("? help"), f"footer does not end in '? help': {row!r}"
         assert "\n" not in row
-
-    def tab(self) -> str:
-        tabs = self.screen.query_one(TabbedContent)
-        return (tabs.active or "").removeprefix("tab-")
 
     async def shot(self, step: str, *, footer: bool = True, check: bool = True) -> Path:
         """Settle, check the screen and write the screenshot; returns the SVG path."""

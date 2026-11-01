@@ -7,9 +7,9 @@ from datetime import timedelta
 from textual.widgets import SelectionList
 
 from eyewall.app import REPLAY_SPEEDS, REPLAY_TICK
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.main import MainScreen
+from eyewall.ui.screens.storm import StormScreen
 from tests.uat.harness import Journey
 
 
@@ -112,8 +112,8 @@ async def test_storm_selection_and_basins(journey, size) -> None:
         await j.keys("a")
         assert app.basin_filter is None
         await j.keys("enter")
-        assert isinstance(app.screen, StormDetailScreen)
-        await j.shot("detail-opened")
+        assert isinstance(app.screen, StormScreen)
+        await j.shot("storm-opened")
         await j.keys("escape")
         assert isinstance(app.screen, MainScreen)
         await j.shot("back-on-the-main-screen")

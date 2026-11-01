@@ -58,10 +58,11 @@ TITLES: dict[str, str] = {
     "main": "Map",
     "main_map": "Map",
     "map": "Map",
-    "detail": "Storm detail",
-    "stations": "Storm detail",
-    "buoy": "Buoy charts",
-    "watch": "Watchlist",
+    "storm": "Storm",
+    "text": "NHC text",
+    "buoys": "Buoys and gauges",
+    "stations": "Buoys and gauges",
+    "station": "Station",
     "gallery": "Graphics",
     "alerts": "Alert log",
     "app": "Anywhere",
@@ -73,13 +74,37 @@ KEYS: tuple[Key, ...] = (
     # ---- the main screen ----
     K("main", "j", "cursor(1)", "next storm"),
     K("main", "k", "cursor(-1)", "previous storm"),
-    K("main", "enter", "open_detail", "open", "previous or next storm; open its detail", footer=True),
+    K("main", "enter", "open_storm", "open", "previous or next storm; open its page", footer=True),
     K("main", "1", "basin('AL')", "Atlantic"),
     K("main", "2", "basin('EP')", "East Pacific"),
     K("main", "3", "basin('CP')", "Central Pacific"),
     K("main", "a", "basin('')", "all basins", "Atlantic, East Pacific, Central Pacific, all"),
-    K("main", "b", "buoys", "buoys", "buoys near the storm (the watchlist when there is none)", footer=True),
-    K("main", "O", "outlook", "outlook", "what NHC is watching: each area and its chances", menu="Open NHC's outlook"),
+    K(
+        "main",
+        "b",
+        "buoys",
+        "buoys",
+        "buoys and tide gauges near the storm (Your stations when there is none)",
+        footer=True,
+        menu="Open buoys and gauges",
+    ),
+    K(
+        "main",
+        "t",
+        "text",
+        "NHC text",
+        "the National Hurricane Center's text for the storm (the outlook when there is none)",
+        footer=True,
+        menu="Open the NHC text",
+    ),
+    K(
+        "main",
+        "O",
+        "outlook",
+        "outlook",
+        "the tropical weather outlook text: each area and its chances",
+        menu="Open NHC's outlook",
+    ),
     K("main", "M", "full_map", "full map", "full-screen map; Esc leaves it"),
     K(
         "main",
@@ -111,22 +136,54 @@ KEYS: tuple[Key, ...] = (
     K("map", "escape", "clear_mark", "clear", "clear the mark"),
     K("main_map", "c", "screen.center", "center", "center on the storm", footer=True),
     K("main_map", "l", "screen.layers", "layers", "map layers", footer=True),
-    # ---- storm detail ----
-    K("detail", "left", "tab(-1)", "previous tab", priority=True),
-    K("detail", "right", "tab(1)", "next tab", "previous or next tab", priority=True),
-    K("detail", "1,2,3,4,5,6,7,8,9,0", "show_tab", "tab", "jump to a tab", shown="1-0", bind=False),
-    K("detail", "t", "toggle_text", "tcp/tcm", "on the Advisory tab: public or forecast advisory", footer=True),
-    K("detail", "p", "pin", "pin", "on the Buoys and Tides tabs: pin or unpin a station", footer=True),
-    K("stations", "enter", "select_cursor", "charts", "open a buoy's charts", footer=True),
-    # ---- buoy charts ----
-    K("buoy", "h", "range", "range", "change the time range", footer=True),
-    K("buoy", "p", "pin", "pin", "pin or unpin this buoy", footer=True),
-    K("buoy", "i", "toggle_info", "info", "charts or latest observation, on a narrow terminal"),
-    # ---- watchlist ----
-    K("watch", "a", "add", "add", "add a station", footer=True),
-    K("watch", "d,delete", "remove", "remove", "remove the selected station", shown="d", footer=True),
-    K("watch", "tab", "other_table", "other table", "switch between buoys and gauges", footer=True, priority=True),
-    K("watch", "w", "back", "back", None),
+    # ---- storm ----
+    K("storm", "b", "buoys", "buoys", "buoys and tide gauges near this storm", footer=True),
+    K("storm", "t", "text", "text", "the NHC text: advisory, discussion, forecast, wind chances", footer=True),
+    K("storm", "g", "pictures", "pictures", None, footer=True),
+    K("storm", "p", "chances", "chances", "the chance of storm-force wind at named places", footer=True),
+    K("storm", "left", "other_storm(-1)", "previous storm", None, priority=True),
+    K(
+        "storm",
+        "right",
+        "other_storm(1)",
+        "next storm",
+        "previous or next storm",
+        shown="left/right",
+        footer=True,
+        priority=True,
+    ),
+    # ---- NHC text ----
+    K("text", "left", "tab(-1)", "previous product", None, priority=True),
+    K(
+        "text",
+        "right",
+        "tab(1)",
+        "next product",
+        "previous or next product; page up and down scroll",
+        shown="left/right",
+        footer=True,
+        priority=True,
+    ),
+    # ---- buoys and gauges ----
+    K("stations", "enter", "select", "open", "open the highlighted station (or click it)", footer=True),
+    K("buoys", "f", "follow", "follow", "follow or stop following the highlighted station", footer=True),
+    K("buoys", "s", "sort", "sort", "change the order: nearest, strongest wind, name", footer=True),
+    K(
+        "buoys",
+        "tab",
+        "switch",
+        "switch",
+        "switch between the storm's stations and Your stations",
+        footer=True,
+        priority=True,
+    ),
+    K("buoys", "slash", "search", "find", None, footer=True),
+    # ---- station ----
+    K("station", "f", "follow", "follow", "follow or stop following this station", footer=True),
+    K("station", "h", "range", "24/48/72 h", "show 24, 48 or 72 hours", footer=True),
+    K("station", "r", "view", "readings", "switch between the charts and the table of readings", footer=True),
+    K("station", "m", "show_on_map", "map", "show this station on the map", footer=True),
+    K("station", "i", "about", "about winds", "how buoy winds differ from the storm's winds", footer=True),
     # ---- alert log ----
     K("alerts", "A", "back", "back", None),
     # ---- graphics ----
@@ -150,7 +207,6 @@ KEYS: tuple[Key, ...] = (
     K("app", "q", "quit_top", "quit", "quit, from the first screen only"),
     K("app", "m", "map", "map", "go to the map", menu="Go to the map"),
     K("app", "D", "feeds", "feeds", "feed health: each feed, its age and the next refresh", menu="Show feed health"),
-    K("app", "w", "watchlist", "watchlist", "the buoy and tide gauge watchlist", menu="Open the watchlist"),
     K("app", "slash", "search", "find", "find a buoy or tide gauge by name or id", menu="Find a buoy or tide gauge"),
     K("app", "g", "graphics", "graphics", "graphics for the selected storm", menu="Open the selected storm's graphics"),
     K("app", "A", "alerts", "alerts", "alert log", menu="Open the alert log"),
@@ -266,17 +322,22 @@ def _storm_title(app: EyewallApp, storm_id: str) -> str:
 
 
 class EyewallCommands(Provider):
-    """The menu: every action and screen in the key table, the active storms, and stations by name or id."""
+    """The menu: every action and screen in the key table, and the active storms."""
 
     @property
     def eye(self) -> EyewallApp:
         return self.app  # type: ignore[return-value]
 
-    def _runner(self, action: str) -> Callable[[], Any]:
+    def _runner(self, entry: Key) -> Callable[[], Any]:
         app = self.eye
 
         async def run() -> None:
-            await app.run_action(action)
+            # A main-screen action is run on the main screen, wherever the menu was opened from.
+            namespace = next((s for s in app.screen_stack if "main" in getattr(s, "NAV_SCOPES", ())), None)
+            if entry.scope == "main" and namespace is not None:
+                await app.run_action(entry.action, namespace)
+            else:
+                await app.run_action(entry.action)
 
         return run
 
@@ -293,10 +354,10 @@ class EyewallCommands(Provider):
         for entry in KEYS:
             name = entry.action.removeprefix("app.").split("(")[0]
             if entry.menu and entry.scope in ("app", "main", "replay") and app.check_action(name, ()):
-                found.append((entry.menu, self._runner(entry.action), f"{footer_name(entry)}  {entry.help or ''}"))
+                found.append((entry.menu, self._runner(entry), f"{footer_name(entry)}  {entry.help or ''}"))
         for storm_id in app.store.storms:
             found.append(
-                (_storm_title(app, storm_id), lambda sid=storm_id: app.open_detail(sid), "the storm's detail page")  # type: ignore[misc]
+                (_storm_title(app, storm_id), lambda sid=storm_id: app.open_storm(sid), "the storm in plain words")  # type: ignore[misc]
             )
         return found
 
@@ -310,8 +371,30 @@ class EyewallCommands(Provider):
             score = matcher.match(title)
             if score > 0:
                 yield Hit(score, matcher.highlight(title), command, text=title, help=help_text)
+
+
+class StationCommands(Provider):
+    """`/`: the menu with only stations in it. It opens at the stations you follow; a name or number finds any."""
+
+    @property
+    def eye(self) -> EyewallApp:
+        return self.app  # type: ignore[return-value]
+
+    def _opener(self, kind: str, station_id: str) -> Callable[[], Any]:
         app = self.eye
-        if len(query.strip()) < 2 or self._blocked():
+        return lambda: app.open_station(kind, station_id)
+
+    async def discover(self) -> AsyncIterator[DiscoveryHit]:
+        app = self.eye
+        followed = [("ndbc", e.id, e.station.name) for e in st.watchlist_buoys(app.store)]
+        followed += [("coops", e.id, e.station.name) for e in st.watchlist_gauges(app.store)]
+        for kind, station_id, name in followed:
+            title = f"{KIND_WORDS[kind]} {station_id} {st.clean_name(name)}".strip()
+            yield DiscoveryHit(title, self._opener(kind, station_id), help="you follow this station")
+
+    async def search(self, query: str) -> AsyncIterator[Hit]:
+        app = self.eye
+        if len(query.strip()) < 2:
             return
         if not (app.store.stations and app.store.tide_stations):
             if app.catalogs_task is None:  # one fetch for the session: a failure is not repeated on every keystroke
@@ -319,14 +402,13 @@ class EyewallCommands(Provider):
             # Each keystroke cancels the previous search; the shield keeps that from cancelling the shared fetch.
             await asyncio.shield(app.catalogs_task)
         for rank, hit in enumerate(st.search_stations(app.store, query, limit=12)):
-            kind = st.KIND_LABELS[hit.kind]
-            title = f"{kind.title()} {hit.id} {' '.join(hit.name.split())}".strip()
-            run: Callable[[], Any] = (
-                (lambda sid=hit.id: app.open_buoy(sid))  # type: ignore[misc]
-                if hit.kind == "ndbc"
-                else (lambda sid=hit.id: app.notify(app.gauge_summary(sid), timeout=6))  # type: ignore[misc]
+            title = f"{KIND_WORDS[hit.kind]} {hit.id} {' '.join(hit.name.split())}".strip()
+            yield Hit(
+                max(0.05, 0.6 - rank * 0.01), title, self._opener(hit.kind, hit.id), text=title, help=hit.detail or None
             )
-            yield Hit(max(0.05, 0.6 - rank * 0.01), title, run, text=title, help=hit.detail or None)
+
+
+KIND_WORDS = {"ndbc": "Buoy", "coops": "Gauge"}
 
 
 __all__ = [
@@ -337,6 +419,7 @@ __all__ = [
     "TITLES",
     "EyewallCommands",
     "Key",
+    "StationCommands",
     "bindings",
     "find",
     "footer_name",

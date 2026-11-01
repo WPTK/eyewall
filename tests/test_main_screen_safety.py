@@ -13,7 +13,7 @@ from eyewall.models.watches import WatchWarningArea
 from eyewall.palette import WatchWarning
 from eyewall.state.store import StormState
 from eyewall.ui.screens.main import MainScreen, lead_text, side_blocks
-from eyewall.ui.screens.outlook_note import OutlookNote
+from eyewall.ui.screens.nhc_text import NhcTextScreen
 from eyewall.ui.widgets import warning_list
 from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, fit_blocks, heading
 from eyewall.ui.words import Words
@@ -246,8 +246,9 @@ async def test_the_outlook_key_opens_every_area_with_its_exact_chances() -> None
         await settle(pilot)
         assert panel_lines(app, "#strip")  # never an empty strip
         await press(pilot, "O")
-        assert isinstance(app.screen, OutlookNote)
-        assert "40% within 7 days" in " ".join(app.screen.sentences)  # type: ignore[attr-defined]
+        assert isinstance(app.screen, NhcTextScreen) and app.screen.tab == "outlook"
+        body = " ".join(screen_text(app).split())
+        assert "7 days:" in body and "40%" in body
         await press(pilot, "escape")
         assert isinstance(app.screen, MainScreen)
 
@@ -265,8 +266,7 @@ async def test_a_long_outlook_is_counted_on_the_strip_and_opens_on_click(monkeyp
         assert 0 < len(plain) <= 4 and any("more" in t for t in plain), plain
         await pilot.click("#strip", offset=(3, plain.index(next(t for t in plain if "more" in t))))
         await settle(pilot)
-        assert isinstance(app.screen, OutlookNote)
-        assert "Area 6: a 60% chance" in " ".join(app.screen.sentences)  # type: ignore[attr-defined]
+        assert isinstance(app.screen, NhcTextScreen) and app.screen.tab == "outlook"
 
 
 async def test_the_more_line_on_the_cards_brings_the_next_storm_forward() -> None:

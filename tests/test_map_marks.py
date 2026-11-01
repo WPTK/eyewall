@@ -7,9 +7,9 @@ import pytest
 from textual.pilot import Pilot
 
 from eyewall.render.hits import Mark
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.main import MainScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from eyewall.ui.widgets.map_view import MapView, MarkChooser
 from tests.ui_support import into_the_storm, press, replay_app, running, settle
 
@@ -63,7 +63,7 @@ async def test_clicking_a_buoy_opens_its_page(size: tuple[int, int]) -> None:
         await pilot.click(MapView, offset=(col, row))
         await settle(pilot)
         screen = pilot.app.screen
-        assert isinstance(screen, BuoyDetailScreen) and screen.station_id == mark.id.upper()
+        assert isinstance(screen, StationScreen) and screen.station_id == mark.id.upper()
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -73,7 +73,7 @@ async def test_clicking_a_storm_opens_its_detail(size: tuple[int, int]) -> None:
         col, row = view.hits.cell_of(STORM) or (-1, -1)
         await pilot.click(MapView, offset=(col, row))
         await settle(pilot)
-        assert isinstance(pilot.app.screen, StormDetailScreen)
+        assert isinstance(pilot.app.screen, StormScreen)
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -90,7 +90,7 @@ async def test_a_click_one_cell_from_a_small_mark_still_hits_it(size: tuple[int,
         )
         await pilot.click(MapView, offset=beside)
         await settle(pilot)
-        assert isinstance(pilot.app.screen, BuoyDetailScreen)
+        assert isinstance(pilot.app.screen, StationScreen)
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -116,10 +116,10 @@ async def test_a_click_on_overlapping_marks_asks_which(size: tuple[int, int]) ->
         await press(pilot, "down", "enter")  # the second one
         second = marks[1]
         screen = pilot.app.screen
-        if second.kind == "buoy":
-            assert isinstance(screen, BuoyDetailScreen) and screen.station_id == second.id.upper()
+        if second.kind in ("buoy", "gauge"):
+            assert isinstance(screen, StationScreen) and screen.station_id == second.id.upper()
         else:
-            assert isinstance(screen, MainScreen)  # a gauge is pinned; it has no page yet
+            assert isinstance(screen, StormScreen)
 
 
 async def test_escape_leaves_the_chooser_without_opening_anything() -> None:
@@ -133,19 +133,16 @@ async def test_escape_leaves_the_chooser_without_opening_anything() -> None:
         assert view.focused_mark is None
 
 
-async def test_clicking_a_gauge_says_what_it_reads_and_changes_nothing() -> None:
+async def test_clicking_a_gauge_opens_its_station_page_and_changes_nothing() -> None:
     async with running(replay_app(), (200, 50)) as pilot:
         view = await map_of(pilot)
         mark, cell = alone(view, "gauge")
         before = pilot.app.config  # type: ignore[attr-defined]
-        shown = len(pilot.app._notifications)
         await pilot.click(MapView, offset=cell)
         await settle(pilot)
-        await pilot.pause(0.3)
-        notes = list(pilot.app._notifications)[shown:]
-        assert len(notes) == 1 and f"Gauge {mark.id}" in notes[0].message
-        assert pilot.app.config is before  # type: ignore[attr-defined]  # nothing was pinned
-        assert isinstance(pilot.app.screen, MainScreen)
+        screen = pilot.app.screen
+        assert isinstance(screen, StationScreen) and screen.kind == "coops" and screen.station_id == mark.id
+        assert pilot.app.config is before  # type: ignore[attr-defined]  # nothing was followed
 
 
 async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click() -> None:
@@ -160,7 +157,7 @@ async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click(
         _, (col, row) = alone(view, "buoy")
         await pilot.click(MapView, offset=(col, row))
         await settle(pilot)
-        assert isinstance(pilot.app.screen, BuoyDetailScreen)
+        assert isinstance(pilot.app.screen, StationScreen)
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -208,7 +205,7 @@ async def test_n_and_enter_reach_the_same_screens_as_a_click(size: tuple[int, in
         await press(pilot, "n")
         assert view.focused_mark == STORM and pilot.app.focused is view
         await press(pilot, "enter")
-        assert isinstance(pilot.app.screen, StormDetailScreen)
+        assert isinstance(pilot.app.screen, StormScreen)
         await back(pilot)
         await press(pilot, "n")  # the next one after the storm
         assert view.focused_mark == order[1]
@@ -228,7 +225,7 @@ async def test_every_buoy_in_the_keyboard_order_opens_by_enter() -> None:
                 await press(pilot, "n")
             await press(pilot, "enter")
             screen = pilot.app.screen
-            assert isinstance(screen, BuoyDetailScreen) and screen.station_id == mark.id.upper()
+            assert isinstance(screen, StationScreen) and screen.station_id == mark.id.upper()
             await back(pilot)
 
 
@@ -260,7 +257,7 @@ async def test_enter_still_belongs_to_the_screen_while_no_mark_is_focused() -> N
         view.focus()
         await settle(pilot)
         await press(pilot, "enter")  # the dashboard's own enter: the selected storm's detail
-        assert isinstance(pilot.app.screen, StormDetailScreen)
+        assert isinstance(pilot.app.screen, StormScreen)
 
 
 async def test_the_mark_ring_survives_the_scene_being_redrawn() -> None:

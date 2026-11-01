@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from textual.widgets import TabbedContent
 
 from eyewall.poll import Freshness, FreshnessState
 from eyewall.ui.chrome import FooterBar, footer_items
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import TABS
 from eyewall.ui.screens.main import MainScreen
+from eyewall.ui.screens.station import StationScreen
 from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, settle
 
 SIZES = [(80, 24), (140, 45)]
@@ -17,13 +15,6 @@ SIZES = [(80, 24), (140, 45)]
 
 def bottom(app) -> str:  # type: ignore[no-untyped-def]
     return screen_text(app).splitlines()[-1]
-
-
-async def show_tab(pilot, tab: str) -> str:  # type: ignore[no-untyped-def]
-    """Jump to a detail tab and return the bottom row once the footer has followed."""
-    await pilot.press(str(([t for t, _ in TABS].index(tab) + 1) % 10))
-    await pilot.pause()
-    return bottom(pilot.app)
 
 
 def labels(app) -> list[str]:  # type: ignore[no-untyped-def]
@@ -51,7 +42,7 @@ async def test_main_footer_is_one_row_and_lists_the_map_keys(size: tuple[int, in
         await into_the_storm(pilot)
         assert type(app.focused).__name__ == "MainMap"
         one_row(app, size[0])
-        assert labels(app) == ["zoom", "fit", "center", "layers", "open", "buoys"]
+        assert labels(app) == ["zoom", "fit", "center", "layers", "open", "buoys", "NHC text"]
 
 
 async def test_footer_follows_the_focus_without_waiting_for_the_clock() -> None:
@@ -64,27 +55,25 @@ async def test_footer_follows_the_focus_without_waiting_for_the_clock() -> None:
         assert "zoom" not in bottom(app) and "open" in bottom(app)
 
 
-# ---- the storm detail tabs ------------------------------------------------------------------------------------
+# ---- the storm screen and the NHC text -------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("size", SIZES)
-async def test_every_detail_tab_keeps_one_row_and_lists_only_working_keys(size: tuple[int, int]) -> None:
+async def test_the_storm_and_text_screens_keep_one_row_and_list_only_working_keys(size: tuple[int, int]) -> None:
     app = replay_app()
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
         await pilot.press("enter")
         await pilot.pause()
-        rows = {}
-        for tab, _ in TABS:
-            await show_tab(pilot, tab)
-            one_row(app, size[0])
-            rows[tab] = labels(app)
-        assert "tcp/tcm" in rows["public"]
-        assert not any("tcp/tcm" in shown for tab, shown in rows.items() if tab != "public")
-        assert all(("pin" in shown) == (tab in ("buoys", "tides")) for tab, shown in rows.items())
-        assert all(("charts" in shown) == (tab == "buoys") for tab, shown in rows.items())
-        assert "open" in rows["graphics"] and "copy URL" in rows["graphics"]
-        assert len({tuple(shown) for shown in rows.values()}) > 3  # it changes with the tab
+        one_row(app, size[0])
+        storm = labels(app)
+        assert "buoys" in storm and "text" in storm and "pictures" in storm
+        await pilot.press("t")
+        await pilot.pause()
+        one_row(app, size[0])
+        text = labels(app)
+        assert "buoys" not in text and "text" not in text
+        assert text != storm
 
 
 async def test_keys_that_are_not_listed_do_nothing() -> None:
@@ -94,55 +83,40 @@ async def test_keys_that_are_not_listed_do_nothing() -> None:
         await pilot.press("enter")
         await pilot.pause()
         screen = app.screen
-        await show_tab(pilot, "summary")
-        before, toasts = screen.show_tcm, len(app._notifications)
-        await pilot.press("t")
-        await pilot.press("p")
+        toasts = len(app._notifications)
+        await pilot.press("f", "s", "h")
         await pilot.pause()
-        assert screen.show_tcm is before
-        assert screen.query_one("#detail-tabs", TabbedContent).active == "tab-summary"
+        assert app.screen is screen
         assert len(app._notifications) == toasts
-        await show_tab(pilot, "public")
-        await pilot.press("t")
-        assert screen.show_tcm is not before
-
-
-async def test_a_tide_gauge_row_lists_no_enter() -> None:
-    app = replay_app()
-    async with running(app, (140, 45)) as pilot:
-        await into_the_storm(pilot)
-        await pilot.press("enter")
-        await pilot.pause()
-        await show_tab(pilot, "tides")
-        assert "charts" not in bottom(app) and "pin" in bottom(app)
 
 
 # ---- other screens --------------------------------------------------------------------------------------------
 
 
-async def test_the_watchlist_lists_its_keys_in_the_footer_not_in_its_header() -> None:
-    app = replay_app()
-    async with running(app, (140, 45)) as pilot:
-        await pilot.press("w")
-        await pilot.pause()
-        row = one_row(app, 140)
-        for text in ("a add", "d remove", "tab other table", "esc back", "enter charts"):
-            assert text in row, row
-        assert "Enter: charts" not in screen_text(app)
-
-
-async def test_the_buoy_charts_list_range_pin_and_back() -> None:
+async def test_the_buoys_screen_lists_its_keys_in_the_footer_not_in_its_header() -> None:
     app = replay_app()
     async with running(app, (140, 45)) as pilot:
         await into_the_storm(pilot)
-        app.open_buoy("41002")
-        for _ in range(50):  # until the buoy screen is up
+        await pilot.press("enter", "b")
+        await pilot.pause()
+        row = one_row(app, 140)
+        for text in ("enter open", "f follow", "s sort", "esc back"):
+            assert text in row, row
+        assert "Enter: open" not in screen_text(app)
+
+
+async def test_the_station_screen_lists_range_follow_map_and_back() -> None:
+    app = replay_app()
+    async with running(app, (140, 45)) as pilot:
+        await into_the_storm(pilot)
+        app.open_station("ndbc", "41002")
+        for _ in range(50):  # until the station screen is up
             await pilot.pause()
-            if isinstance(app.screen, BuoyDetailScreen):
+            if isinstance(app.screen, StationScreen):
                 break
         await pilot.pause()
         row = one_row(app, 140)
-        assert "h range" in row and "p pin" in row and "esc back" in row
+        assert "h 24/48/72 h" in row and "f follow" in row and "m map" in row and "esc back" in row
 
 
 # ---- the crowded worst case -----------------------------------------------------------------------------------
@@ -166,20 +140,6 @@ async def test_under_70_columns_the_pinned_keys_lose_their_words_but_stay() -> N
     async with running(app, (69, 24)) as pilot:
         await pilot.pause()
         assert bottom(app).rstrip().endswith("? ^p q") and "help" not in bottom(app)
-
-
-@pytest.mark.parametrize("size", [(80, 24), (100, 50), (120, 30), (200, 50), (280, 70)])
-async def test_the_forecast_table_fits_without_scrolling_sideways(size: tuple[int, int]) -> None:
-    from textual.widgets import DataTable
-
-    app = replay_app()
-    async with running(app, size) as pilot:
-        await into_the_storm(pilot)
-        await pilot.press("enter")
-        await pilot.pause()
-        await show_tab(pilot, "forecast")
-        table = app.screen.query_one("#forecast-table", DataTable)
-        assert table.row_count > 5 and table.virtual_size.width <= table.size.width
 
 
 @pytest.mark.parametrize("screen_key", ["g", "enter", "b"])

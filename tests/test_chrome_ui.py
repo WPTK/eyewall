@@ -7,12 +7,11 @@ from textual.pilot import Pilot
 from textual.widgets import Input
 
 from eyewall.ui.chrome import ChromeBar, FooterBar, TopBar
-from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
-from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.main import MainScreen
-from eyewall.ui.screens.watchlist import WatchlistScreen
+from eyewall.ui.screens.station import StationScreen
+from eyewall.ui.screens.storm import StormScreen
 from tests.ui_support import into_the_storm, press, replay_app, running, scripted_app, settle, wait_until
 
 SIZES = [(80, 24), (120, 30), (200, 50)]
@@ -59,7 +58,7 @@ async def test_detail_chrome_has_a_breadcrumb_and_esc_back(size: tuple[int, int]
     async with running(app, size) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "enter")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
         assert top(app).startswith(" Home › Erin")
         foot = bottom(app).rstrip()
         assert foot.endswith("? help  ^p menu  esc back"), foot
@@ -78,7 +77,7 @@ async def test_every_screen_has_both_bars() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
-        for key in ("A", "w"):
+        for key in ("A", "b"):
             await press(pilot, key)
             assert len(app.screen.query(TopBar)) == 1 and len(app.screen.query(FooterBar)) == 1
             assert "? help" in bottom(app)
@@ -96,7 +95,7 @@ async def test_esc_goes_back_and_q_quits_only_on_the_first_screen() -> None:
         await into_the_storm(pilot)
         await press(pilot, "enter")
         await press(pilot, "q")
-        assert isinstance(app.screen, StormDetailScreen) and not app._exit
+        assert isinstance(app.screen, StormScreen) and not app._exit
         await press(pilot, "escape")
         assert isinstance(app.screen, MainScreen)
         await press(pilot, "escape")
@@ -135,7 +134,7 @@ async def test_clicking_a_footer_key_does_what_the_key_does() -> None:
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
         await click(pilot, FooterBar, "key:enter")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
 
 
 async def test_clicking_the_pinned_keys() -> None:
@@ -146,7 +145,7 @@ async def test_clicking_the_pinned_keys() -> None:
         assert isinstance(app.screen, HelpScreen)
         await press(pilot, "escape")
         await press(pilot, "enter")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
         await click(pilot, FooterBar, "app:back")
         assert isinstance(app.screen, MainScreen)
 
@@ -157,12 +156,12 @@ async def test_clicking_a_breadcrumb_goes_back_to_it() -> None:
         await into_the_storm(pilot)
         await press(pilot, "enter")
         station = next(iter(app.store.stations))
-        app.open_buoy(station)
+        app.open_station("ndbc", station)
         await settle(pilot)
-        assert isinstance(app.screen, BuoyDetailScreen)
+        assert isinstance(app.screen, StationScreen)
         assert top(app).startswith(f" Home › Erin › Buoy {station}")
         await click(pilot, TopBar, "app:crumb(1)")
-        assert isinstance(app.screen, StormDetailScreen)
+        assert isinstance(app.screen, StormScreen)
         await click(pilot, TopBar, "app:crumb(0)")
         assert isinstance(app.screen, MainScreen)
 
@@ -192,9 +191,9 @@ async def palette(pilot: Pilot[None], text: str) -> None:
 async def test_the_palette_opens_and_runs_an_action() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
-        await palette(pilot, "watchlist")
+        await palette(pilot, "outlook")
         await pilot.press("enter")
-        await wait_until(pilot, lambda: isinstance(app.screen, WatchlistScreen))
+        await wait_until(pilot, lambda: type(app.screen).__name__ == "NhcTextScreen")
 
 
 async def test_the_palette_lists_every_screen_and_action_before_anything_is_typed() -> None:
@@ -203,22 +202,25 @@ async def test_the_palette_lists_every_screen_and_action_before_anything_is_type
         await press(pilot, "ctrl+p")
         await pilot.pause(0.6)
         text = "\n".join(s.text for s in app.screen._compositor.render_strips())
-        assert "Open the watchlist" in text and "Go to the map" in text
+        assert "Open NHC's outlook" in text and "Go to the map" in text
         assert "Change theme" not in text  # Textual's own commands are not offered
 
 
-async def test_the_palette_finds_a_storm_and_a_station() -> None:
+async def test_the_menu_finds_a_storm_and_the_slash_menu_a_station() -> None:
     app = replay_app()
     async with running(app, (120, 30)) as pilot:
         await into_the_storm(pilot)
         await palette(pilot, "erin")
         await pilot.press("enter")
-        await wait_until(pilot, lambda: isinstance(app.screen, StormDetailScreen))
+        await wait_until(pilot, lambda: isinstance(app.screen, StormScreen))
         await press(pilot, "escape")
         station = next(iter(app.store.stations))
-        await palette(pilot, station)
+        await press(pilot, "slash")
+        await pilot.pause(0.3)
+        await pilot.press(*station)
+        await pilot.pause(0.6)
         await pilot.press("enter")
-        await wait_until(pilot, lambda: isinstance(app.screen, BuoyDetailScreen))
+        await wait_until(pilot, lambda: isinstance(app.screen, StationScreen))
         assert app.screen.station_id == station.upper()  # type: ignore[attr-defined]
 
 
@@ -238,7 +240,7 @@ async def test_the_palette_hides_replay_commands_on_a_live_source() -> None:
 async def test_a_cancelled_search_does_not_cancel_the_catalog_fetch() -> None:
     import asyncio
 
-    from eyewall.ui.nav import EyewallCommands
+    from eyewall.ui.nav import StationCommands
 
     app = scripted_app()
     async with running(app, (120, 30)):
@@ -253,7 +255,7 @@ async def test_a_cancelled_search_does_not_cancel_the_catalog_fetch() -> None:
 
         app.ensure_catalogs = slow  # type: ignore[method-assign]
         app.store.stations.clear()
-        provider = EyewallCommands(app.screen, None)
+        provider = StationCommands(app.screen, None)
 
         async def drain(query: str) -> None:
             async for _ in provider.search(query):
@@ -271,12 +273,12 @@ async def test_the_alert_count_outranks_the_replay_clock_at_80_columns_on_a_deep
     async with running(app, (80, 24)) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "enter")
-        app.open_buoy(next(iter(app.store.stations)))
+        app.open_station("ndbc", next(iter(app.store.stations)))
         app.alert_log = [object()] * 3  # type: ignore[list-item]
         await settle(pilot)
         app._for_screens("refresh_status")
         await settle(pilot)
-        assert isinstance(app.screen, BuoyDetailScreen)
+        assert isinstance(app.screen, StationScreen)
         assert "3 alerts" in top(app)
 
 
@@ -298,7 +300,7 @@ async def test_the_palette_offers_no_commands_while_a_dialog_is_open() -> None:
         await press(pilot, "ctrl+p")
         await pilot.pause(0.6)
         text = "\n".join(s.text for s in app.screen._compositor.render_strips())
-        assert "Open the watchlist" not in text and "Go to the map" not in text
+        assert "Open NHC's outlook" not in text and "Go to the map" not in text
 
 
 async def test_q_does_nothing_inside_the_full_screen_map_and_the_footer_agrees() -> None:

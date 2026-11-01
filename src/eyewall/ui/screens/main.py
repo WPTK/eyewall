@@ -23,18 +23,13 @@ from textual.events import Resize
 from textual.widgets import Static
 
 from eyewall.clock import format_age
-from eyewall.models.storm import Classification
-from eyewall.poll import FreshnessState
 from eyewall.sources import protocol
-from eyewall.sources.bundle import DEMO_TITLE
 from eyewall.state.store import StormState
 from eyewall.ui import adapt, nav
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
-from eyewall.ui.screens.outlook_note import OutlookNote
 from eyewall.ui.widgets import side_info, storm_cards, warning_list
 from eyewall.ui.widgets.map_view import MapPane, MapView
-from eyewall.ui.widgets.side_panel import Block, SidePanel, View
-from eyewall.ui.words import outlook as outlook_words
+from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, View
 from eyewall.ui.words import storm as storm_words
 
 REFRESH_SECONDS = 30.0  # the ages on the cards move without a new poll
@@ -123,11 +118,26 @@ def strip_blocks(view: View, width: int) -> list[Block]:
     storm_line = storm_cards.strip_line(view, width)
     if storm_line is not None:
         out.append(Block((storm_line,), 0))
-    for line in warning_list.unread_lines(view, width):
-        out.append(Block((line,), 0))
+    unread = warning_list.unread_lines(view, width)
+    if unread:  # one unread storm is named; any more are counted, so the strip never grows past one line for them
+        out.append(Block((unread[0],), 0))
+    if len(unread) > 1:
+        more = Text(f"+{len(unread) - 1} more {view.g.crumb}", style="underline", no_wrap=True)
+        out.append(Block((Line(more, unread[1].action),), 0))
     warnings = warning_list.strip_line(view, width)
     if warnings is not None:
-        out.append(Block((warnings,), 1))
+        found = warning_list.items(view)
+        # Priority 1 goes first when the strip is short; it is then never silent: `N watches and warnings >`.
+        out.append(
+            Block(
+                (warnings,),
+                1,
+                group="warnings",
+                more=warnings.action,
+                noun=("watch or warning", "watches and warnings"),
+                count=max(len(found), 1),
+            )
+        )
     return out
 
 
@@ -183,40 +193,12 @@ class MainScreen(ChromeScreen):
     # ---- data -------------------------------------------------------------------------------------------------
 
     def _view(self) -> View:
-        eye = self.eye
-        fresh = eye.poller.freshness(protocol.STORMS)
-        old = fresh.state in (FreshnessState.ERROR, FreshnessState.STALE) and eye.store.storms_loaded
-        failed = frozenset(f for f in protocol.FEEDS if eye.poller.freshness(f).state is FreshnessState.ERROR)
-        return View(
-            store=eye.store,
-            preset=eye.preset,
-            now=eye.now(),
-            g=eye.glyphs,
-            tz=eye.local_tz,
-            states=self.states,
-            selected=eye.selected,
-            basins=eye.basin_view,
-            replay_offer=DEMO_TITLE if eye.replay_available() else None,
-            storms_old=old,
-            storms_age=fresh.age,
-            storms_known=eye.store.storms_loaded,
-            failed=failed,
-            ascii=eye.config.map.glyph_set == "ascii",
-            rich=self.tier is Tier.LARGE,
-        )
-
-    def _storm_states(self) -> tuple[StormState, ...]:
-        eye = self.eye
-        shown = [
-            s for s in eye.store.storms.values() if s.storm.basin is not None and s.storm.basin.value in eye.basin_view
-        ]
-        shown.sort(key=lambda s: (s.storm.classification is Classification.PTC, -(s.storm.intensity_kt or 0)))
-        return tuple(shown)
+        return View.of(self.eye, self.states, rich=self.tier is Tier.LARGE)
 
     def refresh_data(self) -> None:
         """Take the storms from the store, keep the selection on one that is still there, and redraw."""
         eye = self.eye
-        self.states = self._storm_states()
+        self.states = eye.storm_states()
         ids = [s.storm.id for s in self.states]
         if eye.selected not in ids:
             eye.selected = ids[0] if ids else None
@@ -253,30 +235,20 @@ class MainScreen(ChromeScreen):
         self.map_view.fit()
 
     def action_outlook(self) -> None:
-        """`O`: NHC's outlook, every area with its exact chances, in a small dialog."""
+        """`O`: the tropical weather outlook text, every area with its exact chances."""
         eye = self.eye
-        if eye.store.outlook is None:
-            words = [
-                "Outlook data unavailable."
-                if protocol.OUTLOOK in self._view().failed
-                else "Waiting for the first outlook."
-            ]
-        else:
-            words = [w.text for w in outlook_words.outlook_sentences(eye.store.outlook, eye.basin_view)]
-        eye.push_screen(OutlookNote(words))
+        eye.open_text(eye.selected, "outlook")
 
-    def action_open_detail(self) -> None:
-        eye = self.eye
-        if eye.selected in eye.store.storms:
-            eye.open_detail(eye.selected)
+    def action_open_storm(self) -> None:
+        self.eye.open_storm(self.eye.selected)
 
     def action_buoys(self) -> None:
-        """The Buoys tab of the selected storm, or the watchlist when there is no storm to look at."""
-        eye = self.eye
-        if eye.selected in eye.store.storms:
-            eye.open_detail(eye.selected, "buoys")
-        else:
-            eye.action_watchlist()
+        """The stations near the selected storm, or Your stations when there is no storm to look at."""
+        self.eye.open_buoys(self.eye.selected)
+
+    def action_text(self) -> None:
+        """The NHC text for the selected storm, or the outlook when there is no storm."""
+        self.eye.open_text(self.eye.selected)
 
     def action_basin(self, code: str) -> None:
         self.eye.basin_filter = code or None
