@@ -242,14 +242,25 @@ def main():
     mid_c = cols // 2
     rowy = naive.y0 + (mid_r + 0.5) * naive.ch
     colx = naive.x0 + (mid_c + 0.5) * naive.cw
-    xs = {}
-    for k in (1, cols // 2, cols - 2):
-        g = naive.x0 + k * naive.cw
-        xs[k] = find_boundary("x", rowy, g - 16, g + 16, k)
-    ys = {}
-    for k in (1, rows // 2, rows - 1):
-        g = naive.y0 + k * naive.ch
-        ys[k] = find_boundary("y", colx, g - 16, g + 16, k)
+    def sweep(axis, fixed, o0, size0, n):
+        """find boundaries for cell 1, n//2, n-2 (or n-1 for rows) refining the cell size estimate as we go."""
+        ks = [1, n // 2, (n - 2) if axis == "x" else (n - 1)]
+        out = {}
+        est = size0
+        first = None
+        for k in ks:
+            g = o0 + k * est if first is None else first[1] + (k - first[0]) * est
+            out[k] = find_boundary(axis, fixed, g - 16 if first is None else g - 8, g + 16 if first is None else g + 8, k)
+            if out[k] is None:
+                return out
+            if first is None:
+                first = (k, out[k])
+            else:
+                est = (out[k] - first[1]) / (k - first[0])
+        return out
+
+    xs = sweep("x", rowy, naive.x0, naive.cw, cols)
+    ys = sweep("y", colx, naive.y0, naive.ch, rows)
     RES["sweep_x_boundaries"], RES["sweep_y_boundaries"] = xs, ys
     save()
     if None in xs.values() or None in ys.values():
