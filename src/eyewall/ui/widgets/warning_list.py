@@ -13,6 +13,7 @@ from rich.text import Text
 
 from eyewall.models.watches import WatchWarningArea
 from eyewall.palette import DIM, FRESHNESS_CUES, NEUTRAL, PATTERN_SAMPLES, WATCH_WARNING_CUES
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui.format import collapse
 from eyewall.ui.widgets.side_panel import OPEN, Block, Line, View, heading, spread, wrapped
@@ -113,7 +114,7 @@ def unread(view: View) -> list[StormState]:
 
 def unread_text(state: StormState) -> str:
     name = state.storm.name.title() if state.storm.name else state.storm.id.upper()
-    adv = state.storm.adv_num
+    adv = current_adv(state.storm)
     return (
         f"{name}: watches and warnings not yet read for advisory {adv}."
         if adv

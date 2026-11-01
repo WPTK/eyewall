@@ -24,6 +24,7 @@ def _storm_block(state: StormState, preset: Preset, now: datetime, tz: tzinfo | 
     out = [storm_words.storm_lead(state, preset)]
     for words in (
         storm_words.storm_wind(state, preset),
+        storm_words.unread_warnings(state),
         *storm_words.warning_sentences(state),
         *storm_words.meaning_sentences(state),
         storm_words.size_sentence(state, preset),
@@ -60,8 +61,8 @@ def _buoy_line(
     parts = [
         station_words.buoy_lead(entry, storm_name, obs, waves, preset),
         station_words.pressure_trend(store.tendency(station_id, now), preset),
-        station_words.wind_trend_sentence(wind_trend(rows), preset),
-        station_words.wave_trend_sentence(wave_trend(rows), preset),
+        station_words.wind_trend_sentence(wind_trend(rows, now=now), preset),
+        station_words.wave_trend_sentence(wave_trend(rows, now=now), preset),
         station_words.approach_sentence(entry, preset),
     ]
     return " ".join(p.text for p in parts if p is not None)

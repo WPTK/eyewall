@@ -14,6 +14,7 @@ from dataclasses import replace
 from typing import Any
 
 from eyewall.models.obs import Parsed, TideStation
+from eyewall.textclean import printable
 
 WATER_LEVEL = "water_level"
 MET = "met"
@@ -57,7 +58,7 @@ def parse_tide_stations(text: str | bytes, product: str = WATER_LEVEL) -> Parsed
         stations.append(
             TideStation(
                 id=station_id,
-                name=str(entry.get("name") or "").strip(),
+                name=printable(str(entry.get("name") or "")).strip(),
                 lat=lat,
                 lon=lon,
                 state=str(entry.get("state") or "").strip(),

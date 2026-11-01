@@ -44,6 +44,7 @@ from eyewall.state.tides import is_silent as tide_is_silent
 from eyewall.state.tides import latest_residual
 from eyewall.state.tides import observation_age as tide_age
 from eyewall.state.trends import SILENT_AFTER, Extremes, interval_extremes
+from eyewall.textclean import printable
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.units import MISSING, Preset, convert, format_value
 
@@ -161,7 +162,7 @@ def _position(entry: Entry[Station] | Entry[TideStation], preset: Preset) -> tup
 
 
 def clean_name(name: str) -> str:
-    return " ".join(name.split())
+    return " ".join(printable(name).split())
 
 
 def _signed(value: float, unit: str, decimals: int) -> str:

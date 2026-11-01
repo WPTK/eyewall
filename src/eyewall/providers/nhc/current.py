@@ -32,6 +32,7 @@ from eyewall.models.storm import (
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.ids import parse_adv_num
 from eyewall.providers.nhc.times import parse_iso
+from eyewall.textclean import printable
 
 _COORD_TEXT = re.compile(r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<hemisphere>[NSEW])\s*$", re.IGNORECASE)
 
@@ -55,7 +56,7 @@ def _int(value: Any) -> int | None:
 def _text(value: Any) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
+    text = printable(str(value)).strip()
     return text or None
 
 
