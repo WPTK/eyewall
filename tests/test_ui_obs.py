@@ -356,7 +356,7 @@ async def test_a_quiet_day_polls_the_watchlist_and_the_main_screen_counts_it() -
         await wait_until(pilot, lambda: "41010" in app.store.latest)
         await settle(pilot)
         text = " ".join(screen_text(app).split())
-        assert "YOUR STATIONS" in text and "tide gauge" in text
+        assert "Your stations" in text and "tide gauge" in text
         assert "Highest wind" in text or "not reporting" in text
 
 

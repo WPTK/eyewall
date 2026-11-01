@@ -4,6 +4,7 @@ import importlib.util
 import math
 import struct
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -180,8 +181,8 @@ def test_the_rank_cutoff_follows_the_zoom(deg, rank):
 def test_a_coarse_view_labels_only_the_great_places_and_a_close_one_adds_the_small():
     places = (
         place("Great", 30.0, -70.0, rank=2),
-        place("Town", 30.3, -69.5, rank=6),
-        place("Hamlet", 29.7, -70.5, rank=8),
+        place("Town", 31.6, -69.0, rank=6),
+        place("Hamlet", 28.4, -71.0, rank=8),
     )
     seen = {}
     for deg in (0.6, 0.35, 0.2, 0.05):
@@ -192,8 +193,10 @@ def test_a_coarse_view_labels_only_the_great_places_and_a_close_one_adds_the_sma
     assert seen == {0.6: {"Great"}, 0.35: {"Great"}, 0.2: {"Great", "Town"}, 0.05: {"Great", "Town", "Hamlet"}}
 
 
-def test_at_most_one_label_per_150_cells_and_the_most_important_places_win():
-    assert P.label_limit(60, 20) == 8 and P.label_limit(2, 2) == 1
+def test_labels_scale_with_the_map_and_the_most_important_places_win():
+    # about six on a 120 by 30 terminal's map, more on a bigger one, never none
+    assert P.label_limit(98, 27) == 5 and P.label_limit(170, 47) == 17 and P.label_limit(2, 2) == 1
+    assert P.label_limit(60, 20) == 2
     places = tuple(
         sorted(
             (place(f"P{i:02d}", 30.0 + (i % 5) * 0.1, -70.0 + (i // 5) * 0.2, rank=i % 3) for i in range(30)),
@@ -201,15 +204,60 @@ def test_at_most_one_label_per_150_cells_and_the_most_important_places_win():
         )
     )
     canvas, view = blank(60, 20, deg=0.01)
-    assert P.draw_places(canvas, view, NEUTRAL, places) <= 8
+    assert P.draw_places(canvas, view, NEUTRAL, places) <= 2
     text = canvas.to_text()
     shown = [p for p in places if p.name in text]
-    assert 1 <= len(shown) <= 8
+    assert 1 <= len(shown) <= 2
     dropped = [p for p in places if p.name not in text]
-    assert max(p.scalerank for p in shown) <= min(p.scalerank for p in dropped) or len(shown) == 8
+    assert max(p.scalerank for p in shown) <= min(p.scalerank for p in dropped) or len(shown) == 2
 
 
 # -------------------------------------------------------------------------------------------- collisions, glyphs
+
+
+def label_runs(bare: Canvas, drawn: Canvas) -> list[tuple[int, int, int]]:
+    """(row, first column, last column) of every run of cells the places changed."""
+    runs = []
+    for row in range(drawn.rows):
+        start = None
+        for col in range(drawn.cols + 1):
+            changed = col < drawn.cols and bare.cell(col, row) != drawn.cell(col, row)
+            if changed and start is None:
+                start = col
+            elif not changed and start is not None:
+                runs.append((row, start, col - 1))
+                start = None
+    return runs
+
+
+def test_a_crowded_view_keeps_labels_apart_from_each_other_and_from_marks():
+    """Regression: names used to stack on adjacent rows and crowd the buoy and storm marks until neither read."""
+    names = ("Houston", "Tampa", "Miami", "Monterrey", "Guadalajara", "Mexico City", "Maracaibo", "Caracas", "Bogota")
+    places = tuple(
+        place(name, 20.0 + (i % 3) * 0.7, -80.0 + (i // 3) * 1.4 + (i % 2) * 0.3, rank=i % 4)
+        for i, name in enumerate(names * 3)
+    )
+    places = tuple(sorted((replace(p, name=f"{p.name}{i}") for i, p in enumerate(places)), key=lambda p: p.scalerank))
+    view = Viewport(21.0, -78.0, 0.1, 100, 27)
+    marks = StormScene(center=TrackPoint(21.0, -78.0, 90.0), best_track=(TrackPoint(20.5, -79.0, 80.0),))
+    bare = render_map(view, MapScene(storms=(marks,)), options=NO_BASE_NO_PLACES)
+    drawn = bare.copy()
+    count = P.draw_places(drawn, view, NEUTRAL, places)
+    assert 1 < count <= P.label_limit(100, 27)
+    runs = label_runs(bare, drawn)
+    assert len(runs) == count
+    for i, (row_a, lo_a, hi_a) in enumerate(runs):
+        for row_b, lo_b, hi_b in runs[i + 1 :]:
+            if abs(row_a - row_b) <= 1:  # same or neighbouring row: a blank cell at least between them
+                assert lo_b > hi_a + 1 or lo_a > hi_b + 1, (runs[i], (row_b, lo_b, hi_b))
+    # nothing the places drew sits on a cell that already held a mark, and the mark is still there
+    assert drawn.to_text().count("◉") == 1
+    assert all(
+        bare.cell(c, r) == drawn.cell(c, r)
+        for r in range(drawn.rows)
+        for c in range(drawn.cols)
+        if bare.cell(c, r)[0] == "◉"
+    )
 
 
 def test_a_lower_ranked_place_that_would_touch_a_label_is_dropped():

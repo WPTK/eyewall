@@ -110,8 +110,15 @@ class ScriptedSource:
 
     name = "scripted"
 
-    def __init__(self, outlook: Outlook | None = None) -> None:
+    def __init__(
+        self,
+        outlook: Outlook | None = None,
+        stations: tuple[Station, ...] = (),
+        gauges: tuple[TideStation, ...] = (),
+    ) -> None:
         self._outlook = outlook if outlook is not None else quiet_outlook()
+        self._stations = stations
+        self._gauges = gauges
         self.fail = False
         self.calls: dict[str, int] = {}
 
@@ -168,7 +175,7 @@ class ScriptedSource:
         raise FetchError(url, "no images in this fake")
 
     async def ndbc_stations(self) -> tuple[Station, ...]:
-        return ()
+        return self._stations
 
     async def ndbc_latest(self) -> tuple[LatestObservation, ...]:
         return ()
@@ -180,7 +187,7 @@ class ScriptedSource:
         return Parsed(message="scripted: no supplemental file")
 
     async def coops_stations(self) -> tuple[TideStation, ...]:
-        return ()
+        return self._gauges
 
     async def coops_series(self, station: TideStation, datum: str) -> TideSeries:
         raise FetchError("scripted://tides", "no gauges")
@@ -205,3 +212,12 @@ async def wait_until(pilot: Pilot[None], condition: Predicate, seconds: float = 
         if asyncio.get_running_loop().time() > deadline:
             raise AssertionError("condition not reached in time")
         await pilot.pause(0.05)
+
+
+# The default watchlist (41010, 42001, 41047 and gauge 8721604) at their real positions, for a quiet day with marks.
+WATCHLIST_BUOYS = (
+    Station("41010", "Canaveral East", 28.878, -78.485),
+    Station("42001", "Mid Gulf", 25.897, -89.668),
+    Station("41047", "NE Bahamas", 27.465, -71.49),
+)
+WATCHLIST_GAUGES = (TideStation("8721604", "Trident Pier, Port Canaveral", 28.416, -80.593),)

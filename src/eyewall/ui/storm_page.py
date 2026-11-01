@@ -140,7 +140,7 @@ def chances_lines(view: View, state: StormState, width: int) -> list[Line]:
         return []
     out = _heading("CHANCE OF STRONG WIND")
     out += wrapped(words.text, width, prefix="  ", action=CHANCES)
-    out.append(link(view, "all places", width, CHANCES, key="p"))
+    out.append(link(view, "all places", CHANCES, key="p"))
     return out
 
 

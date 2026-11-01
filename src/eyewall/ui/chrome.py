@@ -280,8 +280,8 @@ def footer_items(screen: Screen[object]) -> tuple[list[FooterItem], list[FooterI
     """(screen keys, pinned keys) for `screen` as it is now.
 
     The keys are the active, enabled bindings found from the focused widget up to the app, nearest first, that the key
-    table lists for the footer; inside one node they follow the table's order. The pinned group is `?`, the menu key and
-    the back key, or `q` on the first screen."""
+    table lists for the footer, except the `busy` ones on a screen that says it is `quiet`; inside one node they follow
+    the table's order. The pinned group is `?`, the menu key and the back key, or `q` on the first screen."""
     app = screen.app
     seen: list[tuple[int, int, nav.Key, str]] = []
     nodes: dict[int, int] = {}
@@ -293,6 +293,8 @@ def footer_items(screen: Screen[object]) -> tuple[list[FooterItem], list[FooterI
         scopes = ("app", "replay") if isinstance(node, App) else getattr(node, "NAV_SCOPES", ())
         entry = nav.find(key, active.binding.action, scopes)
         if entry is None or not entry.footer or entry in taken or entry.action in nav.PINNED:
+            continue
+        if entry.busy and getattr(screen, "quiet", False):
             continue
         taken.add(entry)
         rank = nodes.setdefault(id(node), len(nodes))

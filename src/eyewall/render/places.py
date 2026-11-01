@@ -20,7 +20,7 @@ from eyewall.units import LABELS, convert
 # (deg per dot at or above, highest scalerank labelled): coarse views name only the largest places.
 RANK_BY_ZOOM: tuple[tuple[float, int], ...] = ((0.5, 2), (0.3, 4), (0.1, 6))
 FINEST_RANK = 8
-CELLS_PER_LABEL = 150  # at most one place label per this many map cells
+CELLS_PER_LABEL = 450  # at most one place label per this many map cells: about six on a 120 by 30 terminal
 KEEP_CLEAR = Priority.WARNING  # place labels and the scale bar stay off cells drawn at this priority or higher
 NM_PER_DEGREE = 60.0
 SCALE_UNITS = ("nm", "mi", "km")
@@ -56,11 +56,14 @@ def _name(place: Place, mode: Mode) -> str | None:
 
 
 def _clear(canvas: Canvas, col: int, row: int, length: int) -> bool:
-    """Whether a label fits at (col, row) with a blank cell on each side, where the canvas has one."""
+    """Whether a label fits at (col, row) with a blank cell on each side and no text on the rows above and below, so
+    two names never touch or stack, and with nothing meaningful drawn under it."""
     if col < 0 or col + length > canvas.cols:
         return False
     lo, hi = max(0, col - 1), min(canvas.cols, col + length + 1)
-    return canvas.text_free(lo, row, hi - lo, below=KEEP_CLEAR)
+    if not canvas.text_free(lo, row, hi - lo, below=KEEP_CLEAR):
+        return False
+    return all(r < 0 or r >= canvas.rows or canvas.text_free(lo, r, hi - lo) for r in (row - 1, row + 1))
 
 
 def draw_places(

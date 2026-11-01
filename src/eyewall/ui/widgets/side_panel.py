@@ -142,20 +142,21 @@ def wrapped(
 
 
 def heading(label: str, section: str, *, action: str | None = None) -> Block:
-    line = Line(Text(label, style=f"bold {HEADING}", no_wrap=True), action)
+    """A section's title in sentence case and dim: it names the block under it without shouting over the text."""
+    line = Line(Text(label, style="dim", no_wrap=True), action)
     return Block((line,), gap=True, section=section, title=True)
 
 
-def link(view: View, label: str, width: int, action: str, *, key: str = "") -> Line:
-    """`b open the list >`, right-aligned, underlined: the one kind of text on this panel that is a link."""
+def link(view: View, label: str, action: str, *, key: str = "") -> Line:
+    """`b  open the list >`: a bold key, plain words and a colored arrow, under the text it belongs to. It is the one
+    kind of line on this panel that is a link, and the arrow is what marks it."""
     text = Text(no_wrap=True, overflow="ellipsis")
-    body = f"{key} {label}".strip()
-    pad = max(width - cell_len(body) - 2, 0)
-    text.append(" " * pad)
+    text.append("  ")
     if key:
-        text.append(key, style="bold")
-        text.append(" ")
-    text.append(f"{label} {view.g.crumb}", style="underline")
+        text.append(key, style=f"bold {HEADING}")
+        text.append("  ")
+    text.append(f"{label} ")
+    text.append(view.g.crumb, style=f"bold {HEADING}")
     return Line(text, action)
 
 
@@ -176,13 +177,14 @@ def height_of(blocks: Sequence[Block]) -> int:
     return rows
 
 
-def _more_line(label: str, width: int, action: str | None) -> Line:
+def _more_line(label: str, action: str | None) -> Line:
     text = Text(no_wrap=True, overflow="ellipsis")
-    text.append(" " * max(width - cell_len(label) - 1, 0) + label, style="underline")
+    text.append(f"  {label[:-1]}")
+    text.append(label[-1], style=f"bold {HEADING}")
     return Line(text, action)
 
 
-def fit_blocks(blocks: Sequence[Block], rows: int, width: int = 0, arrow: str = ">") -> list[Line]:
+def fit_blocks(blocks: Sequence[Block], rows: int, arrow: str = ">") -> list[Line]:
     """The lines that fit `rows`: whole blocks only, the highest priority numbers dropped first (the later of two equal
     ones first).
 
@@ -206,13 +208,13 @@ def fit_blocks(blocks: Sequence[Block], rows: int, width: int = 0, arrow: str = 
                 one, many = block.noun  # type: ignore[misc]
                 total = sum(blocks[i].count for i in whole_lost[block.group])
                 label = f"{total} {one if total == 1 else many} {arrow}"
-                out.append(Block((_more_line(label, width, block.more),), 0, gap=block.gap, section=block.section))
+                out.append(Block((_more_line(label, block.more),), 0, gap=block.gap, section=block.section))
             elif index in present and (not block.title or block.section in alive):
                 later = any(i > index and blocks[i].group == block.group for i in indices)
                 lost = sum(blocks[i].count for i in members.get(block.group or "", []) if i not in present)
                 if block.group and lost and not later:
                     label = f"+{lost} more {arrow}"
-                    block = replace(block, lines=(*block.lines, _more_line(label, width, block.more)))
+                    block = replace(block, lines=(*block.lines, _more_line(label, block.more)))
                 out.append(block)
         return out
 
@@ -277,7 +279,7 @@ class SidePanel(Static):
             rows = self.size.height - self.styles.gutter.height
         else:
             rows = self._max_rows if self._max_rows is not None else 99
-        lines = fit_blocks(blocks, rows, width, self.eye.glyphs.crumb) if rows > 0 else []
+        lines = fit_blocks(blocks, rows, self.eye.glyphs.crumb) if rows > 0 else []
         self._state.lines = lines
         if not self._fill:
             self.styles.height = max(len(lines), 1) if lines else 0

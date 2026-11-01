@@ -148,6 +148,7 @@ class Canvas:
         self._prio = [-1] * count
         self._char: list[str | None] = [None] * count
         self._bold = [False] * count
+        self._bg: list[str | None] = [None] * count
         self._clip = (0, 0, self.width, self.height)
         self._bit_table = _BRAILLE_BITS if mode is Mode.BRAILLE else _BLOCK_BITS
         self._glyph_table = {Mode.BRAILLE: _BRAILLE_GLYPHS, Mode.HALF: _HALF_GLYPHS, Mode.ASCII: _ASCII_GLYPHS}[mode]
@@ -166,6 +167,7 @@ class Canvas:
         other._prio = self._prio[:]
         other._char = self._char[:]
         other._bold = self._bold[:]
+        other._bg = self._bg[:]
         return other
 
     @contextmanager
@@ -401,6 +403,39 @@ class Canvas:
                             fg[i] = color
                             prios[i] = prio
 
+    def tint_polygon(self, rings: Iterable[Sequence[Dot]], color: str) -> None:
+        """Give the background of every cell that is at least half inside the rings (even-odd, so a ring inside
+        another one is a hole) a color. Coverage is counted in dots, so the edge of the tint follows the shore as
+        closely as whole cells can. Dots, text and markers drawn on a tinted cell keep it, so the area reads as one
+        flat fill."""
+        dots_x, dots_y, cols = self.dots_x, self.dots_y, self.cols
+        crossings: list[list[float]] = [[] for _ in range(self.height)]
+        for ring in rings:
+            n = len(ring)
+            for i in range(n if n >= 3 else 0):
+                xa, ya = ring[i]
+                xb, yb = ring[(i + 1) % n]
+                if ya == yb or not all(map(math.isfinite, (xa, ya, xb, yb))):
+                    continue
+                if ya > yb:
+                    xa, ya, xb, yb = xb, yb, xa, ya
+                first = max(0, math.ceil(ya - 0.5))
+                last = min(self.height, math.ceil(yb - 0.5))  # exclusive, as in fill_polygon
+                slope = (xb - xa) / (yb - ya)
+                for y in range(first, last):
+                    crossings[y].append(xa + (y + 0.5 - ya) * slope)
+        covered = [0] * (cols * self.rows)
+        for y, xs in enumerate(crossings):
+            xs.sort()
+            base = (y // dots_y) * cols
+            for k in range(0, len(xs) - 1, 2):
+                for x in range(max(0, math.ceil(xs[k] - 0.5)), min(self.width, math.ceil(xs[k + 1] - 0.5))):
+                    covered[base + x // dots_x] += 1
+        half = dots_x * dots_y / 2.0
+        for i, count in enumerate(covered):
+            if count >= half:
+                self._bg[i] = color
+
     # ------------------------------------------------------------------------------------------------ text, markers
 
     def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
@@ -458,7 +493,10 @@ class Canvas:
         ch = self._char[i]
         if ch is None:
             ch = self._glyph_table[self._bits[i]]
-        return (ch, _BLANK if ch == " " else Style(self._fg[i], None, self._bold[i]))
+        bg = self._bg[i]
+        if ch == " ":
+            return (ch, _BLANK if bg is None else Style(None, bg))
+        return (ch, Style(self._fg[i], bg, self._bold[i]))
 
     def rows_as_runs(self) -> list[list[Run]]:
         """Rows of (text, style) runs with neighbouring cells of one style merged."""
@@ -469,7 +507,7 @@ class Canvas:
             current = _BLANK
             for col in range(self.cols):
                 ch, style = self.cell(col, row)
-                if ch == " " and pending:
+                if ch == " " and pending and style.bg == current.bg:
                     style = current  # a blank cell joins the run before it
                 if pending and style != current:
                     runs.append(("".join(pending), current))
