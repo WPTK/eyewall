@@ -67,6 +67,7 @@ def main() -> int:
             "-p",
             "no:cacheprovider",
             "-q",
+            "--timeout=1500",
             *extra,
         ]
         code = subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode
