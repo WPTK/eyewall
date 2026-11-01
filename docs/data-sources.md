@@ -102,6 +102,13 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
   no interval they are 6-minute; `date=today` gives the day's tides. Station list entries are about 2.5 KB each
   (780 KB for `waterlevels`) because of nested link objects; use `id`, `name`, `lat`, `lng`, `state`, `greatlakes`.
   Only the `type=met` list says which gauges have wind and pressure.
+- **Usage policies:** api.weather.gov (NWS) requires an identifying `User-Agent` and rate-limits abusers
+  (<https://www.weather.gov/documentation/services-web-api>); NOAA data is public domain. CO-OPS asks every API
+  client to send `application=<name>` (<https://api.tidesandcurrents.noaa.gov/api/prod/>), which eyewall does. NDBC's
+  data page asks for minimal retrievals (<https://www.ndbc.noaa.gov/faq/rss_access.shtml>). eyewall sends one shared
+  `User-Agent` (no email), conditional requests, honours `Retry-After` (seconds or HTTP-date, capped at 30 s) and polls
+  no faster than each feed's CDN `max-age`; the `[poll]` config values cannot go below those cadences, so
+  `Cache-Control: max-age` is met by the schedule and a revalidation is a cheap 304.
 - **No published rate limits** on NHC or NDBC; NDBC asks to "limit retrievals to a minimal level". Cadences
   match CDN `max-age`. NDBC has no JSON API; the classic text endpoints remain documented and supported.
 - **2026 season:** cones shrank 3–8 % and carry inland watches/warnings; CPHC operations run under NHC (PHFO

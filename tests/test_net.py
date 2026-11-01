@@ -1,9 +1,21 @@
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
+
 import httpx
 import pytest
 import respx
 
 from eyewall import __version__
-from eyewall.net import HttpError, NetworkError, RateLimited, TooLarge, fetch_bytes, new_client, user_agent
+from eyewall.net import (
+    HttpError,
+    NetworkError,
+    RateLimited,
+    TooLarge,
+    fetch_bytes,
+    new_client,
+    retry_after_seconds,
+    user_agent,
+)
 
 URL = "https://example.test/data.txt"
 
@@ -185,3 +197,39 @@ async def test_a_redirect_loop_is_a_network_error():
     async with new_client(transport=transport) as client:
         with pytest.raises(NetworkError):
             await fetch_bytes(client, URL, retries=0)
+
+
+def test_user_agent_carries_no_email():
+    assert "@" not in user_agent()
+
+
+def test_retry_after_reads_an_http_date():
+    when = datetime.now(UTC) + timedelta(seconds=20)
+    response = httpx.Response(429, headers={"Retry-After": format_datetime(when, usegmt=True)})
+    assert 15.0 <= retry_after_seconds(response) <= 20.0
+
+
+@pytest.mark.parametrize("value", ["soon", "", "nan", "inf"])
+def test_retry_after_ignores_what_it_cannot_read(value):
+    assert retry_after_seconds(httpx.Response(429, headers={"Retry-After": value})) is None
+
+
+def test_retry_after_in_the_past_or_negative_is_zero():
+    past = format_datetime(datetime.now(UTC) - timedelta(hours=1), usegmt=True)
+    assert retry_after_seconds(httpx.Response(429, headers={"Retry-After": past})) == 0.0
+    assert retry_after_seconds(httpx.Response(429, headers={"Retry-After": "-5"})) == 0.0
+
+
+@respx.mock
+async def test_fetch_sleeps_for_an_http_date_retry_after():
+    when = datetime.now(UTC) + timedelta(seconds=10)
+    respx.get(URL).mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": format_datetime(when, usegmt=True)}),
+            httpx.Response(200, content=b"ok"),
+        ]
+    )
+    sleeps = Sleeps()
+    async with new_client() as client:
+        await fetch_bytes(client, URL, sleep=sleeps)
+    assert 5.0 <= sleeps.delays[0] <= 10.0

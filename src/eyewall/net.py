@@ -7,8 +7,11 @@ loop. It deliberately knows nothing about any feed: providers pass a URL and get
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -18,6 +21,7 @@ PROJECT_URL = "https://github.com/WPTK/eyewall"
 CONNECT_TIMEOUT = 10.0
 READ_TIMEOUT = 30.0
 MAX_RETRY_AFTER = 30.0
+RETRIES = 2  # retries after the first attempt, for a transport error, 429 or 5xx
 ERROR_BODY_LIMIT = 64 * 1024  # an error page is read to the end (so the connection is reused) only if it is this small
 MAX_BYTES_EXTENSION = (
     "eyewall_max_bytes"  # request extension: the caller's body limit, so the cache can skip a body it would reject
@@ -91,11 +95,26 @@ class Fetched:
 
 
 def retry_after_seconds(response: httpx.Response) -> float | None:
-    """Seconds from a Retry-After header. HTTP-date values are ignored."""
-    try:
-        return max(0.0, float(response.headers["Retry-After"]))
-    except (KeyError, ValueError):
+    """Seconds from a Retry-After header, which is either a number of seconds or an HTTP-date."""
+    value = response.headers.get("Retry-After")
+    if value is None:
         return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        seconds = (when - datetime.now(UTC)).total_seconds()
+    return max(0.0, seconds) if math.isfinite(seconds) else None
+
+
+def retry_delay(retry_after: float | None, attempt: int, backoff: float = 1.0) -> float:
+    """How long to wait before retry number `attempt`: the server's Retry-After (capped), else exponential backoff."""
+    return min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else backoff * 2**attempt
 
 
 async def fetch_bytes(
@@ -108,7 +127,7 @@ async def fetch_bytes(
     last_modified: str | None = None,
     allow_404: bool = False,
     max_bytes: int | None = None,
-    retries: int = 2,
+    retries: int = RETRIES,
     backoff: float = 1.0,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> Fetched:
@@ -141,7 +160,7 @@ async def fetch_bytes(
                     return Fetched(
                         url, status, body, response.headers.get("ETag"), response.headers.get("Last-Modified")
                     )
-                await _drain(response)
+                await drain_body(response)
                 if status == 404 and allow_404:
                     return Fetched(url, 404)
                 retry_after = retry_after_seconds(response)
@@ -154,14 +173,13 @@ async def fetch_bytes(
         if status == 429 or status >= 500:
             if attempt >= retries:
                 raise RateLimited(url, retry_after) if status == 429 else HttpError(url, status)
-            delay = min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else backoff * 2**attempt
-            await sleep(delay)
+            await sleep(retry_delay(retry_after, attempt, backoff))
             attempt += 1
             continue
         raise HttpError(url, status)
 
 
-async def _drain(response: httpx.Response) -> None:
+async def drain_body(response: httpx.Response) -> None:
     """Read a small error body to its end so the keep-alive connection goes back to the pool; a big one is dropped."""
     size = 0
     try:
