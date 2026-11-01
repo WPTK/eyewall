@@ -113,6 +113,8 @@ class OutlookScreen(Screen[None]):
         Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
         Binding("minus", "zoom_out", "Zoom out", show=False),
         Binding("f", "fit", "Fit", show=False),
+        Binding("n", "mark(1)", "Next mark", show=False),
+        Binding("N", "mark(-1)", "Previous mark", show=False),
     ]
 
     @property
@@ -165,3 +167,6 @@ class OutlookScreen(Screen[None]):
 
     def action_fit(self) -> None:
         self.map_view.fit()
+
+    def action_mark(self, step: int) -> None:
+        self.map_view.action_mark(step)

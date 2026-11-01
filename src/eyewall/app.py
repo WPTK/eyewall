@@ -55,6 +55,7 @@ from eyewall.ui.screens.settings import SettingsScreen
 from eyewall.ui.screens.small import TooSmallScreen, too_small
 from eyewall.ui.screens.watchlist import WatchlistScreen
 from eyewall.ui.theme import EYEWALL_THEME, THEME_NAME
+from eyewall.ui.widgets.map_view import MapView
 from eyewall.units import PRESETS, Preset, next_preset
 
 log = logging.getLogger(__name__)
@@ -362,6 +363,19 @@ class EyewallApp(App[None]):
         ):
             return
         self.push_screen(BuoyDetailScreen(station_id))
+
+    def on_map_view_mark_opened(self, message: MapView.MarkOpened) -> None:
+        """A mark on the map was opened: a storm opens its detail, a buoy its page, a gauge is pinned (it has no page
+        of its own yet)."""
+        message.stop()
+        mark = message.mark
+        if mark.kind == "storm":
+            if mark.id in self.store.storms:
+                self.open_detail(mark.id)
+        elif mark.kind == "buoy":
+            self.open_buoy(mark.id)
+        elif not self._modal_open():
+            self.watch_in_background("coops", mark.id, True)
 
     def open_layers(self) -> None:
         def apply(options: MapOptions | None) -> None:

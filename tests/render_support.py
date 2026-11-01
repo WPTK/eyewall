@@ -111,6 +111,7 @@ def erin_like_scene() -> MapScene:
     south_of_banks = coast_run(33.9, 34.7, -78.3, -76.4)
     chesapeake = coast_run(36.9, 37.3, -76.5, -75.5)
     storm = StormScene(
+        id="AL052025",
         name="ERIN",
         center=center,
         best_track=best,
@@ -135,17 +136,17 @@ def erin_like_scene() -> MapScene:
     return MapScene(
         storms=(storm,),
         buoys=(
-            StationMark(27.5, -71.5, 42.0, label="41047"),
-            StationMark(31.0, -69.6, 28.0, label="41048"),
-            StationMark(28.9, -78.5, 12.0, label="41010"),
-            StationMark(31.8, -75.2, 21.0, label="41002"),
-            StationMark(35.0, -75.4, 15.0, label="41025"),
-            StationMark(32.5, -79.1, None, stale=True, label="41004"),
+            StationMark(27.5, -71.5, 42.0, id="41047"),
+            StationMark(31.0, -69.6, 28.0, id="41048"),
+            StationMark(28.9, -78.5, 12.0, id="41010"),
+            StationMark(31.8, -75.2, 21.0, id="41002"),
+            StationMark(35.0, -75.4, 15.0, id="41025"),
+            StationMark(32.5, -79.1, None, stale=True, id="41004"),
         ),
         tide_gauges=(
-            StationMark(36.18, -75.75, label="8651370"),
-            StationMark(35.80, -75.55, label="8652587"),
-            StationMark(34.72, -76.67, label="8656483"),
-            StationMark(34.23, -77.95, label="8658120"),
+            StationMark(36.18, -75.75, id="8651370"),
+            StationMark(35.80, -75.55, id="8652587"),
+            StationMark(34.72, -76.67, id="8656483"),
+            StationMark(34.23, -77.95, id="8658120"),
         ),
     )

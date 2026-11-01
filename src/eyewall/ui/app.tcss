@@ -265,7 +265,7 @@ StormDetailScreen DataTable {
     height: 1fr;
 }
 
-HelpScreen, LayerMenu {
+HelpScreen, LayerMenu, MarkChooser {
     align: center middle;
 }
 
@@ -277,6 +277,15 @@ HelpScreen, LayerMenu {
     border: round $accent;
     background: $panel;
     padding: 0 2;
+}
+
+#chooser-box {
+    width: 60;
+    max-width: 96%;
+    height: auto;
+    max-height: 80%;
+    border: round $accent;
+    background: $panel;
 }
 
 #layer-box {
