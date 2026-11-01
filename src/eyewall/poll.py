@@ -24,9 +24,10 @@ Retry-After sets a floor on the wait. `refresh()` wakes the loop and makes every
 
 **What is refetched.** `CurrentStorms` is polled on the storms interval; a storm's advisory text, GIS zips, best track
 and graphics are fetched only when its advisory number or last-update time changes. The api.weather.gov copy of the
-text is a gated fallback: asked for only when tgftp still serves the previous advisory, from the second attempt on, and
-given up after `FALLBACK_ATTEMPTS`. A product that fails (a GIS zip not posted yet, a 503) is asked for again on
-the next polls, up to `PRODUCT_ATTEMPTS`; the advisory is not settled before. The alerts feed is polled only while
+text is a gated fallback: asked for only when tgftp still serves the previous advisory, from the second attempt on. A
+product that fails (a GIS zip not posted yet, a 503), a product the source could only answer from its disk cache, and
+the advisory text while it is still behind are asked for again on the next polls, up to `PRODUCT_ATTEMPTS`; the
+advisory is not settled before. The alerts feed is polled only while
 a storm is a US threat.
 """
 
@@ -46,7 +47,7 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event
 from eyewall.models.obs import TideStation
 from eyewall.models.watches import AlertsResult
-from eyewall.net import FetchError, RateLimited
+from eyewall.net import FetchError, HttpError, RateLimited
 from eyewall.providers.base import ParseError
 from eyewall.sources import protocol
 from eyewall.sources.protocol import DataSource, ThrottleReporting
@@ -65,8 +66,10 @@ STAGGER_SECONDS = 0.25
 RETURN_STAGGER_SECONDS = 3.0  # between the feeds' first polls after the user comes back from away mode
 MAX_BUOY_SERIES = 24
 MAX_TIDE_GAUGES = 12
+PERMANENT_STATUSES = frozenset({400, 404, 410})  # a station answered for good; see _is_permanent
 STATION_REFRESH = 24 * 3600.0
 _PRODUCTS = ("forecast_gis", "radii_gis", "track", "graphics")
+_TEXT = "advisory"  # the text products, tracked beside the others in `_pending`
 MAX_BACKOFF_EXPONENT = 16  # 2**failures overflows a float after about 1000 consecutive failures
 
 # CO-OPS answers a water level request with HTTP 400 for a datum the gauge lacks; the Great Lakes need IGLD.
@@ -122,6 +125,27 @@ class _FeedState:
     polls: int = 0
     last_attempt: float | None = None
     not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
+
+
+def _is_permanent(failure: Exception) -> bool:
+    """A request NOAA answered for good: 400 (the station has no such datum), 404 and 410 (it is gone). Anything else
+    says nothing about the station: 401, 403 and 408 mean NOAA is blocking or timing us out, and must back off."""
+    return isinstance(failure, HttpError) and failure.status in PERMANENT_STATUSES
+
+
+def _feed_failure(failures: list[Exception], requests: int) -> Exception | None:
+    """The failure to raise when the feed is down, else None. The feed is down when every request failed and at least
+    one of them was not a permanent answer (a mix of 400 and 503 is down; all 400s or 404s are just those stations)."""
+    if len(failures) < requests:
+        return None
+    return next((f for f in failures if not _is_permanent(f)), None)
+
+
+def _by_rank[T](lists: list[list[T]]) -> list[T]:
+    """The lists interleaved nearest first (every storm's nearest station, then every storm's second), so a cap on the
+    total never gives one storm all the stations."""
+    longest = max((len(items) for items in lists), default=0)
+    return [items[rank] for rank in range(longest) for items in lists if rank < len(items)]
 
 
 async def no_sleep(_seconds: float) -> None:
@@ -399,9 +423,11 @@ class Poller:
         attempt = self._attempts.get((storm_id, key), 0) + 1
         self._attempts[(storm_id, key)] = attempt
         pending = self._pending.get((storm_id, key))  # set once the text is in: only failed products remain
-        advisories: AdvisorySet | None = None
-        behind = False
         if pending is None:
+            pending = {_TEXT, *_PRODUCTS}
+        failed: set[str] = set()
+        advisories: AdvisorySet | None = None
+        if _TEXT in pending:
             advisories = await self.source.advisory(storm, fallback=attempt >= 2)
             wanted = current_adv(storm)
             have = fetched_adv(advisories)
@@ -410,15 +436,17 @@ class Poller:
                 # tgftp still serves the previous advisory, or one product of this one. Keep the old products and
                 # ask again next poll, the second time through api.weather.gov.
                 return []
-            if behind and have is None:
-                advisories = None
-            pending = set(_PRODUCTS)
-        failed: set[str] = set()
+            if behind:
+                failed.add(_TEXT)  # the other products settle below; the text is asked for again
+                if have is None:
+                    advisories = None
         got: dict[str, object] = {}
         for name in _PRODUCTS:
             if name in pending:
-                value = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
-                got[name] = value
+                answered = self.source.cache_answers(protocol.STORMS)
+                got[name] = await self._optional(getattr(self.source, name)(storm), name, failed, storm_id)
+                if self.source.cache_answers(protocol.STORMS) > answered:  # came from the disk cache: use it, ask again
+                    failed.add(name)
         retry = bool(failed) and attempt < PRODUCT_ATTEMPTS  # a failed product is asked for again, within the cap
         if retry:
             self._pending[(storm_id, key)] = failed
@@ -468,23 +496,29 @@ class Poller:
         self.store.apply_latest(await self.source.ndbc_latest())
         # A full series is fetched only for the stations an open page shows and the ones nearest a storm, at most
         # MAX_BUOY_SERIES in all. A watchlist-only buoy is covered by `latest_obs`, which is one file for every buoy.
-        wanted: dict[str, None] = {sid.upper(): None for sid in sorted(self.extra_buoys)[:MAX_BUOY_SERIES]}
-        for storm_id in self.store.storms:
-            for entry in self.store.nearby_buoys(storm_id):
-                if len(wanted) >= MAX_BUOY_SERIES:
-                    break
-                wanted[entry.station.id.upper()] = None
+        nearby = [[e.station.id.upper() for e in self.store.nearby_buoys(sid)] for sid in self.store.storms]
+        extra = sorted(sid.upper() for sid in self.extra_buoys)[:MAX_BUOY_SERIES]
+        wanted = list(dict.fromkeys([*extra, *_by_rank(nearby)]))[:MAX_BUOY_SERIES]
+        for sid in {sid for ranked in nearby for sid in ranked} - set(wanted):
+            self.store.series.pop(sid, None)  # a series nobody refreshes any more must not read as "stopped reporting"
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
+
+        failures: list[Exception] = []
 
         async def one(index: int, station_id: str) -> None:
             async with semaphore:
                 await self._sleep(index % MAX_IN_FLIGHT * STAGGER_SECONDS)
                 try:
                     self.store.apply_series(await self.source.ndbc_series(station_id))
-                except Exception:  # one station's bad answer must not fail the others
+                except Exception as exc:  # one station's bad answer must not fail the others
                     log.debug("the series of buoy %s could not be fetched", station_id, exc_info=True)
+                    failures.append(exc)
 
         await asyncio.gather(*(one(i, sid) for i, sid in enumerate(wanted)))
+        if wanted and (down := _feed_failure(failures, len(wanted))) is not None:
+            raise down  # every request failed: the feed backs off instead of reporting fresh
+        if self.source.stale(protocol.BUOYS):
+            return []  # answered from the disk cache: old rows say nothing about whether a buoy is still reporting
         return self.store.buoy_events(self.source.now())
 
     async def _poll_tides(self) -> list[Event]:
@@ -492,11 +526,11 @@ class Poller:
             self.store.apply_tide_stations(await self.source.coops_stations())
             self._stations_at["coops"] = self.clock.monotonic()
         gauges: dict[str, TideStation] = {}
-        for storm_id in self.store.storms:
-            for entry in self.store.nearby_tides(storm_id):
-                if len(gauges) >= MAX_TIDE_GAUGES:
-                    break
-                gauges[entry.station.id] = entry.station
+        ranked = [[e.station for e in self.store.nearby_tides(sid)] for sid in self.store.storms]
+        for station in _by_rank(ranked):
+            if len(gauges) >= MAX_TIDE_GAUGES:
+                break
+            gauges[station.id] = station
         known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
             gauge = known.get(station_id.upper())
@@ -512,14 +546,23 @@ class Poller:
                     self.store.apply_tide_series(await self.source.coops_series(station, datum))
                 except Exception as exc:  # one gauge's bad answer must not fail the others
                     self.store.apply_tide_error(station.id, str(exc) or type(exc).__name__)
+                    failures.append(exc)
 
+        failures: list[Exception] = []
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
+        if gauges and (down := _feed_failure(failures, len(gauges))) is not None:
+            raise down
         return []
 
     async def _poll_satellite(self) -> list[Event]:
-        for storm_id, state in list(self.store.storms.items()):
+        failures: list[Exception] = []
+        storms = list(self.store.storms.items())
+        for storm_id, state in storms:
             try:
                 self.store.apply_satellite(storm_id, await self.source.satellite(state.storm))
-            except Exception:
+            except Exception as exc:
                 log.debug("the satellite listing of %s could not be fetched", storm_id, exc_info=True)
+                failures.append(exc)
+        if storms and (down := _feed_failure(failures, len(storms))) is not None:
+            raise down
         return []

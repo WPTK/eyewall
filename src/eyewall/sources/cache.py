@@ -6,10 +6,10 @@ the parsers knowing about it:
 - A GET whose URL is cached is sent with the saved `ETag` / `Last-Modified` as validators. A 304 comes back to the
   caller as the cached 200, so a feed that has not changed costs a header exchange and no body.
 - A 2xx answer replaces the cached copy.
-- When the network fails (no connection, a timeout) or the server answers 429 or 5xx, and a copy exists, the caller
-  gets the copy and the current `StaleMarker` is set, so the live source can say the feed is stale. A 429 or 5xx also
-  records the status and the server's Retry-After on the marker, so the poller can back off. With no copy the
-  failure propagates as usual.
+- When the network fails (no connection, a timeout, a loss during the body) or the server answers 429 or 5xx, and a
+  copy exists, the caller gets the copy and the current `StaleMarker` is set, so the live source can say the feed is
+  stale. A 429 or 5xx also records the status and the server's Retry-After on the marker, so the poller can back off.
+  With no copy the failure propagates as usual.
 - The disk is touched from a worker thread, one await at a time, so the UI loop never waits on it. The body file is
   read only when it is used: after a 304 or when serving a copy.
 
@@ -159,6 +159,14 @@ class Cache:
                 with contextlib.suppress(OSError):
                     path.unlink()
             removed += 1
+        try:  # a body whose metadata file is gone (a write cut short, a half-deleted entry) is never read again
+            for body_path in self.directory.glob("*/*.bin"):
+                if not body_path.with_suffix(".json").exists():
+                    with contextlib.suppress(OSError):
+                        body_path.unlink()
+                    removed += 1
+        except OSError:
+            pass
         return removed
 
 
@@ -301,7 +309,14 @@ class CachingTransport(httpx.AsyncBaseTransport):
             declared = response.headers.get("content-length", "")
             if declared.isdigit() and int(declared) > limit:
                 return response  # too big to cache or for this caller: pass it on untouched, nothing is read here
-            return await self._cache_or_pass(request, response, url, limit)
+            try:
+                return await self._cache_or_pass(request, response, url, limit)
+            except httpx.TransportError:  # lost during the body: the copy answers
+                await response.aclose()
+                served = None if entry is None else await self._stale(request, entry)
+                if served is None:
+                    raise
+                return served
         if status in _FAILURE_STATUSES and entry is not None:
             served = await self._stale(request, entry, response)
             if served is not None:
