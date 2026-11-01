@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from datetime import timedelta
 
 import pytest
@@ -14,7 +15,7 @@ from eyewall.state.store import storm_key
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
-from eyewall.ui.screens.help import HelpScreen
+from eyewall.ui.screens.help import HelpScreen, help_text
 from eyewall.ui.screens.layers import LayerMenu
 from eyewall.ui.screens.outlook import OutlookScreen
 from eyewall.ui.widgets.map_view import MapView
@@ -106,6 +107,16 @@ async def test_transport_keys_pause_and_change_speed() -> None:
         assert app.speed_index == min(speed + 1, 3)
         await press(pilot, "less_than_sign", "less_than_sign", "less_than_sign", "less_than_sign", "less_than_sign")
         assert app.speed_index == 0
+
+
+def test_help_says_what_eyewall_is_not() -> None:
+    from rich.console import Console
+
+    console = Console(width=100, record=True, file=io.StringIO())
+    console.print(help_text())
+    text = " ".join(console.export_text().split())
+    assert "not an official forecast or warning" in text
+    assert "follow the National Hurricane Center and your local emergency officials" in text
 
 
 async def test_overlay_screens_open_and_close() -> None:

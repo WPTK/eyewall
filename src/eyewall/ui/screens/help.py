@@ -55,6 +55,12 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
 )
 
 
+NOT_OFFICIAL = (
+    "eyewall is not an official forecast or warning. For decisions about life or property, "
+    "follow the National Hurricane Center and your local emergency officials."
+)
+
+
 def help_text() -> Table:
     table = Table.grid(padding=(0, 2))
     table.add_column(style="bold #ffa63d", no_wrap=True)
@@ -63,6 +69,9 @@ def help_text() -> Table:
         table.add_row(Text(title, style="bold #8fd3ff"), Text(""))
         for key, text in keys:
             table.add_row(key, text)
+    table.add_row(Text(""), Text(""))
+    table.add_row(Text("Not official", style="bold #8fd3ff"), Text(""))
+    table.add_row("", NOT_OFFICIAL)
     return table
 
 

@@ -10,8 +10,8 @@ watches and warnings, wind radii and NOAA's graphics. For the buoys and tide gau
 latest readings with pressure, wind and wave charts. When NOAA posts something new, eyewall tells you. With no storm
 active it shows the tropical weather outlook and a watchlist of stations you pick.
 
-eyewall is not an official source of warnings. For decisions about life or property, use the National Hurricane Center
-and your local National Weather Service office.
+eyewall is not an official forecast or warning. For decisions about life or property, follow the National Hurricane
+Center and your local emergency officials.
 
 ## Try it without a storm
 
