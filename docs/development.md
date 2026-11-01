@@ -69,6 +69,28 @@ is nearly certain about, so a report means a real leftover.
 - `textual_image.renderable` and `textual_image.widget` send terminal queries when imported with stdout on a TTY. Import
   them lazily, only where images are drawn.
 
+## Real-input run on the built exe
+
+`tests/realinput` runs the built artifact, not the source, and drives it the way a terminal does. It starts the Windows
+exe from an empty directory with no repo, no venv and no config (`HOME`, `USERPROFILE`, `APPDATA` and the `XDG_*`
+variables point at empty temp directories) on a ConPTY pseudo-console (pywinpty), writes the bytes a terminal sends
+(key sequences, SGR mouse move, press and release, wheel) and reads the screen back through pyte, so Textual's real input
+parser runs. The driver is the vendored `tests/uat_kit/` (from wxbrief, commit noted in each file); `tests/realinput/app.py`
+is the eyewall adapter that knows where the crumb, footer and marks are.
+
+```powershell
+$env:EYEWALL_EXE = "dist\eyewall.exe"     # a build from scriptsuild_exe.ps1, or any exe
+.venv\Scripts\python -m pytest tests/realinput -m realinput
+.venv\Scripts\python scripts/realinput.py --exe dist\eyewall.exe    # same, plus one results table (also saved as JSON)
+```
+
+Without `EYEWALL_EXE` the suite downloads the release asset `eyewall-windows-x86_64.exe` of `EYEWALL_RELEASE` (default
+`v0.9.0`) into an empty temp directory. The tests are marked `realinput` and do not run in the default suite or in CI;
+`tests/realinput/test_helpers.py` (the harness's own tests, no exe needed) does. The run takes about 20 minutes. Results
+go to `EYEWALL_REAL_RESULTS` (default: the temp directory). Every walkthrough item prints PASS, FAIL, XFAIL or SKIP with the
+assertion that decided it. A defect found by the run is filed as an issue and listed in `tests/realinput/known.py`; its
+item is then expected to fail and the run fails when it starts passing, so the entry has to be deleted with the fix.
+
 ## Configuration while developing
 
 The config file lives in the platform config directory (on Windows, `%LOCALAPPDATA%\eyewall\config.toml`). Pass
