@@ -50,6 +50,8 @@ class View:
     failed: frozenset[str]  # the feeds whose last poll failed: a missing report is "unavailable", never "quiet"
     ascii: bool = False
     rich: bool = False  # the wide tier: a card says more
+    storms_old: bool = False  # the storm feed has stopped updating: what is shown is the last it said
+    storms_age: float | None = None  # seconds since the storm feed last answered
 
     @property
     def chosen(self) -> StormState | None:
@@ -73,6 +75,9 @@ class Block:
     more: str | None = None  # the action of the group's `+N more` line
     section: str | None = None  # blocks of one section share a heading, which is left out when none of them is shown
     title: bool = False  # this block is the section's heading
+    noun: tuple[str, str] | None = (
+        None  # (singular, plural) for the `N warnings >` line when the whole group is dropped
+    )
 
 
 def clean(text: str) -> str:
@@ -138,37 +143,53 @@ def height_of(blocks: Sequence[Block]) -> int:
     return rows
 
 
+def _more_line(label: str, width: int, action: str | None) -> Line:
+    text = Text(no_wrap=True, overflow="ellipsis")
+    text.append(" " * max(width - cell_len(label) - 1, 0) + label, style="underline")
+    return Line(text, action)
+
+
 def fit_blocks(blocks: Sequence[Block], rows: int, width: int = 0, arrow: str = ">") -> list[Line]:
     """The lines that fit `rows`: whole blocks only, the highest priority numbers dropped first (the later of two equal
-    ones first). A group that lost some of its blocks gets a `+N more` line after its last shown block."""
+    ones first).
+
+    A group that lost some of its blocks gets a `+N more` line after its last shown block. A group that lost all of
+    them (and has a `noun`) is never dropped silently: it becomes one `N warnings >` line where its first block was.
+    """
     kept = list(range(len(blocks)))
 
-    def lines_for(indices: list[int]) -> list[Block]:
-        shown = [blocks[i] for i in indices]
-        lost: dict[str, int] = {}
+    def assemble(indices: list[int]) -> list[Block]:
+        present = set(indices)
+        members: dict[str, list[int]] = {}
         for index, block in enumerate(blocks):
-            if block.group and index not in indices:
-                lost[block.group] = lost.get(block.group, 0) + 1
+            if block.group:
+                members.setdefault(block.group, []).append(index)
+        whole_lost = {g: m for g, m in members.items() if not present & set(m) and blocks[m[0]].noun}
+        alive = {blocks[i].section for i in indices if not blocks[i].title}
+        alive |= {blocks[m[0]].section for m in whole_lost.values()}
         out: list[Block] = []
-        for position, block in enumerate(shown):
-            later = any(b.group == block.group for b in shown[position + 1 :])
-            if block.group and block.group in lost and not later:
-                text = Text(no_wrap=True, overflow="ellipsis")
-                label = f"+{lost[block.group]} more {arrow}"
-                text.append(" " * max(width - cell_len(label) - 1, 0) + label, style="underline")
-                block = replace(block, lines=(*block.lines, Line(text, block.more)))
-            out.append(block)
+        for index, block in enumerate(blocks):
+            if block.group in whole_lost and index == whole_lost[block.group][0]:
+                one, many = block.noun  # type: ignore[misc]
+                total = len(whole_lost[block.group])
+                label = f"{total} {one if total == 1 else many} {arrow}"
+                out.append(Block((_more_line(label, width, block.more),), 0, gap=block.gap, section=block.section))
+            elif index in present and (not block.title or block.section in alive):
+                later = any(i > index and blocks[i].group == block.group for i in indices)
+                lost = sum(1 for i in members.get(block.group or "", []) if i not in present)
+                if block.group and lost and not later:
+                    label = f"+{lost} more {arrow}"
+                    block = replace(block, lines=(*block.lines, _more_line(label, width, block.more)))
+                out.append(block)
         return out
 
-    while kept and height_of(lines_for(kept)) > rows:
+    while kept and height_of(assemble(kept)) > rows:
         kept.remove(max(kept, key=lambda i: (blocks[i].priority, i)))
-    shown = [
-        i
-        for i in kept
-        if not blocks[i].title or any(blocks[j].section == blocks[i].section and not blocks[j].title for j in kept)
-    ]
+    final = assemble(kept)
+    if height_of(final) > rows:
+        return []
     out_lines: list[Line] = []
-    for position, block in enumerate(lines_for(shown)):
+    for position, block in enumerate(final):
         if block.gap and position:
             out_lines.append(Line(Text("")))
         out_lines.extend(block.lines)

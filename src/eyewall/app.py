@@ -28,7 +28,7 @@ from eyewall.models.events import Event, Severity
 from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
-from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, Poller, PollResult
+from eyewall.poll import DATUM_COAST, DATUM_GREAT_LAKES, FreshnessState, Poller, PollResult
 from eyewall.providers.base import ParseError
 from eyewall.render.canvas import Mode
 from eyewall.render.images import Depth, InlineBackend, inline_wanted, load_inline
@@ -438,7 +438,10 @@ class EyewallApp(App[bool]):
 
     def replay_available(self) -> bool:
         """True when `R` can start the bundled replay: this is live data, and it has nothing to show."""
-        return self.replay is None and self.store.storms_loaded and not self.store.storms
+        if self.replay is not None or not self.store.storms_loaded or self.store.storms:
+            return False
+        # A failed or stale storm feed says nothing about whether there are storms: no offer on "no storms" then.
+        return self.poller.freshness(protocol.STORMS).state not in (FreshnessState.ERROR, FreshnessState.STALE)
 
     def action_start_replay(self) -> None:
         """End this app with a request for the replay; `run_app` starts it, so the live poller is closed first."""

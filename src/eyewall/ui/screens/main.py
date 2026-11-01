@@ -22,6 +22,7 @@ from textual.containers import Horizontal
 from textual.events import Resize
 from textual.widgets import Static
 
+from eyewall.clock import format_age
 from eyewall.models.storm import Classification
 from eyewall.poll import FreshnessState
 from eyewall.sources import protocol
@@ -29,9 +30,11 @@ from eyewall.sources.bundle import DEMO_TITLE
 from eyewall.state.store import StormState
 from eyewall.ui import adapt, nav
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
+from eyewall.ui.screens.outlook_note import OutlookNote
 from eyewall.ui.widgets import side_info, storm_cards, warning_list
 from eyewall.ui.widgets.map_view import MapPane, MapView
 from eyewall.ui.widgets.side_panel import Block, SidePanel, View
+from eyewall.ui.words import outlook as outlook_words
 from eyewall.ui.words import storm as storm_words
 
 REFRESH_SECONDS = 30.0  # the ages on the cards move without a new poll
@@ -60,11 +63,36 @@ def lead_text(view: View) -> Text:
     if not view.storms_known:
         word = "Storm data unavailable." if protocol.STORMS in view.failed else f"Checking for storms{view.g.ellipsis}"
         return Text(word, style="bold")
+    if view.storms_old:
+        # The feed has stopped answering: never say "no storms" (or a storm's state) as if it were current.
+        ago = f" (last update {format_age(view.storms_age)} ago)" if view.storms_age is not None else ""
+        if not view.states:
+            return Text(f"Storm data unavailable{ago}.", style="bold")
+        note = f" Storm data is not updating{ago}."
+    else:
+        note = ""
     if not view.states:
         return Text(storm_words.nothing_active(view.basins).text, style="bold")
     if len(view.states) == 1:
-        return Text(storm_words.storm_lead(view.states[0], view.preset).text, style="bold")
-    return Text(storm_words.several_storms(view.states).text, style="bold")
+        text = storm_words.storm_lead(view.states[0], view.preset).text
+    else:
+        text = storm_words.several_storms(view.states).text
+    pending = warning_list.unread(view)
+    if pending:
+        text += " " + _unread_sentence(pending, len(view.states))
+    return Text(text + note, style="bold")
+
+
+def _unread_sentence(pending: list[StormState], total: int) -> str:
+    if total == 1:
+        adv = pending[0].storm.adv_num
+        return (
+            f"Its watches and warnings are not yet read for advisory {adv}."
+            if adv
+            else "Its watches and warnings are not yet read."
+        )
+    names = [s.storm.name.title() if s.storm.name else s.storm.id.upper() for s in pending]
+    return f"Watches and warnings are not yet read for {', '.join(names)}."
 
 
 def side_blocks(view: View, width: int) -> list[Block]:
@@ -92,9 +120,14 @@ def strip_blocks(view: View, width: int) -> list[Block]:
     if not view.states:
         return side_info.quiet_strip(view, width)
     out: list[Block] = []
-    for priority, line in enumerate((storm_cards.strip_line(view, width), warning_list.strip_line(view, width))):
-        if line is not None:
-            out.append(Block((line,), priority))
+    storm_line = storm_cards.strip_line(view, width)
+    if storm_line is not None:
+        out.append(Block((storm_line,), 0))
+    for line in warning_list.unread_lines(view, width):
+        out.append(Block((line,), 0))
+    warnings = warning_list.strip_line(view, width)
+    if warnings is not None:
+        out.append(Block((warnings,), 1))
     return out
 
 
@@ -151,6 +184,8 @@ class MainScreen(ChromeScreen):
 
     def _view(self) -> View:
         eye = self.eye
+        fresh = eye.poller.freshness(protocol.STORMS)
+        old = fresh.state in (FreshnessState.ERROR, FreshnessState.STALE) and eye.store.storms_loaded
         failed = frozenset(f for f in protocol.FEEDS if eye.poller.freshness(f).state is FreshnessState.ERROR)
         return View(
             store=eye.store,
@@ -162,6 +197,8 @@ class MainScreen(ChromeScreen):
             selected=eye.selected,
             basins=eye.basin_view,
             replay_offer=DEMO_TITLE if eye.replay_available() else None,
+            storms_old=old,
+            storms_age=fresh.age,
             storms_known=eye.store.storms_loaded,
             failed=failed,
             ascii=eye.config.map.glyph_set == "ascii",
@@ -214,6 +251,19 @@ class MainScreen(ChromeScreen):
         eye.selected = ids[(ids.index(eye.selected) + step) % len(ids)]
         self.refresh_data()
         self.map_view.fit()
+
+    def action_outlook(self) -> None:
+        """`O`: NHC's outlook, every area with its exact chances, in a small dialog."""
+        eye = self.eye
+        if eye.store.outlook is None:
+            words = [
+                "Outlook data unavailable."
+                if protocol.OUTLOOK in self._view().failed
+                else "Waiting for the first outlook."
+            ]
+        else:
+            words = [w.text for w in outlook_words.outlook_sentences(eye.store.outlook, eye.basin_view)]
+        eye.push_screen(OutlookNote(words))
 
     def action_open_detail(self) -> None:
         eye = self.eye

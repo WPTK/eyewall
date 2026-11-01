@@ -14,10 +14,11 @@ from eyewall.palette import DIM, FRESHNESS_CUES
 from eyewall.render.canvas import ASCII_GLYPHS, UNICODE_GLYPHS
 from eyewall.state.store import StormState
 from eyewall.ui.format import advisory_age, movement_text, storm_color
-from eyewall.ui.widgets.side_panel import OPEN, Block, Line, View, heading, link, spread, wrapped
+from eyewall.ui.widgets.side_panel import DO, OPEN, Block, Line, View, heading, link, spread, wrapped
 from eyewall.ui.words import storm as storm_words
 
 SECTION = "storms"
+NEXT_STORM = f"{DO}:cursor(1)"  # the `+N more` line brings the next storm to the front, as `j` does
 
 
 def storm_mark(view: View) -> str:
@@ -27,6 +28,7 @@ def storm_mark(view: View) -> str:
 def _stale_line(state: StormState, view: View, width: int, action: str) -> list[Line]:
     """`Updated 12m ago.`, with the stale mark and the word when the advisory is old."""
     _age, old = advisory_age(state.storm, view.now)
+    old = old or view.storms_old  # the feed itself has stopped: what is shown is the last it said
     words = storm_words.updated(state.storm, view.now).text
     if not old:
         return wrapped(words, width, style=DIM, prefix="  ", action=action)
@@ -84,7 +86,17 @@ def card_blocks(view: View, width: int) -> list[Block]:
     for index, state in enumerate(view.states):
         selected = chosen is state
         lines = card(state, view, width, selected=selected, lead=many or view.rich)
-        out.append(Block(tuple(lines), 0 if selected else 2, gap=index > 0, group=SECTION, section=SECTION))
+        out.append(
+            Block(
+                tuple(lines),
+                0 if selected else 2,
+                gap=index > 0,
+                group=SECTION,
+                more=NEXT_STORM,
+                section=SECTION,
+                noun=("storm", "storms"),
+            )
+        )
     return out
 
 
@@ -105,6 +117,7 @@ def strip_line(view: View, width: int) -> Line | None:
     age, old = advisory_age(storm, view.now)
     adv = state.advisories.adv_num or storm.adv_num
     advisory = f"adv {adv}, {age} ago" if adv and storm.last_update else f"adv {adv}" if adv else "no advisory"
+    old = old or view.storms_old
     if old and storm.last_update:
         cue = FRESHNESS_CUES["stale"]
         advisory = f"{cue.ascii_glyph if view.ascii else cue.glyph} {advisory} ({cue.word})"

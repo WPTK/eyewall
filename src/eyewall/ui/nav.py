@@ -79,6 +79,7 @@ KEYS: tuple[Key, ...] = (
     K("main", "3", "basin('CP')", "Central Pacific"),
     K("main", "a", "basin('')", "all basins", "Atlantic, East Pacific, Central Pacific, all"),
     K("main", "b", "buoys", "buoys", "buoys near the storm (the watchlist when there is none)", footer=True),
+    K("main", "O", "outlook", "outlook", "what NHC is watching: each area and its chances", menu="Open NHC's outlook"),
     K("main", "M", "full_map", "full map", "full-screen map; Esc leaves it"),
     K(
         "main",

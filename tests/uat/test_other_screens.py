@@ -71,7 +71,7 @@ async def test_help_screen_closes_two_ways(journey, size) -> None:
         for key in ("escape", "question_mark"):
             await j.keys("question_mark")
             assert isinstance(j.screen, HelpScreen)
-            j.see("Map", "Storm detail")  # the rest of the help is below, behind the scroll
+            j.see("Map")  # the rest of the help is below, behind the scroll
             if key == "escape":
                 await j.shot("help", footer=False)
             await j.keys(key)

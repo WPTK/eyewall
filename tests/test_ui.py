@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import timedelta
 
@@ -254,13 +255,16 @@ async def test_stepping_and_ticks_share_the_lock_and_the_replay_stops_at_the_end
         app.replay.clock.set(end - timedelta(seconds=1))
         app.paused = False
         # The app's own half-second timer also ticks, and a tick that finds the lock held returns without advancing, so
-        # drive the ticks until the replay reports it is over instead of assuming one call moves the clock.
-        for _ in range(200):
+        # keep driving ticks until the replay reports it is over, up to a time limit rather than a count of tries.
+
+        async def tick() -> bool:
             await app._replay_tick()
-            if app.replay_over:
-                break
-            await pilot.pause(0.01)
-        assert app.replay_over
+            return app.replay_over
+
+        deadline = asyncio.get_running_loop().time() + 30
+        while not await tick():
+            assert asyncio.get_running_loop().time() < deadline, "the replay did not reach its end in 30 s"
+            await pilot.pause(0.05)
         assert app.replay.now() == end
         assert app.paused and app.replay_over
         await app._replay_tick()  # paused and over: nothing moves

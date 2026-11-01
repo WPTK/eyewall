@@ -12,6 +12,8 @@ from eyewall.ui.widgets.side_panel import DO, Block, View, heading, link, wrappe
 from eyewall.ui.words import outlook as outlook_words
 
 SHOW_BUOYS = f"{DO}:buoys"
+SHOW_OUTLOOK = f"{DO}:outlook"
+AREAS_NOUN = ("outlook note", "outlook notes")
 START_REPLAY = f"{DO}:app.start_replay"
 
 
@@ -64,8 +66,11 @@ def areas_block(view: View, width: int, *, priority: int) -> list[Block]:
     if not sentences:
         return []
     title = "ALSO WATCHING" if view.states else "AREAS NHC IS WATCHING"
-    lines = [line for text in sentences for line in wrapped(text, width, prefix="  ")]
-    return [heading(title, "areas"), Block(tuple(lines), priority, section="areas")]
+    out = [heading(title, "areas")]
+    for text in sentences:  # one block per area, so a short column keeps the first and counts the rest
+        lines = wrapped(text, width, prefix="  ", action=SHOW_OUTLOOK)
+        out.append(Block(tuple(lines), priority, group="areas", more=SHOW_OUTLOOK, section="areas", noun=AREAS_NOUN))
+    return out
 
 
 def stations_block(view: View, width: int, *, priority: int) -> list[Block]:
@@ -109,11 +114,12 @@ def replay_block(view: View, width: int, *, priority: int) -> list[Block]:
 
 
 def quiet_strip(view: View, width: int) -> list[Block]:
-    """The strip when nothing is active: the outlook, the replay offer, then your stations, as short blocks."""
+    """The strip when nothing is active: the outlook (one block per sentence, then `+N more >` or `N outlook notes >`
+    that opens the full text), the replay offer, then your stations. It is never left empty."""
     out: list[Block] = []
-    outlook = [line for text in outlook_text(view) for line in wrapped(text, width)]
-    if outlook:
-        out.append(Block(tuple(outlook), 0))
+    for text in outlook_text(view):
+        lines = wrapped(text, width, action=SHOW_OUTLOOK)
+        out.append(Block(tuple(lines), 0, group="outlook", more=SHOW_OUTLOOK, noun=AREAS_NOUN))
     if view.replay_offer is not None:
         offer = wrapped(f"R  replay {view.replay_offer} {view.g.crumb}", width, action=START_REPLAY)
         out.append(Block(tuple(offer), 1))

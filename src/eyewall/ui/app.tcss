@@ -133,11 +133,11 @@ StormDetailScreen DataTable {
     height: 1fr;
 }
 
-HelpScreen, FeedsScreen, LayerMenu, MarkChooser {
+HelpScreen, FeedsScreen, OutlookNote, LayerMenu, MarkChooser {
     align: center middle;
 }
 
-#help-box, #feeds-box {
+#help-box, #feeds-box, #outlook-box {
     width: 78;
     max-width: 96%;
     height: auto;
