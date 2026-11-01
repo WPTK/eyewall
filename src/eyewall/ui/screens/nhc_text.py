@@ -1,4 +1,5 @@
-"""The NHC text screen: each product as NHC issued it, one tab per product, with its issue time and a stale banner."""
+"""The NHC text screen: each product reformatted from its parsed sections, one tab per product, with its issue time and
+a stale banner."""
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 
 
 class NhcTextScreen(ChromeScreen):
-    CRUMB = "NHC text"
+    CRUMB = "NHC text (reformatted)"
     NAV_SCOPES = ("text",)
     BINDINGS = nav.bindings("text")
 
@@ -51,17 +52,19 @@ class NhcTextScreen(ChromeScreen):
 
     # ---- data -------------------------------------------------------------------------------------------------
 
-    def _feed_old(self, feed: str) -> tuple[bool, float | None]:
+    def _feed_old(self, feed: str) -> tuple[bool, float | None, bool]:
+        """(old, age, failing): the feed is stale or failing, how long since it last answered, and whether it errors."""
         fresh = self.eye.poller.freshness(feed)
-        return fresh.state in (FreshnessState.ERROR, FreshnessState.STALE), fresh.age
+        failing = fresh.state is FreshnessState.ERROR
+        return failing or fresh.state is FreshnessState.STALE, fresh.age, failing
 
     def refresh_data(self) -> None:
         eye = self.eye
         now, tz, g = eye.now(), eye.local_tz, eye.glyphs
         body: RenderableType
         if self.tab == "outlook":
-            old, _ = self._feed_old(protocol.OUTLOOK)
-            header = nhc_text.outlook_header(eye.store.outlook, now, tz, g, feed_old=old)
+            old, _, failing = self._feed_old(protocol.OUTLOOK)
+            header = nhc_text.outlook_header(eye.store.outlook, now, tz, g, feed_old=old, feed_error=failing)
             body = nhc_text.outlook_body(eye.store.outlook, eye.basin_view)
         else:
             state = eye.store.storms.get(self.storm_id or "")
@@ -69,8 +72,10 @@ class NhcTextScreen(ChromeScreen):
                 header = nhc_text.Header(Text(f"{(self.storm_id or '').upper()} is no longer active.", style=DIM))
                 body = Text("Press Esc to go back.", style=DIM)
             else:
-                old, age = self._feed_old(protocol.STORMS)
-                header = nhc_text.storm_header(state, self.tab, now, tz, g, feed_old=old, feed_age=age)
+                old, age, failing = self._feed_old(protocol.STORMS)
+                header = nhc_text.storm_header(
+                    state, self.tab, now, tz, g, feed_old=old, feed_age=age, feed_error=failing
+                )
                 body = nhc_text.storm_body(state, self.tab, eye.preset, tz, g)
         self.query_one("#text-head", Static).update(header.text)
         banner = self.query_one("#text-stale", Static)

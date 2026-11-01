@@ -1,8 +1,10 @@
-"""The NHC text screen's content: each product laid out as NHC issued it, with a header that says which advisory it is
-and a banner when it is out of date.
+"""The NHC text screen's content: each product laid out from its parsed sections, with a header that says which
+advisory it is and a banner when it is out of date.
 
-The models keep a product's sections, not its raw bulletin, so the text is laid out from the parsed sections (see
-`ui.products`); the wording inside each section is NHC's own. Pure functions with no Textual in them.
+This is a reformatted view, not the bulletin itself: the models keep a product's sections, not its raw text, so the page
+is rebuilt from them (see `ui.products`). Hard-wrapped lines are joined, some sections are collapsed, and numbers are
+shown in the chosen units. The wording inside each section is NHC's own, and the watches and warnings text is kept
+as NHC wrote it. Pure functions with no Textual in them.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from eyewall.clock import ensure_utc, format_age, format_zulu
 from eyewall.models.outlook import Chance, Outlook, OutlookArea
 from eyewall.models.storm import AdvNum
 from eyewall.palette import DIM, FRESHNESS_CUES, HEADING, risk_color
-from eyewall.state.store import StormState
+from eyewall.state.store import StormState, storm_key
 from eyewall.ui import products
 from eyewall.ui.format import BASIN_NAMES, OLD_ADVISORY_HOURS, collapse, text_basins
 from eyewall.ui.glyphs import UiGlyphs
@@ -76,6 +78,15 @@ def _product(state: StormState, tab: str) -> tuple[str, AdvNum | None, datetime 
     return None
 
 
+def _not_heard(age: float | None) -> str:
+    ago = f" for {format_age(age)}" if age is not None else " lately"
+    return f"eyewall has not heard from NHC{ago}."
+
+
+def _banner(g: UiGlyphs, reasons: list[str]) -> str:
+    return f"{g.stale} {FRESHNESS_CUES['stale'].word.capitalize()}: {' '.join(reasons)} This text may be out of date."
+
+
 def storm_header(
     state: StormState,
     tab: str,
@@ -85,15 +96,23 @@ def storm_header(
     *,
     feed_old: bool,
     feed_age: float | None,
+    feed_error: bool = False,
 ) -> Header:
     """`Public Advisory 30, 5:00 PM EDT Mon 18 Aug. Issued 12m ago.`, and the banner when that is not the newest."""
     if tab == "track":
-        return Header(Text("The best track NHC keeps for this storm, newest position first.", style=DIM))
+        text = Text("The best track NHC keeps for this storm, newest position first.", style=DIM)
+        if feed_old:
+            return Header(text, _banner(g, [_not_heard(feed_age)]))
+        return Header(text)
     product = _product(state, tab)
     if product is None:
-        return Header(
-            Text("Not available yet: NHC has not published this product for the current advisory.", style=DIM)
-        )
+        if state.fetched_key == storm_key(state.storm):
+            note = "NHC has not published this product for the current advisory."
+        elif feed_error:
+            note = "Could not fetch this product: the NHC feed is failing. eyewall will try again."
+        else:
+            note = "Not fetched yet: waiting for NHC's product for the current advisory."
+        return Header(Text(note, style=DIM), _banner(g, [_not_heard(feed_age)]) if feed_old else None)
     label, adv, issued = product
     text = Text(_titled(label, adv), style="bold")
     reasons: list[str] = []
@@ -107,18 +126,27 @@ def storm_header(
     if adv is not None and current is not None and adv.number != current.number:
         reasons.append(f"NHC's current advisory is {current}.")
     if feed_old:
-        ago = f" for {format_age(feed_age)}" if feed_age is not None else ""
-        reasons.append(f"eyewall has not heard from NHC{ago}.")
+        reasons.append(_not_heard(feed_age))
     if not reasons:
         return Header(text)
-    return Header(
-        text,
-        f"{g.stale} {FRESHNESS_CUES['stale'].word.capitalize()}: {' '.join(reasons)} This text may be out of date.",
-    )
+    return Header(text, _banner(g, reasons))
 
 
-def outlook_header(outlook: Outlook | None, now: datetime, tz: tzinfo | None, g: UiGlyphs, *, feed_old: bool) -> Header:
+def outlook_header(
+    outlook: Outlook | None,
+    now: datetime,
+    tz: tzinfo | None,
+    g: UiGlyphs,
+    *,
+    feed_old: bool,
+    feed_error: bool = False,
+) -> Header:
     if outlook is None:
+        if feed_error:
+            return Header(
+                Text("Could not fetch the tropical weather outlook: the NHC feed is failing.", style=DIM),
+                _banner(g, [_not_heard(None)]),
+            )
         return Header(Text("Waiting for the tropical weather outlook.", style=DIM))
     issued = [t.issued for t in outlook.texts if t.issued is not None]
     text = Text("Tropical Weather Outlook", style="bold")
@@ -131,13 +159,10 @@ def outlook_header(outlook: Outlook | None, now: datetime, tz: tzinfo | None, g:
         if age > OUTLOOK_OLD_HOURS * 3600:
             reasons.append(f"This was issued {format_age(age)} ago.")
     if feed_old:
-        reasons.append("eyewall has not heard from NHC lately.")
+        reasons.append(_not_heard(None))
     if not reasons:
         return Header(text)
-    return Header(
-        text,
-        f"{g.stale} {FRESHNESS_CUES['stale'].word.capitalize()}: {' '.join(reasons)} This text may be out of date.",
-    )
+    return Header(text, _banner(g, reasons))
 
 
 # ---- the bodies ----------------------------------------------------------------------------------------------------

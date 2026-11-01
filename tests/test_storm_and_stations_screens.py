@@ -311,3 +311,119 @@ async def test_the_list_footer_says_follow(size) -> None:
         await into_the_storm(pilot)
         await press(pilot, "enter", "b")
         assert "f follow" in screen_text(app).splitlines()[-1]
+
+
+# ---- review fixes -----------------------------------------------------------------------------------------------
+
+
+async def test_a_buoy_lead_says_how_old_the_reading_is() -> None:
+    from datetime import timedelta
+
+    from eyewall.ui import stations as st
+
+    app = replay_app()
+    async with running(app, (100, 40)) as pilot:
+        await into_the_storm(pilot)
+        newest = st.newest_observation(app.store, "41002")
+        assert newest is not None
+        app.now = lambda: newest.time + timedelta(hours=1, minutes=50)  # type: ignore[method-assign]
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
+        assert "Observed 1h50m ago" in flat(app)
+
+
+async def test_the_text_screen_tells_apart_not_fetched_failed_and_not_published() -> None:
+    from dataclasses import replace as rep
+
+    from eyewall.models.advisory import AdvisorySet
+    from eyewall.state.store import storm_key
+    from eyewall.ui import nhc_text
+
+    app = replay_app()
+    async with running(app, (100, 40)) as pilot:
+        await into_the_storm(pilot)
+        state = rep(app.store.storms[app.selected], advisories=AdvisorySet())
+        now, g = app.now(), app.glyphs
+        key = storm_key(state.storm)
+
+        def head(s, **kw):  # type: ignore[no-untyped-def]
+            h = nhc_text.storm_header(
+                s,
+                "discussion",
+                now,
+                None,
+                g,
+                feed_old=kw.get("old", False),
+                feed_age=None,
+                feed_error=kw.get("error", False),
+            )
+            return h.text.plain, h.stale
+
+        assert "has not published" in head(rep(state, fetched_key=key))[0]
+        assert "Not fetched yet" in head(rep(state, fetched_key=None))[0]
+        text, banner = head(rep(state, fetched_key=None), old=True, error=True)
+        assert "Could not fetch" in text and banner is not None and "Stale" in banner
+        text, banner = (
+            nhc_text.storm_header(state, "track", now, None, g, feed_old=True, feed_age=60.0).text.plain,
+            (nhc_text.storm_header(state, "track", now, None, g, feed_old=True, feed_age=60.0).stale),
+        )
+        assert banner is not None and "has not heard from NHC for 1m" in banner
+        outlook = nhc_text.outlook_header(None, now, None, g, feed_old=True, feed_error=True)
+        assert "Could not fetch" in outlook.text.plain and outlook.stale is not None
+
+
+async def test_a_gauge_does_not_blame_noaa_when_the_fetch_failed_here() -> None:
+    app = replay_app()
+    async with running(app, (100, 40)) as pilot:
+        await into_the_storm(pilot)
+        gauge = app.store.tide_stations[0].id
+        app.store.tide_series.pop(gauge, None)
+        app.store.apply_tide_error(gauge, "timed out")
+
+        async def failing(station_id):  # type: ignore[no-untyped-def]
+            app.store.apply_tide_error(gauge, "timed out")
+
+        app.fetch_tide = failing  # type: ignore[method-assign]
+        app.open_station("coops", gauge)
+        await settle(pilot)
+        text = flat(app)
+        assert "Could not fetch the water level" in text and "NOAA has no recent" not in text
+
+
+async def test_the_page_says_so_when_a_buoys_readings_could_not_load() -> None:
+    app = replay_app()
+    async with running(app, (100, 40)) as pilot:
+        await into_the_storm(pilot)
+        app.store.series.pop("41002", None)
+        app.store.latest.pop("41002", None)
+
+        async def failing(station_id):  # type: ignore[no-untyped-def]
+            return "boom"
+
+        app.fetch_series = failing  # type: ignore[method-assign]
+        app.open_station("ndbc", "41002")
+        await settle(pilot)
+        await pilot.pause(0.5)
+        assert "Could not load readings" in flat(app)
+
+
+async def test_closing_one_page_keeps_polling_a_station_another_open_page_still_shows() -> None:
+    app = replay_app()
+    async with running(app, (100, 40)) as pilot:
+        await into_the_storm(pilot)
+        await app.push_screen(StationScreen("ndbc", "41002"))
+        await app.push_screen(StationScreen("ndbc", "41002"))
+        await settle(pilot)
+        assert "41002" in app.poller.extra_buoys
+        await app.pop_screen()
+        await settle(pilot)
+        assert "41002" in app.poller.extra_buoys
+        await app.pop_screen()
+        await settle(pilot)
+        assert "41002" not in app.poller.extra_buoys
+
+
+def test_the_buoys_list_actions_do_not_fail_before_the_list_exists() -> None:
+    screen = BuoysScreen(None)
+    assert screen.check_action("follow", ()) is False
+    assert screen.check_action("sort", ()) is False

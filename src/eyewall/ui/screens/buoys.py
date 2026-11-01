@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.widgets import OptionList, Static, Tab, Tabs
 
 from eyewall.palette import DIM
@@ -126,7 +127,10 @@ class BuoysScreen(ChromeScreen):
         if action == "switch":
             return len(self.tab_ids) > 1
         if action in ("follow", "sort"):
-            return bool(self.query_one(StationList).rows)
+            try:
+                return bool(self.query_one(StationList).rows)
+            except NoMatches:
+                return False
         return True
 
     def action_switch(self) -> None:

@@ -106,7 +106,9 @@ def gauge_row(
     gauge = entry.station
     series = store.tide_series.get(gauge.id)
     if series is None or series.latest_level is None:
-        if gauge.id in store.tide_errors or series is not None:
+        if gauge.id in store.tide_errors:
+            return _row(GAUGE, entry, "dark", "Not reporting. Could not fetch the water level for this gauge.")
+        if series is not None:
             return _row(GAUGE, entry, "dark", "Not reporting. NOAA has no recent water level for this gauge.")
         return _row(GAUGE, entry, "waiting", "Waiting for the first water level.")
     age = observation_age(series, now)

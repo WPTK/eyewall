@@ -569,13 +569,16 @@ class EyewallApp(App[bool]):
         self._file_broken = False
         return True
 
-    async def fetch_series(self, station_id: str) -> None:
-        """Fetch one buoy's series now, for a page that was just opened; the rest of the buoys feed is left alone."""
+    async def fetch_series(self, station_id: str) -> str | None:
+        """Fetch one buoy's series now, for a page that was just opened; the rest of the buoys feed is left alone.
+
+        Returns the failure as text, or None when the series arrived, so the page can say it could not load."""
         try:
             self.store.apply_series(await self.source.ndbc_series(station_id.upper()))
-        except (FetchError, ParseError):
-            return
+        except (FetchError, ParseError) as exc:
+            return str(exc) or type(exc).__name__
         self._for_screens("refresh_data")
+        return None
 
     async def fetch_tide(self, station_id: str) -> None:
         """Fetch one tide gauge now (it was just pinned), not every gauge."""

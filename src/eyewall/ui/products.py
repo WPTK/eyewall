@@ -18,12 +18,10 @@ from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import (
     DIM,
     HEADING,
-    NEUTRAL,
-    WATCH_WARNING_COLORS,
     category_color,
     category_for_knots,
 )
-from eyewall.state.store import Store, StormState
+from eyewall.state.store import StormState
 from eyewall.ui.format import advisory_age, collapse, movement_text
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.units import MISSING, Preset
@@ -276,43 +274,6 @@ def probabilities_note(state: StormState) -> str:
     if state.advisories.wind_probabilities is None:
         return "No wind speed probabilities yet."
     return "Cumulative chance (percent) of winds of at least 34, 50 and 64 kt by hour; <1 is under one percent."
-
-
-def watches_warnings(store: Store, state: StormState, g: UiGlyphs, now: datetime) -> Text:
-    out = Text()
-    public = state.advisories.public
-    if public is not None:
-        blocks = public.watches_warnings
-        for area in blocks.in_effect:
-            color = WATCH_WARNING_COLORS.get(area.kind, NEUTRAL) if area.kind else NEUTRAL
-            out.append(f"{g.chip} {collapse(area.label)}\n", style=f"bold {color}")
-            for place in area.areas:
-                out.append(f"    {collapse(place)}\n")
-        if not blocks.in_effect:
-            out.append("No coastal watches or warnings in effect.\n", style=DIM)
-        if blocks.changes:
-            out.append("\nChanges with this advisory\n", style=f"bold {HEADING}")
-            for change in blocks.changes:
-                out.append(f"{g.sep} {collapse(change)}\n")
-    else:
-        out.append("The public advisory has not been fetched yet.\n", style=DIM)
-    gis = state.forecast_gis
-    if gis is not None and gis.watch_warnings:
-        kinds: dict[str, int] = {}
-        for segment in gis.watch_warnings:
-            kinds[segment.code] = kinds.get(segment.code, 0) + 1
-        out.append(
-            "\nCoast segments on the map: " + ", ".join(f"{k} x{n}" for k, n in sorted(kinds.items())) + "\n", style=DIM
-        )
-    alerts = store.active_alerts(now)
-    if alerts:
-        out.append("\nNWS alerts\n", style=f"bold {HEADING}")
-        for alert in alerts:
-            out.append(f"{alert.event}", style="bold")
-            out.append(f"  {collapse(alert.area_desc)}\n")
-            if alert.headline:
-                out.append(f"    {collapse(alert.headline)}\n", style=DIM)
-    return out
 
 
 HISTORY_COLUMNS = ("Time (Z)", "Lat", "Lon", "Wind", "Pressure", "Type", "Cat")

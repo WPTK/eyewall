@@ -60,6 +60,7 @@ class StationScreen(ChromeScreen):
         self.about = False
         self.supl: Parsed[SupplementalReading] | None = None
         self._supl_loading = False
+        self.series_error: str | None = None  # why the buoy's readings could not be fetched, when they could not
 
     def crumb(self) -> str:
         return f"{station_view.KIND_WORD[self.kind]} {self.station_id}"
@@ -91,7 +92,7 @@ class StationScreen(ChromeScreen):
         if self.is_buoy:
             eye.poller.extra_buoys.add(self.station_id)
             if self.station_id not in eye.store.series:
-                self.run_worker(eye.fetch_series(self.station_id), name="station-series", exit_on_error=False)
+                self.run_worker(self._load_series(), name="station-series", exit_on_error=False)
             self._ask_supplemental()
         else:
             self.run_worker(self._load_gauge(), name="station-gauge", exit_on_error=False)
@@ -99,7 +100,18 @@ class StationScreen(ChromeScreen):
         self._draw()
 
     def on_unmount(self) -> None:
-        self.eye.poller.extra_buoys.discard(self.station_id)
+        # Another page for the same station may still be open beneath or above this one; it still needs the polling.
+        others = [
+            s
+            for s in self.app.screen_stack
+            if s is not self and isinstance(s, StationScreen) and s.is_buoy and s.station_id == self.station_id
+        ]
+        if not others:
+            self.eye.poller.extra_buoys.discard(self.station_id)
+
+    async def _load_series(self) -> None:
+        self.series_error = await self.eye.fetch_series(self.station_id)
+        self._draw()
 
     def on_resize(self, event: Resize) -> None:
         self._draw()
@@ -177,6 +189,7 @@ class StationScreen(ChromeScreen):
             else:
                 lead = words.buoy_summary(station, obs, waves, preset)
             out.append((lead.text, "bold"))
+            out.append((f"{g.sep} Observed {format_age(max(0.0, (now - obs.time).total_seconds()))} ago.", ""))
             series = store.series.get(self.station_id)
             rows = () if series is None else series.observations
             trends = (
@@ -221,7 +234,9 @@ class StationScreen(ChromeScreen):
             failed = self.station_id in store.tide_errors or series is not None
             out.append(
                 (
-                    "Not reporting. NOAA has no recent water level for this gauge."
+                    "Not reporting. Could not fetch the water level for this gauge."
+                    if self.station_id in store.tide_errors
+                    else "Not reporting. NOAA has no recent water level for this gauge."
                     if failed
                     else "Waiting for the first water level.",
                     DIM,
@@ -297,7 +312,12 @@ class StationScreen(ChromeScreen):
                 latest = store.latest.get(self.station_id)
                 rows = [latest.observation] if latest is not None else []
             state = st.buoy_state(store, self.station_id, now)
-            empty = st.NOT_REPORTING if state in ("silent", "dark") else "no data in this range"
+            if not rows and self.series_error is not None:
+                empty = "Could not load readings"  # the fetch failed here: that says more than "not reporting"
+            elif state in ("silent", "dark"):
+                empty = st.NOT_REPORTING
+            else:
+                empty = "no data in this range"
             lines = st.chart_series(rows, now, hours, preset)
             titles = {
                 "pressure": f"Pressure ({LABELS[preset.pressure]})",
