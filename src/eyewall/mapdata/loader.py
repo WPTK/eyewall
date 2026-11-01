@@ -28,6 +28,10 @@ LAYERS = ("coast", "land", "lakes", "borders", "coast_lo", "land_lo", "lakes_lo"
 _HEADER = struct.Struct("<4sBBHII")
 _PATH_HEADER = struct.Struct("<BI")
 
+PLACES_MAGIC = b"EWPL"
+PLACES_VERSION = 1
+_PLACE_FIXED = struct.Struct("<iiBI")
+
 
 @dataclass(frozen=True)
 class MapPath:
@@ -92,3 +96,58 @@ def load_layer(name: str) -> MapLayer:
     if name not in LAYERS:
         raise ValueError(f"unknown map layer {name!r}; expected one of {', '.join(LAYERS)}")
     return parse(resources.files("eyewall.mapdata").joinpath(f"{name}.bin").read_bytes())
+
+
+@dataclass(frozen=True)
+class Place:
+    """A populated place. scalerank is Natural Earth's importance (0 is the greatest); name_ascii equals name unless
+    the name has characters outside ASCII."""
+
+    lat: float
+    lon: float
+    scalerank: int
+    population: int
+    name: str
+    name_ascii: str
+
+
+def parse_places(data: bytes) -> tuple[Place, ...]:
+    """Decode the bytes of places.bin. The places come in the file's order: most important first."""
+    if len(data) < _HEADER.size:
+        raise ValueError("places file is truncated")
+    magic, version, _, _, units, count = _HEADER.unpack_from(data)
+    if magic != PLACES_MAGIC or version != PLACES_VERSION:
+        raise ValueError("not an eyewall places file of a supported version")
+    if units <= 0:
+        raise ValueError("places file has a non-positive unit scale")
+    scale = float(units)
+    offset = _HEADER.size
+    places: list[Place] = []
+    try:
+        for _ in range(count):
+            lon, lat, rank, pop = _PLACE_FIXED.unpack_from(data, offset)
+            offset += _PLACE_FIXED.size
+            n = data[offset]
+            name = data[offset + 1 : offset + 1 + n].decode("utf-8")
+            offset += 1 + n
+            m = data[offset]
+            alt = data[offset + 1 : offset + 1 + m].decode("utf-8") if m else name
+            offset += 1 + m
+            if offset > len(data):
+                raise ValueError("places file is truncated")
+            if places and rank < places[-1].scalerank:
+                raise ValueError("places file is not ordered by scalerank")
+            places.append(Place(lat / scale, lon / scale, rank, pop, name, alt))
+    except (struct.error, IndexError, UnicodeDecodeError) as exc:
+        raise ValueError("places file is truncated") from exc
+    return tuple(places)
+
+
+@cache
+def load_places() -> tuple[Place, ...]:
+    """Every place in the vendored places.bin, read once, then kept. A missing or damaged file gives no places, so the
+    map loses its labels but still draws."""
+    try:
+        return parse_places(resources.files("eyewall.mapdata").joinpath("places.bin").read_bytes())
+    except (ValueError, OSError):
+        return ()

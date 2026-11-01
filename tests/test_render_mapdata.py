@@ -176,7 +176,7 @@ def test_unknown_layer_and_bad_data_are_rejected():
 
 
 def test_the_attribution_page_matches_the_data(build):
-    outputs = {f"{name}.bin": (DATA_DIR / f"{name}.bin").read_bytes() for name in loader.LAYERS}
+    outputs = {f"{name}.bin": (DATA_DIR / f"{name}.bin").read_bytes() for name in (*loader.LAYERS, "places")}
     assert (DATA_DIR / "ATTRIBUTION.md").read_text(encoding="utf-8") == build.attribution(outputs)
     assert "public domain" in build.attribution(outputs)
 
@@ -335,6 +335,28 @@ def write_sources(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     for name, geometry in sources.items():
         (directory / f"{name}.geojson").write_text(geojson(geometry), encoding="utf-8")
+    (directory / "ne_10m_populated_places_simple.geojson").write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [-80.2, 25.8]},
+                        "properties": {
+                            "name": "Miami",
+                            "nameascii": "Miami",
+                            "scalerank": 1,
+                            "pop_max": 5000000,
+                            "latitude": 25.8,
+                            "longitude": -80.2,
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 @pytest.fixture
@@ -358,9 +380,10 @@ def test_the_build_is_reproducible(build, offline):
     first = build.build(offline / "cache")
     second = build.build(offline / "cache")
     assert first == second
-    assert set(first) == {f"{name}.bin" for name in loader.LAYERS} | {"ATTRIBUTION.md"}
+    assert set(first) == {f"{name}.bin" for name in loader.LAYERS} | {"places.bin", "ATTRIBUTION.md"}
     assert loader.parse(first["borders.bin"]).paths[0].kind == loader.KIND_COUNTRY
     assert {p.kind for p in loader.parse(first["borders.bin"]).paths} == {0, 1}
+    assert [p.name for p in loader.parse_places(first["places.bin"])] == ["Miami"]
 
 
 def test_main_writes_the_files_and_check_notices_drift(build, offline, capsys):

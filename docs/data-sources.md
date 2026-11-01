@@ -39,6 +39,7 @@ last-known data marked stale. Zips and images are fetched only when a storm's ad
 | CO-OPS stations | `https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels` (302; `?type=met` 314); longitude field is `lng` | tide gauge catalog | 24 h, cached |
 | CO-OPS data | `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product={water_level\|predictions\|air_pressure\|wind}&station=…&datum=MLLW&units=english&time_zone=gmt&format=json&application=eyewall` with `date=latest\|recent` or `begin_date`/`range` | observed vs predicted water level (surge residual), wind, pressure near the storm | 6 min |
 | Basemap | Natural Earth 1:10 million GeoJSON (nvkelso mirror): coastline 10 MB, minor-islands coastline 1.3 MB, land 10 MB, lakes 5 MB, admin-0 boundary lines 2.3 MB, admin-1 state lines 21 MB (downloaded only to build the vendored files) | vendored, pre-simplified, no runtime download | dev script |
+| Places | Natural Earth `ne_10m_populated_places_simple` (public domain, 4.9 MB GeoJSON), same nvkelso mirror and commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), SHA-256 `fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f`; fields read by name (`name`, `nameascii`, `scalerank`, `pop_max`, `latitude`, `longitude`), scalerank 8 or better, inside the basemap box (2,854 places, `places.bin` 69 KB, budget 150 KB) | map place labels, ranked by zoom; vendored, no runtime download | dev script |
 
 ## Facts that shape the code (observed, not assumed)
 

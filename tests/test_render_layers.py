@@ -262,7 +262,7 @@ RADII = WindRadii(
     *CENTER, kt34=(200.0, 160.0, 120.0, 180.0), kt50=(100.0, 80.0, 60.0, 90.0), kt64=(50.0, 40.0, 30.0, 45.0)
 )
 ZOOMED = Viewport(*CENTER, 0.03, 100, 40)
-OPEN_SEA = MapOptions(land=False, coast=False, borders=False)
+OPEN_SEA = MapOptions(land=False, coast=False, borders=False, places=False)
 
 
 def test_each_wind_radius_ring_passes_through_its_quadrant_radius():
@@ -514,7 +514,7 @@ def test_drawing_on_a_canvas_that_does_not_fit_the_viewport_is_refused():
 def test_an_empty_scene_is_just_the_base_map():
     from eyewall.render.basemap import basemap_canvas
 
-    assert render_map(ERIN_VIEW).to_text() == basemap_canvas(ERIN_VIEW).to_text()
+    assert render_map(ERIN_VIEW, options=MapOptions(places=False)).to_text() == basemap_canvas(ERIN_VIEW).to_text()
 
 
 def test_the_cone_is_shaded_with_a_bright_edge():

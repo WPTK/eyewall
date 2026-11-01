@@ -3,8 +3,9 @@
 Nothing here knows about NHC models or Textual. The UI adapts storm data to these dataclasses (positions in degrees,
 winds in knots, radii in nautical miles, rings as sequences of (lat, lon)) and calls render_map(). Layers are drawn in
 this order: land, coastline, borders, cone, outlook areas, surge lines, coastal watches and warnings, best track,
-forecast line, wind radii, tide gauges, buoys, forecast points, storm center, labels, cursor. Where two layers meet in
-one cell, the priority in canvas.Priority decides the color: track over warning over cone over coast.
+forecast line, wind radii, tide gauges, buoys, forecast points, storm center, labels, scale bar, place names,
+cursor. Where two layers meet in one cell, the priority in canvas.Priority decides the color: track over warning over
+cone over coast.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from eyewall.palette import (
     CURSOR,
     FORECAST_DASH,
     MAP_LABEL,
+    NEUTRAL,
     RING_PATTERNS,
     STALE,
     TIDE_GAUGE,
@@ -33,6 +35,7 @@ from eyewall.palette import (
 )
 from eyewall.render.basemap import DEFAULT_STYLE, BasemapStyle, basemap_canvas, ensure_matches
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
+from eyewall.render.places import draw_places, draw_scale_bar
 from eyewall.render.projection import Bounds, LatLon, Viewport, bounds_of
 
 Ring = tuple[LatLon, ...]
@@ -148,6 +151,7 @@ class MapScene:
     buoys: tuple[StationMark, ...] = ()
     tide_gauges: tuple[StationMark, ...] = ()
     cursor: LatLon | None = None
+    distance_unit: str = "nm"  # the unit of the scale bar: nm, mi or km, from the reader's units preset
 
 
 @dataclass(frozen=True)
@@ -167,6 +171,7 @@ class MapOptions:
     tide_gauges: bool = True
     labels: bool = True
     station_labels: bool = False
+    places: bool = True  # place names and the scale bar
 
 
 @dataclass(frozen=True)
@@ -178,6 +183,7 @@ class MapStyle:
     cone_shade: Shade = Shade.SPARSE
     cone_edge: str = CONE_EDGE
     label: str = MAP_LABEL
+    place: str = NEUTRAL
     buoy: str = BUOY
     tide_gauge: str = TIDE_GAUGE
     stale: str = STALE
@@ -388,6 +394,9 @@ def draw_scene(
     if options.labels:
         for label in [*labels, *point_labels]:
             _draw_label(canvas, label)
+    if options.places:  # last, so a place never takes room a storm or station label wants
+        draw_scale_bar(canvas, viewport, scene.distance_unit, style.label)
+        draw_places(canvas, viewport, style.place)
     if scene.cursor is not None:
         canvas.marker(*viewport.to_dot(*scene.cursor), glyphs.cursor, style.cursor, Priority.CURSOR, bold=True)
 
