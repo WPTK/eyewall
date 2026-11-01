@@ -271,6 +271,51 @@ def test_importing_the_core_does_not_import_textual_image() -> None:
     assert done.returncode == 0, done.stderr
 
 
+def test_a_failing_terminal_probe_prints_nothing_to_stderr(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    import importlib.abc
+    import importlib.util
+    import logging
+    import types
+
+    class Loader(importlib.abc.Loader):
+        def create_module(self, spec):
+            return types.ModuleType(spec.name)
+
+        def exec_module(self, module) -> None:
+            # What the library does when the terminal never answers its capability query.
+            try:
+                raise TimeoutError("no reply")
+            except TimeoutError as error:
+                logging.getLogger("textual_image._terminal").warning(
+                    "Failed to probe terminal capabilities", exc_info=error
+                )
+            module.Image = object  # type: ignore[attr-defined]
+
+    class Finder(importlib.abc.MetaPathFinder):
+        def find_spec(self, name, path=None, target=None):
+            if name.split(".")[0] == "textual_image":
+                return importlib.util.spec_from_loader(name, Loader(), is_package=True)
+            return None
+
+    class Tty:
+        def isatty(self) -> bool:
+            return True
+
+    for name in [m for m in sys.modules if m.split(".")[0] == "textual_image"]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setattr(sys, "meta_path", [Finder(), *sys.meta_path])
+    monkeypatch.setattr(sys, "__stdout__", Tty())
+    monkeypatch.setattr(logging.root, "handlers", [])  # as in the real app: no handler, so logging falls back to stderr
+    library_log = logging.getLogger("textual_image")
+    handlers = list(library_log.handlers)
+
+    images.load_inline("auto")
+
+    captured = capsys.readouterr()
+    assert captured.err == "" and captured.out == ""
+    assert library_log.handlers == handlers  # the quieting handler does not outlive the import
+
+
 def test_the_source_tree_imports_textual_image_in_one_place_only() -> None:
     import re
     from pathlib import Path
