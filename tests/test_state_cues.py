@@ -16,11 +16,11 @@ async def test_the_focused_pane_has_a_heavy_border_and_the_others_a_round_one() 
         storms = app.screen.query_one("#storms")
         app.screen.set_focus(storms)
         await press(pilot)
-        top = _lines(app)[0]
+        top = _lines(app)[1]  # under the top bar
         assert top.startswith("┏━ Storms"), top  # the storm list is focused: heavy
         assert "╭" in top  # the map pane beside it is blurred: round
         await press(pilot, "tab")
-        top = _lines(app)[0]
+        top = _lines(app)[1]
         assert top.startswith("╭─ Storms"), top  # focus left the storm list: round again
         assert "┏" in top  # and sits on another pane
 

@@ -6,27 +6,21 @@ Wide terminals (110 columns and up) show the panels stacked beside the map. Narr
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.css.scalar import Unit
 from textual.events import Resize
-from textual.screen import Screen
 from textual.widgets import OptionList, TabbedContent, TabPane
 
 from eyewall.poll import FreshnessState
 from eyewall.sources import protocol
-from eyewall.ui import adapt
+from eyewall.ui import adapt, nav
 from eyewall.ui import format as fmt
+from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.widgets.map_view import MapPane, MapView
-from eyewall.ui.widgets.panels import PANEL_KINDS, Panel, StatusBar, has_text
+from eyewall.ui.widgets.panels import PANEL_KINDS, Panel, has_text
 from eyewall.ui.widgets.storm_list import StormList
-
-if TYPE_CHECKING:
-    from eyewall.app import EyewallApp
 
 NARROW_BELOW = 110
 COMPACT_BELOW = 90
@@ -38,32 +32,14 @@ MIN_PANEL_ROWS = 4  # the least any other stacked panel is given: its border and
 class DashboardMap(MapView):
     """The dashboard's map: the keys only it has, listed in the footer while it has the focus."""
 
-    BINDINGS = [
-        Binding("c", "screen.center", "center"),
-        Binding("l", "screen.layers", "layers"),
-    ]
+    NAV_SCOPES = ("dashboard_map", "map")
+    BINDINGS = nav.bindings("dashboard_map")
 
 
-class DashboardScreen(Screen[None]):
-    BINDINGS = [
-        Binding("j", "cursor(1)", "Next storm", show=False),
-        Binding("k", "cursor(-1)", "Previous storm", show=False),
-        Binding("enter", "open_detail", "detail"),
-        Binding("1", "basin('AL')", "Atlantic", show=False),
-        Binding("2", "basin('EP')", "East Pacific", show=False),
-        Binding("3", "basin('CP')", "Central Pacific", show=False),
-        Binding("a", "basin('')", "All basins", show=False),
-        Binding("b", "buoys", "buoys"),
-        Binding("m", "toggle_map", "map"),
-        Binding("M", "full_map", "Full map", show=False),
-        Binding("l", "layers", "Layers", show=False),
-        Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
-        Binding("minus", "zoom_out", "Zoom out", show=False),
-        Binding("c", "center", "Center storm", show=False),
-        Binding("f", "fit", "Fit storm", show=False),
-        Binding("n", "mark(1)", "Next mark", show=False),
-        Binding("N", "mark(-1)", "Previous mark", show=False),
-    ]
+class DashboardScreen(ChromeScreen):
+    CRUMB = "Home"
+    NAV_SCOPES = ("dashboard",)
+    BINDINGS = nav.bindings("dashboard")
 
     def __init__(self) -> None:
         super().__init__()
@@ -72,12 +48,9 @@ class DashboardScreen(Screen[None]):
 
     # ---- layout -----------------------------------------------------------------------------------------------
 
-    @property
-    def eye(self) -> EyewallApp:
-        return self.app  # type: ignore[return-value]
-
     def compose(self) -> ComposeResult:
         eye = self.eye
+        yield TopBar()
         self.map_view = DashboardMap(mode=eye.map_mode, options=eye.map_options)
         with Horizontal(id="main"):
             yield StormList(id="storms")
@@ -89,13 +62,12 @@ class DashboardScreen(Screen[None]):
                 for kind, title, short in PANEL_KINDS:
                     with TabPane(short, id=f"tab-{kind}"):
                         yield Panel(kind, title)
-        yield StatusBar(id="status")
+        yield FooterBar()
 
     def on_mount(self) -> None:
         self.query_one("#storms", StormList).border_title = "Storms"
         self.set_interval(ROW_REFRESH_SECONDS, self.refresh_data)
         self.refresh_data()
-        self.refresh_status()
 
     def on_resize(self, event: Resize) -> None:
         self._apply_layout(event.size.width)
@@ -193,9 +165,6 @@ class DashboardScreen(Screen[None]):
                 return points
         return adapt.basin_points(eye.basin_view)
 
-    def refresh_status(self) -> None:
-        self.query_one("#status", StatusBar).show(self.eye.status_text(self.size.width, self))
-
     # ---- events -----------------------------------------------------------------------------------------------
 
     def on_storm_list_picked(self, event: StormList.Picked) -> None:
@@ -236,6 +205,20 @@ class DashboardScreen(Screen[None]):
         self.refresh_data()
         self.map_view.fit()
 
+    def can_go_back(self) -> bool:
+        """Esc leaves the full-screen map; on the plain dashboard there is nothing to go back to."""
+        return self._full_map
+
+    def go_back(self) -> None:
+        self.action_full_map()
+
+    def show_map(self) -> None:
+        """Make the map visible: `m` from another screen lands here."""
+        compact = self.size.width < COMPACT_BELOW
+        if self._map_toggled == compact:  # toggled and compact, or untoggled and wide, is the map showing
+            return
+        self.action_toggle_map()
+
     def action_toggle_map(self) -> None:
         self._map_toggled = not self._map_toggled
         self._apply_layout()
@@ -243,6 +226,7 @@ class DashboardScreen(Screen[None]):
     def action_full_map(self) -> None:
         self._full_map = not self._full_map
         self._apply_layout()
+        self.refresh_status()  # Esc is back, or nothing to go back to, depending on this
 
     def action_layers(self) -> None:
         self.eye.open_layers()

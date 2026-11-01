@@ -10,19 +10,19 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
-from textual.screen import Screen
 from textual.widgets import DataTable, OptionList, Static, TabbedContent, TabPane
 
 from eyewall.config import watchlist_ids
 from eyewall.palette import ACCENT, DIM
 from eyewall.ui import format as fmt
-from eyewall.ui import products
+from eyewall.ui import nav, products
 from eyewall.ui import stations as st
+from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.widgets.gallery import GalleryPanel
 from eyewall.ui.widgets.station_table import StationTable
 
 if TYPE_CHECKING:
-    from eyewall.app import EyewallApp
+    pass
 
 # (tab id, title). Buoys and Tides are station tables, Graphics is the image gallery.
 TABS: tuple[tuple[str, str], ...] = (
@@ -41,13 +41,10 @@ TABLE_TABS = ("forecast", "probs", "history")
 STATION_TABS = {"buoys": "ndbc", "tides": "coops"}  # tab id -> watchlist kind
 
 
-class StormDetailScreen(Screen[None]):
+class StormDetailScreen(ChromeScreen):
+    NAV_SCOPES = ("detail",)
     BINDINGS = [
-        Binding("left", "tab(-1)", "Previous tab", show=False, priority=True),
-        Binding("right", "tab(1)", "Next tab", show=False, priority=True),
-        Binding("t", "toggle_text", "tcp/tcm"),
-        Binding("p", "pin", "pin"),
-        Binding("escape,backspace", "back", "back"),
+        *nav.bindings("detail"),
         *[
             Binding(str((i + 1) % 10), f"show_tab('{tab_id}')", title, show=False)
             for i, (tab_id, title) in enumerate(TABS)
@@ -60,11 +57,12 @@ class StormDetailScreen(Screen[None]):
         self._first_tab = tab
         self.show_tcm = False
 
-    @property
-    def eye(self) -> EyewallApp:
-        return self.app  # type: ignore[return-value]
+    def crumb(self) -> str:
+        state = self.eye.store.storms.get(self.storm_id)
+        return state.storm.name.title() if state is not None else self.storm_id.upper()
 
     def compose(self) -> ComposeResult:
+        yield TopBar()
         yield Static("", id="detail-title")
         with TabbedContent(id="detail-tabs"):
             for tab_id, title in TABS:
@@ -80,18 +78,14 @@ class StormDetailScreen(Screen[None]):
                     else:
                         with VerticalScroll():
                             yield Static("", id=f"{tab_id}-text", classes="detail-text")
-        yield Static("", id="detail-status")
+        yield FooterBar()
 
     def on_mount(self) -> None:
         if self._first_tab in dict(TABS):
             self.query_one("#detail-tabs", TabbedContent).active = f"tab-{self._first_tab}"
         self.refresh_data()
-        self.refresh_status()
 
     # ---- data -------------------------------------------------------------------------------------------------
-
-    def refresh_status(self) -> None:
-        self.query_one("#detail-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def _set_table(self, tab_id: str, table: products.Table, note: str) -> None:
         widget = self.query_one(f"#{tab_id}-table", DataTable)
@@ -161,9 +155,6 @@ class StormDetailScreen(Screen[None]):
         )
 
     # ---- actions ----------------------------------------------------------------------------------------------
-
-    def action_back(self) -> None:
-        self.app.pop_screen()
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
         """Keys that do something on one tab only are off, and so out of the footer, on the others."""

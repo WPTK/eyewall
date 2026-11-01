@@ -29,6 +29,20 @@ TooSmallScreen {
     max-width: 100%;
 }
 
+/* ---- chrome: the top bar and the footer, one row each on every screen ---- */
+
+TopBar {
+    dock: top;
+    height: 1;
+    background: $panel;
+}
+
+FooterBar {
+    dock: bottom;
+    height: 1;
+    background: $panel;
+}
+
 /* ---- dashboard ---- */
 
 #main {
@@ -139,13 +153,6 @@ MapView {
 
 #side-tabs .panel {
     border: none;
-}
-
-#status, #detail-status, #outlook-status, #graphics-status {
-    dock: bottom;
-    height: 1;
-    background: $panel;
-    padding: 0;
 }
 
 DashboardScreen.narrow #side-stack {
@@ -265,11 +272,11 @@ StormDetailScreen DataTable {
     height: 1fr;
 }
 
-HelpScreen, LayerMenu, MarkChooser {
+HelpScreen, FeedsScreen, LayerMenu, MarkChooser {
     align: center middle;
 }
 
-#help-box {
+#help-box, #feeds-box {
     width: 78;
     max-width: 96%;
     height: auto;
@@ -358,12 +365,6 @@ BuoyDetailScreen.narrow.show-info #buoy-info {
 
 BuoyDetailScreen.narrow.show-info #buoy-charts {
     display: none;
-}
-
-#buoy-status, #watch-status, #alert-status {
-    dock: bottom;
-    height: 1;
-    background: $panel;
 }
 
 /* ---- watchlist ---- */

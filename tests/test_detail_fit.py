@@ -11,6 +11,7 @@ from textual.widgets import DataTable, Tabs
 
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
+from eyewall.ui.chrome import FooterBar
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.detail import StormDetailScreen
 from eyewall.ui.widgets.chart_view import ChartView
@@ -95,7 +96,7 @@ async def test_graphics_picture_stays_above_the_footer(size) -> None:
         panel = screen.query_one(GalleryPanel)
         view = screen.query_one("#gal-view", ImageView)
         await wait_until(pilot, lambda: view._is_picture)
-        status = screen.query_one("#detail-status")
+        status = screen.query_one(FooterBar)
         assert view.region.bottom < status.region.y, "the picture area touches the footer"
         assert panel.region.bottom <= status.region.y
         assert view.region.width >= 20

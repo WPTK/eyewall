@@ -16,12 +16,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
-from typing import Any
 
-from rich.text import Text
 from textual import events
 from textual.app import App
-from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
@@ -41,11 +38,14 @@ from eyewall.sources.replay import ReplaySource
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.store import Store
 from eyewall.ui import format as fmt
+from eyewall.ui import nav
+from eyewall.ui.chrome import ChromeScreen, FeedStatus, Health, ReplayStatus, health
 from eyewall.ui.glyphs import UiGlyphs, glyphs_for
 from eyewall.ui.screens.alerts import AlertLogScreen
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import StormDetailScreen
+from eyewall.ui.screens.feeds import FeedsScreen
 from eyewall.ui.screens.graphics import GraphicsScreen
 from eyewall.ui.screens.help import HelpScreen
 from eyewall.ui.screens.layers import LayerMenu
@@ -75,25 +75,10 @@ IMAGE_MEMORY = 48 * 1024 * 1024  # bytes of downloaded images kept in memory
 class EyewallApp(App[None]):
     CSS_PATH = "ui/app.tcss"
     TITLE = "eyewall"
-    ENABLE_COMMAND_PALETTE = False
+    ENABLE_COMMAND_PALETTE = True
+    COMMANDS = {nav.EyewallCommands}  # the menu lists eyewall's own actions, not Textual's theme and quit commands
 
-    BINDINGS = [
-        Binding("q", "quit", "Quit", show=False),
-        Binding("question_mark", "help", "Help", show=False),
-        Binding("g", "graphics", "Graphics", show=False),
-        Binding("O", "outlook", "Outlook", show=False),
-        Binding("A", "alerts", "Alerts", show=False),
-        Binding("r", "refresh", "Refresh", show=False),
-        Binding("u", "units", "Units", show=False),
-        Binding("slash", "search", "Find station", show=False),
-        Binding("w", "watchlist", "Watchlist", show=False),
-        Binding("S", "settings", "Settings", show=False),
-        Binding("space", "play_pause", "Pause", show=False),
-        Binding("less_than_sign", "speed(-1)", "Slower", show=False),
-        Binding("greater_than_sign", "speed(1)", "Faster", show=False),
-        Binding("left_square_bracket", "step(-1)", "Previous advisory", show=False),
-        Binding("right_square_bracket", "step(1)", "Next advisory", show=False),
-    ]
+    BINDINGS = nav.bindings("app", "replay")
 
     def __init__(
         self,
@@ -146,6 +131,7 @@ class EyewallApp(App[None]):
         self._tick_lock = asyncio.Lock()
         self._reported: set[str] = set()
         self.replay_over = False
+        self.catalogs_task: asyncio.Future[bool] | None = None  # the menu's one fetch of the station catalogs
         engine = AlertEngine(config.alerts, state_dir)
         self.poller = Poller(
             source,
@@ -172,39 +158,33 @@ class EyewallApp(App[None]):
         enabled = self.config.basins.enabled
         return (self.basin_filter,) if self.basin_filter in enabled else enabled
 
-    def status_text(self, width: int, screen: Screen[Any]) -> Text:
-        feeds = [fmt.FeedStatus(f, self.poller.freshness(f), self.poller.active(f)) for f in protocol.FEEDS]
-        replay = None
-        if self.replay is not None:
-            adv = next((str(s.advisories.adv_num) for s in self.store.storms.values() if s.advisories.adv_num), None)
-            replay = fmt.ReplayStatus(
-                self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over
-            )
+    def feed_statuses(self) -> list[FeedStatus]:
+        return [FeedStatus(f, self.poller.freshness(f), self.poller.active(f)) for f in protocol.FEEDS]
 
-        def status(room: int) -> Text:
-            return fmt.status_bar(
-                feeds,
-                next_poll=self.poller.seconds_until_next(),
-                alert_count=len(self.alert_log),
-                replay=replay,
-                away=self.poller.away,
-                width=room,
-                g=self.glyphs,
-            )
+    def replay_status(self) -> ReplayStatus | None:
+        if self.replay is None:
+            return None
+        adv = next((str(s.advisories.adv_num) for s in self.store.storms.values() if s.advisories.adv_num), None)
+        return ReplayStatus(self.paused, REPLAY_SPEEDS[self.speed_index], self.replay.now(), adv, self.replay_over)
 
-        if width >= 70:  # `? help` keeps its place, then the keys; the status degrades to the room left
-            return fmt.footer_row(status, self.footer_keys(screen), width)
-        return status(width)
+    def health(self) -> Health:
+        """What the top bar's health slot says now."""
+        return health(self.feed_statuses(), self.replay_status(), self.glyphs)
 
-    def footer_keys(self, screen: Screen[Any]) -> list[tuple[str, str]]:
-        """The keys that work where the focus is on `screen`: Textual's own active bindings, nearest widget first,
-        filtered to the ones marked `show` and not disabled by their widget's `check_action`."""
-        keys: dict[str, tuple[str, str]] = {}
-        for active in screen.active_bindings.values():
-            binding = active.binding
-            if binding.show and active.enabled and binding.description and binding.action not in keys:
-                keys[binding.action] = (binding.key_display or fmt.key_name(binding.key), binding.description)
-        return list(keys.values())
+    def top_bar_extras(self) -> list[tuple[str, str | None]]:
+        """What the top bar shows beside the breadcrumb when there is room, most important first: the alert
+        count, the idle marker, the replay time."""
+        extras: list[tuple[str, str | None]] = []
+        if self.alert_log:
+            count = len(self.alert_log)
+            extras.append((f"{count} alert" + ("" if count == 1 else "s"), "app:alerts"))
+        if self.poller.away:
+            extras.append(("idle", None))
+        replay = self.replay_status()
+        if replay is not None:  # the clock is the first to go when the bar is tight
+            when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")
+            extras.append((when, None))
+        return extras
 
     def on_descendant_focus(self) -> None:
         self._for_screens("refresh_status")
@@ -250,7 +230,7 @@ class EyewallApp(App[None]):
     def on_resize(self, event: events.Resize) -> None:
         if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
             self.push_screen(TooSmallScreen())
-        self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every footer follows a resize
+        self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every bar follows a resize
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
@@ -344,6 +324,43 @@ class EyewallApp(App[None]):
 
     def _modal_open(self) -> bool:
         return isinstance(self.screen, ModalScreen)
+
+    def _can_go_back(self) -> bool:
+        screen = self.screen
+        return isinstance(screen, ChromeScreen) and screen.can_go_back()
+
+    async def action_back(self) -> None:
+        """Esc: one step back out of the screen, a full-screen map or a mark. A dialog closes itself."""
+        if self._can_go_back():
+            self.screen.action_back()  # type: ignore[attr-defined]
+
+    def action_quit_top(self) -> None:
+        """`q`: quit, but only on the first screen, where Esc has nothing to go back to."""
+        if self.check_action(nav.QUIT, ()):
+            self.exit()
+
+    async def action_crumb(self, index: int) -> None:
+        """A breadcrumb was clicked: go back to that screen."""
+        chrome = [s for s in self.screen_stack if isinstance(s, ChromeScreen)]
+        if not 0 <= index < len(chrome):
+            return
+        target = chrome[index]
+        while self.screen is not target and len(self.screen_stack) > 1:
+            await self.pop_screen()
+
+    async def action_map(self) -> None:
+        """`m` from another screen: back to the first screen with its map showing."""
+        if self._modal_open():
+            return
+        while len(self.screen_stack) > 1:
+            await self.pop_screen()
+        root = self.screen
+        if isinstance(root, DashboardScreen):
+            root.show_map()
+
+    def action_feeds(self) -> None:
+        if not self._modal_open():
+            self.push_screen(FeedsScreen())
 
     def open_detail(self, storm_id: str | None, tab: str | None = None) -> None:
         if storm_id is not None and not isinstance(self.screen, StormDetailScreen):
@@ -655,7 +672,18 @@ class EyewallApp(App[None]):
     # ---- replay transport -------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
-        return not (action in REPLAY_ACTIONS and self.replay is None)
+        if action in REPLAY_ACTIONS and self.replay is None:
+            return False
+        if action == nav.BACK:
+            return self._can_go_back()
+        if action == nav.QUIT:
+            if isinstance(self.screen, TooSmallScreen):
+                return True  # nothing else works there, so q must
+            # The first screen only, and not inside its full-screen map, where Esc is the way out.
+            return len(self.screen_stack) == 1 and not self._can_go_back()
+        if action == "command_palette":
+            return not isinstance(self.screen, SearchScreen)  # there Ctrl+P pins the station, as the search says
+        return True
 
     def action_play_pause(self) -> None:
         self.paused = not self.paused

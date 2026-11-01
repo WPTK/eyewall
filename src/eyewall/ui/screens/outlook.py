@@ -10,17 +10,16 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import Screen
 from textual.widgets import DataTable, Static
 
 from eyewall.clock import format_age, format_zulu
 from eyewall.models.outlook import OutlookArea
 from eyewall.palette import DIM, HEADING, risk_color
-from eyewall.ui import adapt
+from eyewall.ui import adapt, nav
 from eyewall.ui import format as fmt
 from eyewall.ui import stations as st
+from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.widgets.map_view import MapPane, MapView
 from eyewall.ui.widgets.station_table import StationTable
 from eyewall.units import MISSING
@@ -107,22 +106,14 @@ def watchlist_rows(eye: EyewallApp) -> list[tuple[str, tuple[Text, ...]]]:
     return rows
 
 
-class OutlookScreen(Screen[None]):
-    BINDINGS = [
-        Binding("escape,O", "back", "back"),
-        Binding("plus,equals_sign", "zoom_in", "Zoom in", show=False),
-        Binding("minus", "zoom_out", "Zoom out", show=False),
-        Binding("f", "fit", "Fit", show=False),
-        Binding("n", "mark(1)", "Next mark", show=False),
-        Binding("N", "mark(-1)", "Previous mark", show=False),
-    ]
-
-    @property
-    def eye(self) -> EyewallApp:
-        return self.app  # type: ignore[return-value]
+class OutlookScreen(ChromeScreen):
+    CRUMB = "Outlook"
+    NAV_SCOPES = ("outlook",)
+    BINDINGS = nav.bindings("outlook")
 
     def compose(self) -> ComposeResult:
         eye = self.eye
+        yield TopBar()
         self.map_view = MapView(mode=eye.map_mode, options=eye.map_options)
         with Horizontal(id="outlook-main"):
             with Vertical(id="outlook-left"):
@@ -131,15 +122,11 @@ class OutlookScreen(Screen[None]):
                 yield Static("Watchlist   Enter: charts   w: edit", id="watchlist-title")
                 yield StationTable(id="watchlist")
             yield MapPane(self.map_view, id="outlook-map")
-        yield Static("", id="outlook-status")
+        yield FooterBar()
 
     def on_mount(self) -> None:
         self.query_one("#outlook-left").border_title = "Tropical weather outlook"
         self.refresh_data()
-        self.refresh_status()
-
-    def refresh_status(self) -> None:
-        self.query_one("#outlook-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
         eye = self.eye
@@ -155,9 +142,6 @@ class OutlookScreen(Screen[None]):
         if event.row_key.value is not None:
             event.stop()
             self.eye.open_buoy(str(event.row_key.value))
-
-    def action_back(self) -> None:
-        self.app.pop_screen()
 
     def action_zoom_in(self) -> None:
         self.map_view.action_zoom_in()

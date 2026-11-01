@@ -1,4 +1,4 @@
-"""The side panels and the status bar: thin widgets that show text built in `eyewall.ui.format`."""
+"""The side panels: thin widgets that show text built in `eyewall.ui.format`."""
 
 from __future__ import annotations
 
@@ -44,10 +44,3 @@ class Panel(VerticalScroll):
         if self.kind != "headline":  # no text, no panel: an empty box says nothing
             self.filled = has_text(text)
             self.display = self.filled and not self.dropped
-
-
-class StatusBar(Static):
-    """The bottom line: feed freshness, next poll, alert count and the replay transport."""
-
-    def show(self, text: Text) -> None:
-        self.update(text)

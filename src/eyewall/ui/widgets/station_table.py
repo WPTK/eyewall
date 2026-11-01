@@ -7,8 +7,9 @@ from collections.abc import Sequence
 from rich.cells import cell_len
 from rich.text import Text
 from textual import events
-from textual.binding import Binding
 from textual.widgets import DataTable
+
+from eyewall.ui import nav
 
 NAME = "Name"
 NAME_MIN = 10  # the Name column never shrinks below this; past it the table scrolls sideways
@@ -30,7 +31,8 @@ class StationTable(DataTable[Text]):
     that did not change), so a poll that changes nothing costs nothing and never moves the cursor; when it does change,
     the cursor follows the station it was on."""
 
-    BINDINGS = [Binding("enter", "select_cursor", "charts")]
+    NAV_SCOPES = ("stations",)
+    BINDINGS = nav.bindings("stations")
 
     def __init__(self, *, id: str | None = None, charts: bool = True) -> None:
         super().__init__(id=id, zebra_stripes=True, cursor_type="row")

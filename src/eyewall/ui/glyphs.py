@@ -27,6 +27,7 @@ class UiGlyphs:
     ellipsis: str
     alert: str
     rule: str
+    crumb: str
 
 
 UNICODE = UiGlyphs(
@@ -44,6 +45,7 @@ UNICODE = UiGlyphs(
     ellipsis="…",
     alert="!",
     rule="─",
+    crumb="›",  # noqa: RUF001 (a single right-pointing angle quotation mark)
 )
 
 ASCII = UiGlyphs(
@@ -61,6 +63,7 @@ ASCII = UiGlyphs(
     ellipsis="...",
     alert="!",
     rule="-",
+    crumb=">",
 )
 
 SETS = {"unicode": UNICODE, "ascii": ASCII}
