@@ -54,5 +54,8 @@ class HelpScreen(ModalScreen[None]):
         with VerticalScroll(id="help-box"):
             yield Static(help_text())
 
+    def on_mount(self) -> None:
+        self.query_one("#help-box").border_subtitle = "Esc closes, Up and Down scroll"
+
     def action_close(self) -> None:
         self.dismiss()

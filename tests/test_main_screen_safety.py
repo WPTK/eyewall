@@ -219,7 +219,7 @@ async def test_a_failed_storm_feed_is_not_reported_as_no_storms(monkeypatch: pyt
         await press(pilot, "r")
         await wait_until(pilot, lambda: app.poller.freshness("storms").failures > 0, 15)
         await settle(pilot)
-        assert "Storm data unavailable (last update" in lead_of(app)
+        assert "Storm data unavailable (storms feed failing)" in lead_of(app)
         assert "No tropical storms" not in lead_of(app)
         assert not app.replay_available()  # no offer on the strength of "no storms" that is no longer known
         await press(pilot, "R")
@@ -232,7 +232,7 @@ async def test_retained_storms_are_marked_stale_when_the_feed_stops() -> None:
         await into_the_storm(pilot)
         assert "stale" not in panel_text(app)
         view = replace(app.screen._view(), storms_old=True, storms_age=900.0)  # type: ignore[attr-defined]
-        assert "Storm data is not updating (last update 15m00s ago)" in lead_text(view).plain
+        assert "Storm data is not updating (storms feed failing, last update 15m00s ago)" in lead_text(view).plain
         lines = fit_blocks(side_blocks(view, 34), 60, 34)
         assert "stale" in " ".join(line.text.plain for line in lines)
 

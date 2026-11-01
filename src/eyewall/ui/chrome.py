@@ -136,7 +136,8 @@ def health(feeds: Sequence[FeedStatus], replay: ReplayStatus | None, g: UiGlyphs
     late = [f for f in active if f.freshness.state is FreshnessState.STALE]
     cue = FRESHNESS_CUES
     if any(f.freshness.from_cache for f in active):
-        return Health(g.error, "offline, cached", "offline", age, f"bold {WARN}")
+        # A cached answer's age is when the poll ran, not how old the data is, so none is claimed.
+        return Health(g.error, "offline, cached", "offline", "", f"bold {WARN}")
     if errors:
         return Health(g.error, f"{_feeds_word(len(errors))} failing", f"{len(errors)} fail", age, cue["error"].style())
     if late:

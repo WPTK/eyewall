@@ -321,8 +321,9 @@ class MapView(Widget, can_focus=True):
 
     # ---- marks ------------------------------------------------------------------------------------------------
 
-    def describe(self, mark: Mark) -> str:
-        """A plain line naming a mark, for the tooltip and the chooser: 'Buoy 41046 East Bahamas · 60 mph'."""
+    def describe(self, mark: Mark, *, named: bool = True) -> str:
+        """A plain line naming a mark, for the tooltip and the chooser: 'Buoy 41046 East Bahamas · 60 mph'. Without
+        `named` a station's own name is left out, which is what a short legend row has room for."""
         preset = getattr(self.app, "preset", None) or PRESETS[DEFAULT_PRESET]
         scene = self.scene
         if mark.kind == "storm":
@@ -335,7 +336,7 @@ class MapView(Widget, can_focus=True):
         head = f"{'Buoy' if mark.kind == 'buoy' else 'Gauge'} {mark.id}"
         if station is None:
             return head
-        head += f" {station.name}" if station.name else ""
+        head += f" {station.name}" if named and station.name else ""
         if station.stale:
             return f"{head} · no recent report"
         return head + (f" · {preset.fmt_wind(station.wind_kt)}" if station.wind_kt is not None else "")
@@ -347,6 +348,7 @@ class MapView(Widget, can_focus=True):
     def _show(self) -> None:
         self._strips = None
         self.refresh()
+        self.post_message(self.Changed())  # the legend names the marked mark
 
     def _open(self, mark: Mark) -> None:
         self.focused_mark = mark
@@ -385,8 +387,9 @@ class MapView(Widget, can_focus=True):
     # ---- legend -----------------------------------------------------------------------------------------------
 
     def _pattern_key(self) -> list[list[tuple[str, str]]]:
-        """Names the line patterns on the map: the wind rings by strength, then watch, warning and surge lines. Only
-        what the scene draws is listed, so the key reads the same without color."""
+        """Names the line patterns on the map, each sample just before its label: the watch, warning and surge lines,
+        then the wind rings by strength. Only what the scene draws is listed, so the key reads the same without color.
+        A group's first item carries the group word."""
         ascii_mode = self.mode is Mode.ASCII
         storms = self.scene.storms
 
@@ -394,6 +397,13 @@ class MapView(Widget, can_focus=True):
             return PATTERN_SAMPLES[pattern][1 if ascii_mode else 0]
 
         items: list[list[tuple[str, str]]] = []
+        if self.options.warnings:
+            kinds = {segment.kind for storm in storms for segment in (*storm.warnings, *storm.surge)}
+            for kind in WatchWarning:
+                if kind in kinds:
+                    cue = WATCH_WARNING_CUES[kind]
+                    parts = [(sample(cue.pattern), cue.color), (f" {cue.short} ", DIM)]
+                    items.append([(" lines ", DIM), *parts] if not items else parts)
         if self.options.radii:
             drawn = {
                 knots
@@ -402,23 +412,31 @@ class MapView(Widget, can_focus=True):
                 for knots, quadrants in ((34, radii.kt34), (50, radii.kt50), (64, radii.kt64))
                 if quadrants is not None and any(quadrants)
             }
+            first = True
             for knots in RING_KNOTS:
                 if knots in drawn:
-                    ring = [(f" {knots}kt ", DIM), (sample(RING_PATTERNS[knots]), category_color(knots))]
-                    items.append([(" rings", DIM), *ring] if not items else ring)
-        if self.options.warnings:
-            kinds = {segment.kind for storm in storms for segment in (*storm.warnings, *storm.surge)}
-            first = True
-            for kind in WatchWarning:
-                if kind in kinds:
-                    cue = WATCH_WARNING_CUES[kind]
-                    parts = [(f" {cue.short} ", DIM), (sample(cue.pattern), cue.color)]
-                    items.append([(" lines", DIM), *parts] if first else parts)
+                    parts = [(sample(RING_PATTERNS[knots]), category_color(knots)), (f" {knots}kt ", DIM)]
+                    items.append([("  rings " if items else " rings ", DIM), *parts] if first else parts)
                     first = False
         return items
 
+    def _marked(self, room: int) -> list[tuple[str, str]] | None:
+        """The focused mark in words, if there is one and `room` cells for them: the name a reader needs first."""
+        mark = self.focused_mark
+        if mark is None:
+            return None
+        full, short = self.describe(mark), self.describe(mark, named=False)
+        for text in (full, short):
+            for said in (f"  Marked: {text}  enter opens", f"  Marked: {text}"):
+                if cell_len(said) <= room:
+                    return [(said, "bold")]
+        cut = Text(f"  Marked: {short}", no_wrap=True)
+        cut.truncate(max(room, 0), overflow="ellipsis")
+        return [(cut.plain, "bold")] if room > 8 else None
+
     def legend(self, width: int) -> Text:
-        """The marks, then the zoom and the cursor. Items that do not fit the width go on the next line."""
+        """The marks, then the zoom and the cursor, or the focused mark in words; and the line key. Each row holds
+        whole items: what does not fit is left out, so the legend is never more than two rows."""
         glyphs = ASCII_GLYPHS if self.mode is Mode.ASCII else UNICODE_GLYPHS
         self._ensure_viewport()
         items: list[list[tuple[str, str]]] = []
@@ -430,35 +448,37 @@ class MapView(Widget, can_focus=True):
         ):
             items.append([(f" {mark} ", "bold"), (name, DIM)])
         view = self._viewport
-        if view is not None and width >= 60:
+        marked = self._marked(width - sum(cell_len(t) for item in items for t, _ in item))
+        if marked is not None:
+            items.append(marked)
+        elif view is not None and width >= 60:
             items.append(
                 [
                     (f"  {view.deg_per_dot:.2f} deg/dot ", DIM),
                     ("10m coast" if is_detailed(view) else "overview", HEADING),
                 ]
             )
-        if self.cursor is not None and width >= 80:
-            lat, lon = self.cursor
-            items.append(
-                [(f"  {abs(lat):.2f}{'N' if lat >= 0 else 'S'} {abs(lon):.2f}{'E' if lon >= 0 else 'W'}", DIM)]
-            )
+            if self.cursor is not None and width >= 80:
+                lat, lon = self.cursor
+                items.append(
+                    [(f"  {abs(lat):.2f}{'N' if lat >= 0 else 'S'} {abs(lon):.2f}{'E' if lon >= 0 else 'W'}", DIM)]
+                )
         out = Text(no_wrap=True, overflow="ellipsis")
         _flow(out, items, width)
         key = self._pattern_key()
-        if key:  # on its own rows, so the cursor joining the line above never changes how many rows the legend takes
+        if key:  # on its own row, so the row above never changes how many rows the legend takes
             out.append("\n")
             _flow(out, key, width)
         return out
 
 
 def _flow(out: Text, items: list[list[tuple[str, str]]], width: int) -> None:
-    """Append items to a line, moving any that do not fit the width to the next one."""
+    """Append items to one line while they fit the width; the first that does not, and all after it, are left out."""
     used = 0
     for item in items:
         size = sum(cell_len(text) for text, _ in item)
-        if used and used + size > width:
-            out.append("\n")
-            used = 0
+        if used + size > width:
+            break
         for text, style in item:
             out.append(text, style=style)
         used += size

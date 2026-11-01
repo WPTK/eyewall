@@ -89,7 +89,7 @@ def in_effect_lines(view: View, state: StormState, width: int) -> list[Line]:
     for area in areas:
         stroke, color = warning_list.area_marker(area, view)
         out += wrapped(
-            collapse(area.label), width, style=f"bold {color}", prefix=f"{stroke} ", prefix_style=color, hang=4
+            collapse(area.label), width, style=f"bold {color}".strip(), prefix=f"{stroke} ", prefix_style=color, hang=4
         )
         phrase = storm_words.area_phrase(area)
         if phrase:

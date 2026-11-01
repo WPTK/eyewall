@@ -105,7 +105,8 @@ def storm_scene(state: StormState) -> L.StormScene:
 
 
 def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
-    """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance."""
+    """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance and its
+    span, so a number on the map is never bare."""
     if outlook is None:
         return ()
     areas: list[L.OutlookArea] = []
@@ -114,8 +115,8 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
             continue
         risks = [r for r in (system.risk_2day, system.risk_7day) if r]
         risk = max(risks, key=lambda r: _RISK_RANK.get(r.lower(), 0)) if risks else "low"
-        chance = system.prob_7day if system.prob_7day is not None else system.prob_2day
-        areas.append(L.OutlookArea(system.polygons, risk, None if chance is None else f"{chance}%"))
+        days, chance = (7, system.prob_7day) if system.prob_7day is not None else (2, system.prob_2day)
+        areas.append(L.OutlookArea(system.polygons, risk, None if chance is None else f"{chance}% in {days} days"))
     return tuple(areas)
 
 
