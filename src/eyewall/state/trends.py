@@ -16,6 +16,7 @@ from eyewall.models.obs import Observation, ObservationSeries, SupplementalReadi
 
 TENDENCY_HOURS = 3.0
 STEADY_BAND_MPS = 1.0
+STEADY_BAND_WAVE_M = 0.3
 SILENT_AFTER = timedelta(hours=2)
 _PAIR_TOLERANCE_MIN = 20.0
 
@@ -151,6 +152,13 @@ def gust_trend(
 ) -> Trend | None:
     """The change in gust speed (m/s) between the newest reading and one about `hours` earlier."""
     return _trend(observations, lambda o: o.gust_mps, hours, steady_band)
+
+
+def wave_trend(
+    observations: Iterable[Observation], *, hours: float = TENDENCY_HOURS, steady_band: float = STEADY_BAND_WAVE_M
+) -> Trend | None:
+    """The change in wave height (m) between the newest reading that has one and one about `hours` earlier."""
+    return _trend(observations, lambda o: o.wave_height_m, hours, steady_band)
 
 
 def observation_age(series: ObservationSeries, now: datetime) -> timedelta | None:

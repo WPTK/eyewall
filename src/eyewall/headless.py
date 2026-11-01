@@ -56,6 +56,7 @@ class HeadlessResult:
     ended: datetime | None = None
     feeds_ok: int = 0  # feed polls that worked
     feeds_failed: int = 0  # feed polls that raised, timed out or were answered by a server that was failing
+    store: Store | None = None  # what the poller learned, for a summary
 
 
 async def run_replay(
@@ -80,7 +81,8 @@ async def _drive(
     end: datetime,
     emit: Callable[[Event], None] | None,
 ) -> HeadlessResult:
-    result = HeadlessResult()
+    store = Store(config)
+    result = HeadlessResult(store=store)
 
     def collect(events: list[Event]) -> None:
         for event in events:
@@ -90,7 +92,7 @@ async def _drive(
 
     poller = Poller(
         source,
-        Store(config),
+        store,
         AlertEngine(config.alerts, state_dir),
         config.poll,
         clock=clock,
@@ -115,7 +117,8 @@ async def run_live(
 ) -> HeadlessResult:
     """Poll the real services once, or for the duration given as `+30m`, and print the events."""
     source = LiveSource()
-    result = HeadlessResult()
+    store = Store(config)
+    result = HeadlessResult(store=store)
 
     def collect(events: list[Event]) -> None:
         for event in events:
@@ -124,7 +127,7 @@ async def run_live(
                 emit(event)
 
     try:
-        poller = Poller(source, Store(config), AlertEngine(config.alerts, state_dir), config.poll, on_events=collect)
+        poller = Poller(source, store, AlertEngine(config.alerts, state_dir), config.poll, on_events=collect)
         end = None if until is None else parse_until(until, source.now())
         while True:
             for polled in await poller.tick():

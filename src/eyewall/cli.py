@@ -42,9 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--headless", action="store_true", help="run the poller with no interface and print the events")
     parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="print what is happening in plain sentences once, then exit; works with --replay and --demo",
+    )
+    parser.add_argument(
         "--until",
         metavar="WHEN",
-        help="with --headless, stop at this moment: +12h, +90m or an ISO timestamp (replay: from the bundle start)",
+        help="with --headless or --summary, stop at this moment: +12h, +90m or an ISO timestamp (replay: from the "
+        "bundle start)",
     )
     parser.add_argument(
         "--state-dir",
@@ -126,6 +132,39 @@ def _headless(args: argparse.Namespace, config: Config) -> int:
     return 0
 
 
+def _summary(args: argparse.Namespace, config: Config) -> int:
+    """Poll once (a replay up to `--until`, +12h by default), print the plain-language summary and exit.
+
+    The seen-event set is never read or written: a summary must not use up an alert the real app has yet to show.
+    """
+    from datetime import datetime
+
+    from eyewall.headless import UntilError, run_live, run_replay
+    from eyewall.sources.bundle import BundleError, resolve_bundle
+    from eyewall.sources.replay import ReplaySource
+    from eyewall.ui.words.summary import summary_lines
+    from eyewall.units import PRESETS
+
+    try:
+        if args.replay or args.demo:
+            source = ReplaySource(resolve_bundle(DEMO_BUNDLE if args.demo else args.replay))
+            result = asyncio.run(run_replay(source, config, None, args.until or "+12h"))
+        else:
+            result = asyncio.run(run_live(config, None, args.until))
+    except (BundleError, UntilError) as exc:
+        print(f"eyewall: {exc}", file=sys.stderr)
+        return 2
+    if result.feeds_failed and not result.feeds_ok:  # nothing was fetched: a script must not read this as "quiet"
+        print("eyewall: every feed failed", file=sys.stderr)
+        return 1
+    if result.store is None or result.ended is None:
+        return 1
+    zone = datetime.now().astimezone().tzinfo
+    lines = summary_lines(result.store, PRESETS[config.units.preset], result.ended, zone)
+    sys.stdout.write("".join(f"{line}\n" for line in lines))
+    return 0
+
+
 def _config_path(args: argparse.Namespace) -> Path | None:
     """Where the app saves settings and the watchlist: the file it was told to read, else the default; with
     --no-config nowhere, so changes last for the run."""
@@ -183,8 +222,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     warnings = loaded.warnings
     for warning in warnings:
         print(f"eyewall: config: {warning}", file=sys.stderr)
-    if args.until is not None and not args.headless:
-        build_parser().error("--until needs --headless")
+    if args.headless and args.summary:
+        build_parser().error("--headless and --summary cannot be used together")
+    if args.until is not None and not (args.headless or args.summary):
+        build_parser().error("--until needs --headless or --summary")
+    if args.summary:
+        return _summary(args, config)
     if args.headless:
         return _headless(args, config)
     return _run_app(args, config, loaded)
