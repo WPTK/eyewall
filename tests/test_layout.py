@@ -8,7 +8,7 @@ from textual.widgets import DataTable, SelectionList, Switch, TabbedContent
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import TABS
 from eyewall.ui.widgets.panels import Panel
-from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, scripted_app, settle
+from tests.ui_support import into_the_storm, press, replay_app, running, screen_text, scripted_app, settle, wait_until
 
 
 def _stacked(app) -> dict[str, Panel]:  # type: ignore[no-untyped-def]
@@ -100,11 +100,9 @@ async def test_settings_scrolls_to_its_last_switch_at_80x24() -> None:
     async with running(app, (80, 24)) as pilot:
         await press(pilot, "S")
         last = app.screen.query_one("#alerts-bell", Switch)
-        last.focus()
-        await settle(pilot)
+        last.focus()  # focusing scrolls it into view with an animation, which a slow runner finishes late
         screen = app.screen.region
-        assert last.region.height > 0
-        assert screen.contains_region(last.region)
+        await wait_until(pilot, lambda: last.region.height > 0 and screen.contains_region(last.region))
 
 
 async def test_scrollbars_are_one_column_wide() -> None:
