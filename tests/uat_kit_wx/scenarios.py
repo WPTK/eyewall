@@ -11,11 +11,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import struct
 import subprocess
 import tempfile
 import time
-import zlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,9 +21,9 @@ from typing import Any
 
 from .ew_driver import Run
 from .fakenoaa import FakeNoaa
+from .payloads import nhc_routes
 
 REPO = Path(__file__).resolve().parents[2]
-FIX = REPO / "tests" / "fixtures"
 DEFAULT_EXE = Path(r"C:\Users\billp\uat-s2b\dl\eyewall-windows-x86_64.exe")
 MAIN_PY = Path(r"C:\eyewall-wt\uat-kit-main\.venv\Scripts\python.exe")
 LOCK = Path(r"C:\Users\billp\uat-shared\locks\gilead-heavy")
@@ -55,33 +53,6 @@ def heavy_lock(purpose: str, wait: float = 1200) -> Iterator[None]:
         for f in LOCK.glob("*"):
             f.unlink(missing_ok=True)
         LOCK.rmdir()
-
-
-def png() -> bytes:
-    def chunk(k: bytes, d: bytes) -> bytes:
-        return struct.pack(">I", len(d)) + k + d + struct.pack(">I", zlib.crc32(k + d))
-
-    raw = b"".join(b"\x00" + b"\x20\x40\x80" * 64 for _ in range(48))
-    ihdr = struct.pack(">IIBBBBB", 64, 48, 8, 2, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-
-
-def nhc_routes(storms: str) -> Any:
-    body = (FIX / "nhc" / "current" / f"{storms}.json").read_bytes()
-    landing = (FIX / "nhc" / "graphics" / "landing_active_modelled.html").read_bytes()
-    img = png()
-
-    def route(host: str, path: str) -> tuple[int, str, bytes]:
-        if host == "www.nhc.noaa.gov":
-            if path.startswith("/CurrentStorms.json"):
-                return 200, "application/json", body
-            if path.endswith(".shtml") and "graphics" in path:
-                return 200, "text/html", landing
-            if path.endswith((".png", ".gif", ".jpg")):
-                return 200, "image/png", img
-        return 404, "text/plain", b"not found"
-
-    return route
 
 
 def save(out: Path, name: str, text: str) -> None:
@@ -605,6 +576,63 @@ def s8_summary(prefix: list[str], tag: str) -> dict[str, Any]:
     return {"build": tag, "cases": res}
 
 
+def s10_full_map_by_mouse(driver: str, exe: Path, out: Path) -> dict[str, Any]:
+    """Is there any mouse path to the full-screen map (the ``M`` key)? Palette entry, footer cell, breadcrumb."""
+    facts: dict[str, Any] = {"driver": driver}
+    with _fresh_demo(driver, exe, "home") as r:
+        facts["home_footer_cells"] = [(k, lbl) for k, lbl, *_ in r.footer_cells()]
+        base_scale = r.text()
+        r.key("M")
+        facts["M_key"] = {"crumb": r.crumb(), "footer": r.footer(), "changed": r.text() != base_scale}
+        save(out, f"s10-{driver}-M-key.txt", r.dump())
+        full_footer = r.footer()
+        r.key("esc")
+        facts["after_esc_footer_matches_home"] = r.footer() != full_footer
+    for query in ("map", "full", "screen"):
+        with _fresh_demo(driver, exe, "home") as r:
+            r.raw("")
+            r.settle(1.0)
+            r.raw(query)
+            r.settle(1.5)
+            lines = [ln.strip() for ln in r.lines() if ln.strip()]
+            facts[f"palette_{query}"] = lines[:14]
+            save(out, f"s10-{driver}-palette-{query}.txt", r.dump())
+    # click the palette entry 'Go to the map' (the only map entry), by mouse, and see which map results
+    with _fresh_demo(driver, exe, "home") as r:
+        r.raw("")
+        r.settle(1.0)
+        r.raw("map")
+        r.settle(1.5)
+        hit = next((i for i, ln in enumerate(r.lines()) if "Go to the map" in ln), None)
+        facts["palette_row_for_go_to_the_map"] = hit
+        if hit is not None:
+            col = r.lines()[hit].find("Go to the map") + 3
+            r.click(col, hit)
+            r.settle(1.0)
+            facts["after_palette_click"] = {"crumb": r.crumb(), "footer": r.footer(), "dialog_open": "╰" in r.text()}
+            save(out, f"s10-{driver}-after-palette-click.txt", r.dump())
+            if "╰" in r.text():  # still open: the click did not resolve; Enter does
+                r.key("enter")
+                facts["after_palette_enter"] = {"crumb": r.crumb(), "footer": r.footer()}
+    return facts
+
+
+def s11_alerts_count(driver: str, exe: Path, out: Path) -> dict[str, Any]:
+    """Alerts screen: the top bar says 'N alerts'; count the rows."""
+    import re
+
+    facts: dict[str, Any] = {"driver": driver}
+    with _fresh_demo(driver, exe, "home") as r:
+        r.key("A")
+        r.settle(1.0)
+        head = r.head()
+        m = re.search(r"(\d+) alerts?", head)
+        rows = [ln for ln in r.lines()[1:-1] if re.match(r"\s*[A-Z][a-z]{2} \d{1,2} \d\d:\d\d ", ln)]
+        facts.update(header=head, header_count=int(m.group(1)) if m else None, row_count=len(rows), rows=rows)
+        save(out, f"s11-{driver}-alerts.txt", r.dump())
+    return facts
+
+
 # --------------------------------------------------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -649,6 +677,10 @@ def main() -> None:
                 results.append(s9b_zoom_scale(d, a.exe, a.out))
             elif sc == "s9":
                 results.append(s9_footer_clicks(d, a.exe, a.out))
+            elif sc == "s10":
+                results.append(s10_full_map_by_mouse(d, a.exe, a.out))
+            elif sc == "s11":
+                results.append(s11_alerts_count(d, a.exe, a.out))
             elif sc == "s7":
                 results.append(s7_space(d, a.exe, a.out, a.n))
             elif sc == "s7f":

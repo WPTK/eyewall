@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.uat_kit_wx.isolation import guard_real_folders
+
 from . import known
 
 HERE = Path(__file__).parent
@@ -43,6 +45,9 @@ class Collector:
 
 
 COLLECTOR = Collector()
+
+# Fails the session if anything under the user's real eyewall folders changed while the suite ran.
+real_folders_untouched = pytest.fixture(scope="session", autouse=True)(guard_real_folders)
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

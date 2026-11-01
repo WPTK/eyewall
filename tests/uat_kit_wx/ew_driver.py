@@ -8,13 +8,17 @@ NO_COLOR is cleared; PYTHONUTF8=1; cells are 0-based.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from .isolation import assert_isolated, isolated_env
 
 ESC = "\x1b"
 RAW = {
@@ -61,32 +65,32 @@ class Run:
         no_state_dir: bool = False,
     ) -> None:
         self.driver, self.cols, self.rows = driver, cols, rows
-        self._exedir: Path | None = None
+        self.root = Path(tempfile.mkdtemp(prefix="ew-run-"))  # everything this launch can write lives below here
         if isinstance(exe, list):
             prefix = [str(p) for p in exe]
         else:
-            self._exedir = Path(tempfile.mkdtemp(prefix="ew-exe-"))
-            shutil.copy2(exe, self._exedir / exe.name)
-            prefix = [str(self._exedir / exe.name)]
-        e = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "HOME": "{dir}/home", "USERPROFILE": "{dir}/home"}
+            (self.root / "exe").mkdir()
+            shutil.copy2(exe, self.root / "exe" / exe.name)  # a fresh empty directory: nothing next to it can help
+            prefix = [str(self.root / "exe" / exe.name)]
+        e = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "WSLENV": ""}
         if fake is not None:
             e.update(fake.env())
         e.update(env or {})
+        e.update(isolated_env(self.root))  # last: a caller cannot point a launch at the real profile
+        assert_isolated(e, self.root)  # asserted before every launch
         argv = [*prefix, "--no-config", *args]
         if not no_state_dir:
-            argv += ["--state-dir", "{dir}/state"]
+            argv += ["--state-dir", str(self.root / "state")]
+            (self.root / "state").mkdir()
         self.t0 = time.monotonic()
         self.t = terminal_class(driver)(
             argv, cols, rows, env=e, env_remove=("NO_COLOR", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME")
         )
-        (self.t.dir / "home").mkdir(exist_ok=True)
-        (self.t.dir / "state").mkdir(exist_ok=True)
 
     # -- plumbing
     def close(self) -> None:
         self.t.close()
-        if self._exedir:
-            shutil.rmtree(self._exedir, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def __enter__(self) -> Run:
         return self
@@ -193,3 +197,33 @@ class Run:
             self.t.send_raw(sgr(kind, c, y))
             time.sleep(0.02)
         self.settle()
+
+
+def run_cli(exe: Path, args: list[str], *, fake: Any = None, timeout: float = 180) -> subprocess.CompletedProcess[str]:
+    """A non-interactive run (``--summary``, ``--version``): the exe copied into a fresh directory and the same isolated
+    environment as ``Run``. Its cache lives under the run's own profile, so a shared cache cannot hide a failed feed."""
+    root = Path(tempfile.mkdtemp(prefix="ew-cli-"))
+    try:
+        (root / "exe").mkdir()
+        shutil.copy2(exe, root / "exe" / exe.name)
+        drop = ("NO_COLOR", "SSL_CERT_FILE", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME")
+        env = {k: v for k, v in os.environ.items() if k not in drop and "PROXY" not in k.upper()}
+        env.update(PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+        if fake is not None:
+            env.update(fake.env())
+        env.update(isolated_env(root))
+        assert_isolated(env, root)
+        (root / "state").mkdir()
+        return subprocess.run(
+            [str(root / "exe" / exe.name), *args, "--no-config", "--state-dir", str(root / "state")],
+            env=env,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
