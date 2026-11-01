@@ -21,6 +21,7 @@ from eyewall.palette import (
     category_color,
     category_for_knots,
 )
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
 from eyewall.ui.format import advisory_age, collapse, movement_text
 from eyewall.ui.glyphs import UiGlyphs
@@ -62,7 +63,7 @@ def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None)
     out.add_column(no_wrap=True)
     out.add_column(ratio=1)
     headlines = Text()
-    adv = state.advisories.adv_num or storm.adv_num
+    adv = current_adv(storm)
     age, _ = advisory_age(storm, now)
     _line(out, "Advisory", f"{adv or MISSING}  ({age})")
     _line(out, "Updated", format_when(storm.last_update, tz, day=True) if storm.last_update else MISSING)

@@ -211,7 +211,7 @@ class EyewallApp(App[bool]):
         self.theme = THEME_NAME
         self.set_interval(1.0, self._pulse)
         if self.replay is None and self.config_path is not None and not self.config_path.exists():
-            self.notify(f"Settings are saved to {self.config_path}", timeout=6)
+            self.notify(f"Settings are saved to {self.config_path}", timeout=6, markup=False)
         if self.replay is not None:
             times = self.replay.advisory_times()
             if times and times[0] > self.replay.now():
@@ -263,13 +263,13 @@ class EyewallApp(App[bool]):
         self.paused = True
         if not self.replay_over:
             self.replay_over = True
-            self.notify("The replay is over; use [ to step back through the advisories.", timeout=8)
+            self.notify("The replay is over; use [ to step back through the advisories.", timeout=8, markup=False)
         self._for_screens("refresh_status")
 
     def _pulse(self) -> None:
         """Once a second: notice the user coming back from away mode and let the clocks on screen tick."""
         if self.poller.observe_presence():
-            self.notify("Welcome back; refreshing every feed.", timeout=4)
+            self.notify("Welcome back; refreshing every feed.", timeout=4, markup=False)
         self._for_screens("refresh_status")
 
     # ---- results from the poller ------------------------------------------------------------------------------
@@ -288,6 +288,7 @@ class EyewallApp(App[bool]):
                 title=fmt.event_title(event),
                 severity="warning" if event.severity is Severity.WARNING else "information",
                 timeout=TOAST_SECONDS,
+                markup=False,
             )
         if events_ and self.config.alerts.bell:
             self.bell()
@@ -310,7 +311,12 @@ class EyewallApp(App[bool]):
         log.exception("%s failed", where)
         if where not in self._reported:
             self._reported.add(where)
-            self.notify(f"{where} failed; data keeps polling. See the log.", severity="error", timeout=TOAST_SECONDS)
+            self.notify(
+                f"{where} failed; data keeps polling. See the log.",
+                severity="error",
+                timeout=TOAST_SECONDS,
+                markup=False,
+            )
 
     def _for_screens(self, method: str) -> None:
         for screen in list(self.screen_stack):
@@ -410,12 +416,12 @@ class EyewallApp(App[bool]):
         if isinstance(root, MainScreen):
             root.show_map()
             root.map_view.center_on((lat, lon))
-            self.notify(f"{label} is at the centre of the map.", timeout=3)
+            self.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
 
     def open_graphics(self, storm_id: str | None) -> None:
         screen = self.screen
         if storm_id is None or storm_id not in self.store.storms:
-            self.notify("Select a storm first: graphics are per storm.", timeout=4)
+            self.notify("Select a storm first: graphics are per storm.", timeout=4, markup=False)
         elif not isinstance(screen, ModalScreen | GraphicsScreen):
             self.push_screen(GraphicsScreen(storm_id))
 
@@ -458,7 +464,7 @@ class EyewallApp(App[bool]):
         self.poller.refresh(throttled=self.replay is None)  # NOAA is asked at most once per gap; a replay asks nobody
         if self.replay is not None:
             await self._tick()
-        self.notify("Refreshing every feed.", timeout=3)
+        self.notify("Refreshing every feed.", timeout=3, markup=False)
 
     def replay_available(self) -> bool:
         """True when `R` can start the bundled replay: this is live data, and it has nothing to show."""
@@ -475,7 +481,7 @@ class EyewallApp(App[bool]):
     def action_units(self) -> None:
         self.units = next_preset(self.units)
         self._for_screens("refresh_data")
-        self.notify(f"Units: {self.units}", timeout=3)
+        self.notify(f"Units: {self.units}", timeout=3, markup=False)
 
     def action_search(self) -> None:
         """`/`: the menu, with only buoys and tide gauges to find."""
@@ -561,10 +567,12 @@ class EyewallApp(App[bool]):
                         break
                     backup = path.with_name(f"{path.name}.bak{n}")
                 shutil.copy2(path, backup)
-                self.notify(f"{path.name} could not be read; the original is kept as {backup.name}.", timeout=8)
+                self.notify(
+                    f"{path.name} could not be read; the original is kept as {backup.name}.", timeout=8, markup=False
+                )
             save_config(self._for_save(new), path)
         except OSError as exc:
-            self.notify(f"Could not save {path}: {exc.strerror or exc}", severity="error", timeout=8)
+            self.notify(f"Could not save {path}: {exc.strerror or exc}", severity="error", timeout=8, markup=False)
             return False
         self._file_broken = False
         return True
@@ -657,11 +665,16 @@ class EyewallApp(App[bool]):
         updated, watched = toggle_watch(self.config, kind, station_id)
         if watched and station_id not in watchlist_ids(updated, kind):
             self.notify(
-                "You follow as many stations as can be kept. Stop following one first.", severity="warning", timeout=4
+                "You follow as many stations as can be kept. Stop following one first.",
+                severity="warning",
+                timeout=4,
+                markup=False,
             )
             return
         self.apply_config(updated)
-        self.notify(f"Following {station_id}." if watched else f"Stopped following {station_id}.", timeout=3)
+        self.notify(
+            f"Following {station_id}." if watched else f"Stopped following {station_id}.", timeout=3, markup=False
+        )
         if not watched:
             return
         if kind == "coops":
@@ -677,7 +690,9 @@ class EyewallApp(App[bool]):
                 await self.set_watch(kind, station_id, wanted)
             except Exception as exc:
                 log.exception("could not %s %s", "follow" if wanted else "unfollow", station_id)
-                self.notify(f"Could not change the stations you follow: {exc}", severity="error", timeout=8)
+                self.notify(
+                    f"Could not change the stations you follow: {exc}", severity="error", timeout=8, markup=False
+                )
 
         self.run_worker(work(), exclusive=False, exit_on_error=False)
 
@@ -728,7 +743,9 @@ class EyewallApp(App[bool]):
         async with self._tick_lock:  # the clock move and the refresh must not interleave with a replay tick
             if self.replay.step_advisory(direction) is None:
                 self.notify(
-                    "No later advisory in this replay." if direction > 0 else "This is the first advisory.", timeout=3
+                    "No later advisory in this replay." if direction > 0 else "This is the first advisory.",
+                    timeout=3,
+                    markup=False,
                 )
                 return
             self.replay_over = False

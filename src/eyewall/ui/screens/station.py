@@ -216,8 +216,8 @@ class StationScreen(ChromeScreen):
             rows = () if series is None else series.observations
             trends = (
                 words.pressure_trend(store.tendency(self.station_id, now), preset),
-                words.wind_trend_sentence(wind_trend(rows), preset),
-                words.wave_trend_sentence(wave_trend(rows), preset),
+                words.wind_trend_sentence(wind_trend(rows, now=now), preset),
+                words.wave_trend_sentence(wave_trend(rows, now=now), preset),
             )
             shown = [t for t in trends if t is not None]
             for trend in shown[:2] if small else shown:  # a short screen keeps room for the charts
@@ -348,7 +348,14 @@ class StationScreen(ChromeScreen):
                 "wave": f"Wave height ({LABELS[preset.length]})",
             }
             for key, chart_lines in lines.items():
-                self._chart(key).set_chart(chart_lines, title=titles[key], x_range=x_range, x_ticks=ticks, empty=empty)
+                self._chart(key).set_chart(
+                    chart_lines,
+                    title=titles[key],
+                    x_range=x_range,
+                    x_ticks=ticks,
+                    empty=empty,
+                    y_range=st.speed_range(chart_lines) if key == "wind" else None,
+                )
             return
         tide = store.tide_series.get(self.station_id)
         empty = "no data in this range" if tide is not None else "waiting for data"
@@ -383,8 +390,10 @@ class StationScreen(ChromeScreen):
         gust_points = self._gauge_points(
             tide.wind.items if tide else (), now, hours, lambda w: w.gust_kt, "kt", preset.wind
         )
+        wind_lines = [ChartSeries("wind", wind_points, WIND_SERIES), ChartSeries("gust", gust_points, GUST_SERIES)]
         self._chart("gwind").set_chart(
-            [ChartSeries("wind", wind_points, WIND_SERIES), ChartSeries("gust", gust_points, GUST_SERIES)],
+            wind_lines,
+            y_range=st.speed_range(wind_lines),
             title=f"Wind and gust ({LABELS[preset.wind]})",
             x_range=x_range,
             x_ticks=ticks,

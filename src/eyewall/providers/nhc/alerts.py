@@ -19,6 +19,7 @@ from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.palette import WatchWarning
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.times import parse_iso
+from eyewall.textclean import printable
 
 _EVENT_KINDS: dict[str, WatchWarning] = {
     "tropical storm watch": WatchWarning.TROPICAL_STORM_WATCH,
@@ -40,7 +41,7 @@ def _load(data: bytes | str) -> Any:
 def _text(value: Any) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
+    text = printable(str(value)).strip()
     return text or None
 
 

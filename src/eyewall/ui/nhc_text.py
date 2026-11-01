@@ -19,6 +19,7 @@ from eyewall.clock import ensure_utc, format_age, format_zulu
 from eyewall.models.outlook import Chance, Outlook, OutlookArea
 from eyewall.models.storm import AdvNum
 from eyewall.palette import DIM, FRESHNESS_CUES, HEADING, risk_color
+from eyewall.state.events import current_adv
 from eyewall.state.store import StormState, storm_key
 from eyewall.ui import products
 from eyewall.ui.format import BASIN_NAMES, OLD_ADVISORY_HOURS, collapse, text_basins
@@ -122,8 +123,15 @@ def storm_header(
         text.append(f"Issued {format_age(age)} ago.", style=DIM)
         if age > OLD_ADVISORY_HOURS * 3600:
             reasons.append(f"This was issued {format_age(age)} ago.")
-    current = state.storm.adv_num
-    if adv is not None and current is not None and adv.number != current.number:
+    current = current_adv(state.storm)
+    # An intermediate advisory (31A) is a public advisory only: the other products stay at 31 and are current, so
+    # they are compared by base number; the Public tab still showing 31 is the previous one, compared with the suffix.
+    behind = (
+        adv is not None
+        and current is not None
+        and (adv != current if tab == "public" else adv.number != current.number)
+    )
+    if behind:
         reasons.append(f"NHC's current advisory is {current}.")
     if feed_old:
         reasons.append(_not_heard(feed_age))

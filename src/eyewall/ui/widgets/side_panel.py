@@ -26,6 +26,7 @@ from eyewall.poll import FreshnessState
 from eyewall.sources import protocol
 from eyewall.sources.bundle import DEMO_TITLE
 from eyewall.state.store import Store, StormState
+from eyewall.textclean import printable
 from eyewall.ui.glyphs import UiGlyphs
 from eyewall.units import Preset
 
@@ -113,7 +114,7 @@ class Block:
 
 
 def clean(text: str) -> str:
-    return " ".join(text.split())
+    return " ".join(printable(text).split())
 
 
 def wrapped(

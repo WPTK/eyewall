@@ -14,6 +14,7 @@ from collections.abc import Mapping
 
 from eyewall.models.obs import Parsed, Station
 from eyewall.ndbc.table import normalize_station_id
+from eyewall.textclean import printable
 
 _DECLARATION = re.compile(r"^\s*<\?xml[^>]*\?>")
 _DTD = re.compile(rb"<!(DOCTYPE|ENTITY)", re.IGNORECASE)
@@ -56,7 +57,7 @@ def parse_stations(data: str | bytes) -> Parsed[Station]:
         stations.append(
             Station(
                 id=station_id,
-                name=attributes.get("name", "").strip(),
+                name=printable(attributes.get("name", "")).strip(),
                 lat=lat,
                 lon=lon,
                 type=attributes.get("type", "").strip(),

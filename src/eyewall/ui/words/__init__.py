@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from eyewall.textclean import printable
 from eyewall.units import LABELS, Preset, convert
 
 
@@ -18,6 +19,9 @@ class Words:
 
     text: str
     sources: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "text", printable(self.text))  # names in a sentence come straight from a feed
 
     def __str__(self) -> str:
         return self.text

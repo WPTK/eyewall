@@ -37,6 +37,7 @@ from eyewall.palette import WatchWarning
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.ids import parse_adv_num
 from eyewall.providers.nhc.times import parse_header_time, resolve_day_time
+from eyewall.textclean import printable
 
 _STORM_STEM = re.compile(r"(?P<id>(?:al|ep|cp)\d{6})", re.IGNORECASE)
 _TCWW_KINDS: dict[str, WatchWarning] = {
@@ -194,7 +195,7 @@ def _int(value: Any, *, fill: float = 9999) -> int | None:
 def _text(value: Any) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
+    text = printable(str(value)).strip()
     return text or None
 
 

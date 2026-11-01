@@ -19,6 +19,7 @@ from eyewall.palette import (
     category_color,
     category_for_knots,
 )
+from eyewall.textclean import printable
 from eyewall.units import Preset
 
 BASIN_NAMES = {"AL": "Atlantic", "EP": "East Pacific", "CP": "Central Pacific"}
@@ -45,7 +46,7 @@ SEVERITY_COLORS = {severity: SEVERITY_CUES[severity.value].color for severity in
 
 def collapse(text: str) -> str:
     """Whitespace runs to single spaces: NHC text is hard-wrapped at 69 columns."""
-    return " ".join(text.split())
+    return " ".join(printable(text).split())
 
 
 def class_label(storm: Storm) -> str:

@@ -272,3 +272,21 @@ async def test_without_colour_a_warning_heading_keeps_the_text_colour_so_none_is
         for area in (surge, warning):
             assert warning_list.area_marker(area, coloured)[1].startswith("#")
             assert warning_list.area_marker(area, plain)[1] == ""  # the same bold default text for every kind
+
+
+async def test_alert_log_warning_rows_are_bold_and_marked_so_none_is_fainter_under_no_colour(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from eyewall.models.events import Severity
+    from eyewall.palette import BAD
+    from eyewall.ui.screens.alerts import AlertLogScreen
+
+    app = replay_app()
+    async with running(app, (140, 45)) as pilot:
+        await into_the_storm(pilot, 20)
+        await press(pilot, "A")
+        assert isinstance(app.screen, AlertLogScreen)
+        events = app.screen._newest_first()
+        cells = {e.severity: app.screen._event_cell(e) for e in reversed(events)}
+        warning, notice = cells[Severity.WARNING], cells[Severity.NOTICE]
+        assert "bold" in str(warning.style) and BAD in str(warning.style)  # colour mode keeps the red
+        assert warning.plain.startswith("! ") and "bold" not in str(notice.style)
+        assert "Watch or warning" in warning.plain  # the kind is in words

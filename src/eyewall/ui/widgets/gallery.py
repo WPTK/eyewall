@@ -432,7 +432,9 @@ class GalleryPanel(Vertical, can_focus=True):
             log.exception("the loop stopped")
             if not self._failed_toast:
                 self._failed_toast = True
-                self.eye.notify("The loop stopped after an error. See the log.", severity="error", timeout=6)
+                self.eye.notify(
+                    "The loop stopped after an error. See the log.", severity="error", timeout=6, markup=False
+                )
 
     # ---- actions ----------------------------------------------------------------------------------------------
 
@@ -460,10 +462,10 @@ class GalleryPanel(Vertical, can_focus=True):
         if item is None:
             return
         if not item.url.startswith(("http://", "https://")):
-            self.eye.notify("This image is part of the recording, so it has no web address.", timeout=5)
+            self.eye.notify("This image is part of the recording, so it has no web address.", timeout=5, markup=False)
             return
         if not is_noaa_url(item.url):
-            self.eye.notify("Not a NOAA link.", severity="warning", timeout=5)
+            self.eye.notify("Not a NOAA link.", severity="warning", timeout=5, markup=False)
             return
         try:
             outcome = await asyncio.to_thread(open_in_browser, item.url)
@@ -475,6 +477,7 @@ class GalleryPanel(Vertical, can_focus=True):
                 "The only browser here runs inside this terminal. Press y to copy the address instead.",
                 severity="warning",
                 timeout=10,
+                markup=False,
             )
         elif outcome != "opened":
             self.eye.notify(
@@ -493,7 +496,7 @@ class GalleryPanel(Vertical, can_focus=True):
                 f"Could not use the clipboard. Address: {item.url}", severity="warning", timeout=10, markup=False
             )
             return
-        self.eye.notify("Copied the address (the terminal must allow clipboard access).", timeout=4)
+        self.eye.notify("Copied the address (the terminal must allow clipboard access).", timeout=4, markup=False)
 
 
 CONSOLE_BROWSERS = frozenset({"lynx", "w3m", "links", "links2", "elinks", "browsh", "www-browser", "wget", "curl"})

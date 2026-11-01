@@ -33,3 +33,9 @@
 - UAT P3: the Outlook tab of the NHC text screen is headed "NHC text (reformatted)", which means nothing for an outlook; also "No outlook for the enabled basins." in the replay.
 - UAT P3: land is a dot-density mask, so coastlines are hard to read at some zooms; the city names do the work.
 - UAT not verified: the hover tooltip on a mark (needs a real terminal) and the main screen with two storms (no two-storm fixture).
+- UAT P3: the map legend drops the 64 kt ring entry at 100x40.
+- UAT P3: the offline main screen leaves its right column blank.
+- UAT P3: the quiet-day outlook area carries no basin or place name.
+- UAT P3: a marked buoy stays marked after Esc.
+- UAT P3: the text screens run very long lines at 280x70; wrap at a readable measure.
+- UAT P3: low-height pressure charts show stray dot rows.

@@ -223,3 +223,15 @@ def test_a_watchlisted_gauge_missing_from_the_loaded_catalog_reads_unknown() -> 
     assert st.tide_row(store, listed, NOW, preset)[9].plain == "waiting"
     store.tide_stations = ()  # catalog not loaded yet: nothing is known to be missing
     assert st.tide_row(store, st.Entry(ghost, watchlisted=True), NOW, preset)[9].plain == "waiting"
+
+
+def test_a_wind_axis_runs_from_zero_to_the_strongest_gust_with_headroom() -> None:
+    from eyewall.render.chart import ChartSeries
+
+    def line(*ys: float | None) -> ChartSeries:
+        return ChartSeries("w", tuple((float(i), y) for i, y in enumerate(ys)), "#fff")
+
+    assert st.speed_range([line(30.0, 44.0), line(None, 60.0)]) == (0.0, 66.0)  # not rounded up to 100
+    assert st.speed_range([line(73.0)]) == (0.0, 81.0)  # the highest gust stays inside the axis
+    assert st.speed_range([line(2.0)]) == (0.0, 10.0)  # a calm day gets a floor
+    assert st.speed_range([line(None)]) is None
