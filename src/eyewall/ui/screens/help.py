@@ -56,6 +56,13 @@ HELP: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         ),
     ),
     (
+        "Status line",
+        (
+            ("N alerts", "watches and warnings in force; A opens the alert log"),
+            ("idle", "no keys or mouse for a while; feeds poll more slowly until you touch one"),
+        ),
+    ),
+    (
         "Replay",
         (("space  < >  [ ]", "pause; slower or faster; previous or next advisory"),),
     ),
