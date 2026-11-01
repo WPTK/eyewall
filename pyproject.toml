@@ -89,7 +89,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Long lines in tests are inline fixture payloads; wrapping them hurts readability.
-"tests/**" = ["E501"]
+"tests/**" = ["E501", "RUF001"]  # RUF001: the breadcrumb separator is a real glyph the tests assert on
 
 [tool.mypy]
 python_version = "3.12"

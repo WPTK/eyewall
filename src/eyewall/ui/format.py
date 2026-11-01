@@ -1,4 +1,4 @@
-"""What the dashboard says: the storm list rows, the side panels and the status bar, as Rich text.
+"""What the dashboard says: the storm list rows, the side panels and the alert titles, as Rich text.
 
 Pure functions of the store and a few settings, so they are tested without a terminal. Units stay as NOAA reported them
 and are converted here, at display time, through a `units.Preset`.
@@ -6,7 +6,6 @@ and are converted here, at display time, through a `units.Preset`.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -22,19 +21,15 @@ from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import (
     ACCENT,
     DIM,
-    FRESHNESS_CUES,
     HEADING,
     NEUTRAL,
     SEVERITY_CUES,
-    WARN,
     WATCH_WARNING_COLORS,
     category_color,
     category_for_knots,
     risk_color,
     storm_force,
 )
-from eyewall.poll import Freshness, FreshnessState
-from eyewall.sources import protocol
 from eyewall.state.store import Store, StormState
 from eyewall.ui import stations as st
 from eyewall.ui.glyphs import UiGlyphs
@@ -451,176 +446,6 @@ def buoy_strip(store: Store, selected: str | None, now: datetime, preset: Preset
 
 
 # --------------------------------------------------------------------------------------------------------- status bar
-
-FEED_LABELS = {
-    protocol.STORMS: ("storms", "sto"),
-    protocol.OUTLOOK: ("outlook", "out"),
-    protocol.ALERTS: ("alerts", "alr"),
-    protocol.BUOYS: ("buoys", "buo"),
-    protocol.TIDES: ("tides", "tid"),
-    protocol.SATELLITE: ("satellite", "sat"),
-}
-
-
-@dataclass(frozen=True, slots=True)
-class FeedStatus:
-    feed: str
-    freshness: Freshness
-    active: bool = True
-
-
-@dataclass(frozen=True, slots=True)
-class ReplayStatus:
-    paused: bool
-    speed: int
-    moment: datetime
-    adv: str | None
-    over: bool = False
-
-
-def feed_glyph(freshness: Freshness, g: UiGlyphs) -> str:
-    return {
-        FreshnessState.FRESH: g.fresh,
-        FreshnessState.STALE: g.stale,
-        FreshnessState.ERROR: g.error,
-        FreshnessState.LOADING: g.loading,
-    }[freshness.state]
-
-
-# Left to right on the line.
-STATUS_ORDER = ("feeds", "offline", "next", "away", "alerts", "replay")
-# What to keep, most important first; the last goes first when the room runs out. A failing feed is a "trouble"
-# segment and ranks above the alert count; the healthy "sources ok" ranks near the bottom.
-STATUS_PRIORITY = ("replay", "offline", "trouble", "alerts", "away", "feeds", "next")
-
-
-def status_bar(
-    feeds: list[FeedStatus],
-    *,
-    next_poll: float | None,
-    alert_count: int,
-    replay: ReplayStatus | None,
-    away: bool,
-    width: int,
-    g: UiGlyphs,
-) -> Text:
-    """The feed health, the offline marker, the alert count, the replay transport, the idle marker and the next
-    poll on one line that fits `width` cells.
-
-    Nothing is truncated: a segment first takes a shorter wording, then goes whole, lowest priority first (see
-    `STATUS_PRIORITY`), until the line fits."""
-    segments: dict[str, list[Text]] = {}
-    active = [f for f in feeds if f.active]
-    trouble = [f for f in active if f.freshness.state in (FreshnessState.STALE, FreshnessState.ERROR)]
-    if trouble:
-        variants = []
-        for index in (0, 1):  # full names, then three-letter ones
-            text = Text()
-            for item in trouble:
-                color = FRESHNESS_CUES[item.freshness.state.value].color
-                text.append(f" {feed_glyph(item.freshness, g)} ", style=color)
-                text.append(FEED_LABELS[item.feed][index], style=color)
-                if item.freshness.age is not None:
-                    text.append(f" {format_age(item.freshness.age)}", style=color)
-            variants.append(text)
-        segments["trouble"] = variants
-    elif any(f.freshness.state is FreshnessState.LOADING for f in active):
-        segments["feeds"] = [Text(f" {g.loading} loading", style=FRESHNESS_CUES["loading"].color)]
-    elif active:
-        segments["feeds"] = [Text(f" {g.fresh} sources ok", style=FRESHNESS_CUES["fresh"].color)]
-    if any(f.freshness.from_cache and f.active for f in feeds):
-        segments["offline"] = [Text("OFFLINE: cached data", style=f"bold {WARN}")]
-    if next_poll is not None:
-        segments["next"] = [Text(f"next {format_age(next_poll)}", style=DIM)]
-    if away:
-        segments["away"] = [Text("idle", style=WARN)]
-    if alert_count:
-        noun = "alert" if alert_count == 1 else "alerts"
-        segments["alerts"] = [Text(f"{alert_count} {noun}", style=f"bold {ACCENT}")]
-    if replay is not None:
-        mark = g.pause if replay.paused else g.play
-        speed = "over" if replay.over else f"{replay.speed}x"
-        full = Text(f"{mark} replay {speed} {replay.moment:%a %d %b %H:%MZ}", style=f"bold {HEADING}")
-        if replay.adv:
-            full.append(f" adv {replay.adv}", style=HEADING)
-        segments["replay"] = [full, Text(f"{mark} replay {speed}", style=f"bold {HEADING}")]
-
-    level = dict.fromkeys(segments, 0)
-
-    def current() -> list[Text]:
-        slot = {"trouble": "feeds"}  # a failing feed takes the place "sources ok" would
-        return [
-            segments[name][level[name]] for place in STATUS_ORDER for name in level if slot.get(name, name) == place
-        ]
-
-    def length() -> int:
-        parts = current()
-        return (
-            sum(part.cell_len for part in parts)
-            + 2 * (len(parts) - 1)
-            + (0 if parts and parts[0].plain[:1] == " " else 1)
-        )
-
-    while level and length() > width:
-        name = next(n for n in reversed(STATUS_PRIORITY) if n in level)
-        if level[name] + 1 < len(segments[name]):
-            level[name] += 1
-        else:
-            del level[name]
-    out = Text(no_wrap=True, overflow="ellipsis")
-    for index, part in enumerate(current()):
-        if index or not part.plain.startswith(" "):
-            out.append(" " if index == 0 else "  ")
-        out.append_text(part)
-    return out
-
-
-KEY_NAMES = {
-    "escape": "esc",
-    "question_mark": "?",
-    "plus": "+",
-    "minus": "-",
-    "slash": "/",
-    "left_square_bracket": "[",
-    "right_square_bracket": "]",
-    "delete": "del",
-}
-
-
-def key_name(key: str) -> str:
-    """How a binding's key reads in the footer: the first of a comma list, spelled short."""
-    first = key.split(",")[0]
-    return KEY_NAMES.get(first, first)
-
-
-STATUS_RESERVE = 24  # cells the keys always leave for the status, so the key set depends on the width alone
-
-
-def footer_row(status: Callable[[int], Text], keys: list[tuple[str, str]], width: int) -> Text:
-    """The bottom line: the status on the left, the keys valid where the focus is and `? help` on the right, in one row.
-
-    Which keys fit is decided from `width` and a fixed `STATUS_RESERVE` only, never from the status text, so the key set
-    stays put while the countdown ticks. A key is listed only whole, and `? help` is always last. The status then
-    degrades by priority to the room that is left (`status` is called with it). Bold marks the keys and dim the labels,
-    so nothing rests on colour."""
-
-    def pair(key: str, label: str) -> Text:
-        return Text.assemble((key, "bold"), " ", (label, "dim"))
-
-    help_ = pair("?", "help")
-    right = Text()
-    for key, label in keys:
-        item = pair(key, label)
-        item.append("  ")
-        if STATUS_RESERVE + right.cell_len + item.cell_len + help_.cell_len + 2 > width:
-            break
-        right.append_text(item)
-    right.append_text(help_)
-    left = status(max(width - right.cell_len - 2, 0))
-    left.truncate(width - right.cell_len - 2, overflow="ellipsis")
-    left.append(" " * (width - left.cell_len - right.cell_len))
-    left.append_text(right)
-    return left
 
 
 def event_title(event: Event) -> str:

@@ -8,6 +8,7 @@ import pytest
 from textual.widgets import TabbedContent
 
 from eyewall.ui.adapt import storm_scene
+from eyewall.ui.chrome import FooterBar
 from eyewall.ui.screens.dashboard import HEADLINE_ROWS, MIN_PANEL_ROWS, DashboardScreen
 from eyewall.ui.widgets.panels import Panel
 from tests.ui_support import into_the_storm, replay_app, running, screen_text, scripted_app, settle
@@ -55,7 +56,7 @@ async def test_a_short_stacked_column_drops_panels_from_the_bottom() -> None:
         assert panels["headline"].region.height >= HEADLINE_ROWS
         for kind in ("ww", "wind", "surge"):
             assert panels[kind].region.height >= MIN_PANEL_ROWS
-        status = app.screen.query_one("#status")
+        status = app.screen.query_one(FooterBar)
         assert status.region.bottom == app.size.height and "advisory" in screen_text(app)
 
 

@@ -12,33 +12,29 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import Resize
-from textual.screen import Screen
 from textual.widgets import Static
 
 from eyewall.models.obs import Parsed, SupplementalReading
 from eyewall.net import FetchError
 from eyewall.palette import ACCENT, DIM, HEADING
 from eyewall.providers.base import ParseError
+from eyewall.ui import nav
 from eyewall.ui import stations as st
+from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.units import LABELS
 
 if TYPE_CHECKING:
-    from eyewall.app import EyewallApp
+    pass
 
 NARROW_BELOW = 110
 
 
-class BuoyDetailScreen(Screen[None]):
-    BINDINGS = [
-        Binding("h", "range", "range"),
-        Binding("p", "pin", "pin"),
-        Binding("escape,backspace", "back", "back"),
-        Binding("i", "toggle_info", "Info", show=False),
-    ]
+class BuoyDetailScreen(ChromeScreen):
+    NAV_SCOPES = ("buoy",)
+    BINDINGS = nav.bindings("buoy")
 
     def __init__(self, station_id: str) -> None:
         super().__init__()
@@ -49,15 +45,15 @@ class BuoyDetailScreen(Screen[None]):
         self._show_info = False
         self._supl_loading = False
 
-    @property
-    def eye(self) -> EyewallApp:
-        return self.app  # type: ignore[return-value]
+    def crumb(self) -> str:
+        return f"Buoy {self.station_id}"
 
     @property
     def hours(self) -> int:
         return st.RANGES_H[self.range_index]
 
     def compose(self) -> ComposeResult:
+        yield TopBar()
         yield Static("", id="buoy-title")
         with Horizontal(id="buoy-body"):
             with Vertical(id="buoy-charts"):
@@ -67,7 +63,7 @@ class BuoyDetailScreen(Screen[None]):
             with VerticalScroll(id="buoy-info"):
                 yield Static("", id="buoy-latest")
                 yield Static("", id="buoy-extremes")
-        yield Static("", id="buoy-status")
+        yield FooterBar()
 
     def on_mount(self) -> None:
         eye = self.eye
@@ -77,7 +73,6 @@ class BuoyDetailScreen(Screen[None]):
         self._ask_supplemental()
         self._apply_layout(self.size.width)
         self._draw()
-        self.refresh_status()
 
     def on_unmount(self) -> None:
         self.eye.poller.extra_buoys.discard(self.station_id)
@@ -115,9 +110,6 @@ class BuoyDetailScreen(Screen[None]):
         self._draw()
 
     # ---- data -------------------------------------------------------------------------------------------------
-
-    def refresh_status(self) -> None:
-        self.query_one("#buoy-status", Static).update(self.eye.status_text(self.size.width, self))
 
     def refresh_data(self) -> None:
         """Called after every poll result."""
@@ -178,9 +170,6 @@ class BuoyDetailScreen(Screen[None]):
             chart.align(widest)
 
     # ---- actions ----------------------------------------------------------------------------------------------
-
-    def action_back(self) -> None:
-        self.app.pop_screen()
 
     def action_range(self) -> None:
         self.range_index = (self.range_index + 1) % len(st.RANGES_H)

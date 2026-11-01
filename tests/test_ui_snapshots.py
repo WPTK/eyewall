@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import asyncio
 
-from rich.text import Text
 from textual.pilot import Pilot
 
+from eyewall.ui.chrome import Health
 from tests.ui_support import into_the_storm, replay_app, scripted_app, settle
 
 
@@ -21,8 +21,9 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
         if storm:
             await into_the_storm(pilot)
             pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
-        # Feed ages and the poll countdown follow the wall clock; pin the bar so the picture is repeatable.
-        pilot.app.status_text = lambda width, screen: Text(" status bar pinned for the snapshot")  # type: ignore[attr-defined, method-assign]
+        # Feed ages and the replay clock follow the wall clock; pin the top bar's slot so the picture is repeatable.
+        pilot.app.health = lambda: Health("●", "data ok", "ok", "3m", "")  # type: ignore[attr-defined, method-assign]
+        pilot.app.top_bar_extras = lambda: [("pinned", None)]  # type: ignore[attr-defined, method-assign]
         pilot.app._for_screens("refresh_status")  # type: ignore[attr-defined]
         for key in keys:
             await pilot.press(key)

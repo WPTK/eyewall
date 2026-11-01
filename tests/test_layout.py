@@ -77,7 +77,7 @@ async def test_every_detail_tab_is_visible_at_80x24() -> None:
     async with running(app, (80, 24)) as pilot:
         await into_the_storm(pilot)
         await press(pilot, "enter")
-        bar = screen_text(app).splitlines()[1]
+        bar = screen_text(app).splitlines()[2]  # under the top bar and the storm line
         for _tab_id, title in TABS:
             assert title in bar
         assert len(bar) <= 80

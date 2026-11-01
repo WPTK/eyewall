@@ -41,6 +41,7 @@ from eyewall.render.images import (
     inline_wanted,
     render_fallback,
 )
+from eyewall.ui import nav
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
 from eyewall.ui.widgets.strips import blank, centered
 from eyewall.urls import is_noaa_url
@@ -101,13 +102,8 @@ class ImageView(Widget):
 class GalleryPanel(Vertical):
     """One storm's images. `set_active` says whether it is on screen; nothing is fetched or played while it is not."""
 
-    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
-        Binding("o", "open_url", "open"),
-        Binding("y", "copy_url", "copy URL"),
-        Binding("left_square_bracket", "step(-1)", "previous frame", key_display="[ ]"),
-        Binding("right_square_bracket", "step(1)", "next frame", show=False),
-        Binding("space", "toggle_loop", "play/pause"),
-    ]
+    NAV_SCOPES = ("gallery",)
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [*nav.bindings("gallery")]
 
     def __init__(self, storm_id: str, *, id: str | None = None) -> None:
         super().__init__(id=id)

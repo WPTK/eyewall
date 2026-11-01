@@ -1,13 +1,12 @@
-"""The bottom row lists only the keys that work where the focus is, and never loses `? help`."""
+"""The footer lists only the keys that work where the focus is, and never loses `?`, the menu key or Esc/q."""
 
 from __future__ import annotations
 
 import pytest
-from rich.text import Text
 from textual.widgets import TabbedContent
 
 from eyewall.poll import Freshness, FreshnessState
-from eyewall.ui import format as fmt
+from eyewall.ui.chrome import FooterBar, footer_items
 from eyewall.ui.screens.buoy_detail import BuoyDetailScreen
 from eyewall.ui.screens.dashboard import DashboardScreen
 from eyewall.ui.screens.detail import TABS
@@ -27,79 +26,19 @@ async def show_tab(pilot, tab: str) -> str:  # type: ignore[no-untyped-def]
     return bottom(pilot.app)
 
 
+def labels(app) -> list[str]:  # type: ignore[no-untyped-def]
+    """The words of the screen's own footer keys, in order, apart from the pinned group."""
+    return [item.label for item in footer_items(app.screen)[0]]
+
+
 def one_row(app, width: int) -> str:  # type: ignore[no-untyped-def]
-    """The bottom row: the screen's status widget is one row high, fits the width and ends with `? help`."""
-    status = app.screen.query(".status-row, #status, #detail-status, #watch-status")
-    assert all(widget.region.height == 1 for widget in status)
-    row = bottom(app)
+    """The bottom row: the footer is one row high, fits the width and ends with the pinned group."""
+    bar = app.screen.query_one(FooterBar)
+    assert bar.region.height == 1
+    row = bottom(app).rstrip()
     assert len(row) <= width, row
-    assert row.endswith("? help"), row
+    assert row.endswith(("esc back", "q quit")) or row.endswith(("^p esc", "^p q")), row
     return row
-
-
-# ---- the row itself -------------------------------------------------------------------------------------------
-
-
-def fixed(text: str):  # type: ignore[no-untyped-def]
-    """A status that ignores the room it is given, to test the row on its own."""
-    return lambda room: Text(text)
-
-
-KEYS = [("enter", "detail"), ("b", "buoys"), ("m", "map")]
-
-
-def test_keys_fill_the_room_whole_and_help_stays_last() -> None:
-    status = fixed(" ● sources ok")
-    wide = fmt.footer_row(status, KEYS, 80)
-    assert len(wide.plain) == 80 and wide.plain.startswith(" ● sources ok  ")
-    assert wide.plain.endswith("  enter detail  b buoys  m map  ? help")
-    narrow = fmt.footer_row(status, KEYS, 58)  # room for two keys and no more
-    assert narrow.plain.endswith("enter detail  b buoys  ? help") and "m map" not in narrow.plain
-    assert len(narrow.plain) == 58
-    bare = fmt.footer_row(status, KEYS, 30)
-    assert bare.plain == " ● sources ok" + " " * 11 + "? help"
-
-
-def test_the_key_set_does_not_depend_on_the_status_text() -> None:
-    for width in range(70, 130):
-        keys = {
-            tuple(label for _, label in KEYS if label in fmt.footer_row(fixed(text), KEYS, width).plain)
-            for text in ("", "next 9s", "next 10m 5s", "x" * 300)
-        }
-        assert len(keys) == 1, (width, keys)
-
-
-def test_a_long_status_is_cut_before_the_keys_and_help() -> None:
-    row = fmt.footer_row(fixed("x" * 200), [("b", "buoys")], 60)
-    assert len(row.plain) == 60
-    assert row.plain.endswith("b buoys  ? help")
-
-
-def test_the_status_is_asked_for_the_room_the_keys_leave() -> None:
-    rooms: list[int] = []
-    fmt.footer_row(lambda room: rooms.append(room) or Text(""), KEYS, 100)  # type: ignore[func-returns-value]
-    assert rooms == [100 - len("enter detail  b buoys  m map  ? help") - 2]
-
-
-def test_wide_characters_are_measured_in_cells_not_characters() -> None:
-    keys = [("w", "台風"), ("b", "buoys")]  # two characters, four cells
-    row = fmt.footer_row(fixed("あ" * 30), keys, 40)
-    assert row.cell_len == 40 and row.plain.endswith("? help")
-    fits = fmt.footer_row(fixed("ok"), keys, 40)  # 24 reserved + "w 台風  " (8) + "? help" (6) + 2 = 40
-    assert fits.cell_len == 40 and "台風" in fits.plain and "buoys" not in fits.plain
-
-
-def test_the_footer_marks_keys_without_colour() -> None:
-    row = fmt.footer_row(fixed(""), [("b", "buoys")], 50)
-    styles = {str(span.style) for span in row.spans}
-    assert styles == {"bold", "dim"}
-
-
-@pytest.mark.parametrize(
-    ("binding", "shown"), [("escape", "esc"), ("question_mark", "?"), ("plus,equals_sign", "+"), ("enter", "enter")]
-)
-def test_key_names_are_short(binding: str, shown: str) -> None:
-    assert fmt.key_name(binding) == shown
 
 
 # ---- the dashboard --------------------------------------------------------------------------------------------
@@ -125,12 +64,12 @@ async def test_dashboard_map_lists_its_own_keys_and_the_list_does_not() -> None:
     app = replay_app()
     async with running(app, (140, 45)) as pilot:
         await into_the_storm(pilot)
-        in_list = [label for _, label in app.footer_keys(app.screen)]
+        in_list = labels(app)
         assert in_list == ["detail", "buoys", "map"]
         app.screen.map_view.focus()
         await pilot.pause()
         assert "zoom" in bottom(app) and "center" in bottom(app) and "layers" in bottom(app)
-        assert [label for _, label in app.footer_keys(app.screen)][:4] == ["zoom", "fit", "center", "layers"]
+        assert labels(app)[:4] == ["zoom", "fit", "center", "layers"]
 
 
 async def test_footer_follows_the_focus_without_waiting_for_the_clock() -> None:
@@ -149,7 +88,7 @@ async def test_the_narrow_dashboard_tabs_list_the_same_keys_as_the_list() -> Non
         await into_the_storm(pilot)
         app.screen.query_one("#side-tabs", TabbedContent).focus()
         await pilot.pause()
-        assert [label for _, label in app.footer_keys(app.screen)] == ["detail", "buoys", "map"]
+        assert labels(app) == ["detail", "buoys", "map"]
         one_row(app, 100)
 
 
@@ -167,14 +106,13 @@ async def test_every_detail_tab_keeps_one_row_and_lists_only_working_keys(size: 
         for tab, _ in TABS:
             await show_tab(pilot, tab)
             one_row(app, size[0])
-            rows[tab] = [label for _, label in app.footer_keys(app.screen)]
+            rows[tab] = labels(app)
         assert "tcp/tcm" in rows["public"]
-        assert not any("tcp/tcm" in labels for tab, labels in rows.items() if tab != "public")
-        assert all(("pin" in labels) == (tab in ("buoys", "tides")) for tab, labels in rows.items())
-        assert all(("charts" in labels) == (tab == "buoys") for tab, labels in rows.items())
+        assert not any("tcp/tcm" in shown for tab, shown in rows.items() if tab != "public")
+        assert all(("pin" in shown) == (tab in ("buoys", "tides")) for tab, shown in rows.items())
+        assert all(("charts" in shown) == (tab == "buoys") for tab, shown in rows.items())
         assert "open" in rows["graphics"] and "copy URL" in rows["graphics"]
-        assert all("back" in labels for labels in rows.values())
-        assert len({tuple(labels) for labels in rows.values()}) > 3  # it changes with the tab
+        assert len({tuple(shown) for shown in rows.values()}) > 3  # it changes with the tab
 
 
 async def test_keys_that_are_not_listed_do_nothing() -> None:
@@ -245,15 +183,17 @@ async def test_help_survives_a_crowded_status_at_every_width(width: int) -> None
         app.poller.freshness = lambda feed: Freshness(FreshnessState.STALE, age=7500.0)  # type: ignore[method-assign]
         app.poller.active = lambda feed: True  # type: ignore[method-assign]
         app.alert_log = [object()] * 12  # type: ignore[list-item]
-        await pilot.pause()
-        one_row(app, width)
+        await pilot.pause(0.3)
+        assert "? help  ^p menu  q quit" in one_row(app, width)
+        # A replay speaks for the health slot ("paused" in the short form), whatever the feeds say.
+        assert "paused" in screen_text(app).splitlines()[0]
 
 
-async def test_no_footer_below_the_help_threshold() -> None:
+async def test_under_70_columns_the_pinned_keys_lose_their_words_but_stay() -> None:
     app = replay_app()
     async with running(app, (69, 24)) as pilot:
         await pilot.pause()
-        assert "? help" not in bottom(app) and "detail" not in bottom(app)
+        assert bottom(app).rstrip().endswith("? ^p q") and "help" not in bottom(app)
 
 
 @pytest.mark.parametrize("size", [(80, 24), (100, 50), (120, 30), (200, 50), (280, 70)])
@@ -283,4 +223,4 @@ async def test_every_screen_rebuilds_its_footer_after_the_too_small_screen(scree
         await settle(pilot)
         await pilot.resize_terminal(120, 30)
         await settle(pilot)
-        assert one_row(app, 120).endswith("? help")
+        assert one_row(app, 120).endswith("esc back")

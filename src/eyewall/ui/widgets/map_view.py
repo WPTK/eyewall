@@ -8,6 +8,7 @@ which one is showing. The rendered rows are kept until something changes, so scr
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import ClassVar
 
 from rich.cells import cell_len
 from rich.text import Text
@@ -38,6 +39,7 @@ from eyewall.render.canvas import ASCII_GLYPHS, UNICODE_GLYPHS, Mode
 from eyewall.render.hits import EMPTY_HITS, Hits, Mark
 from eyewall.render.layers import DEFAULT_MAP_STYLE, EMPTY_SCENE, MapOptions, MapScene, render_map_hits
 from eyewall.render.projection import Viewport
+from eyewall.ui import nav
 from eyewall.ui.adapt import basin_points
 from eyewall.ui.widgets.strips import blank, canvas_strips, reverse_cell
 from eyewall.units import DEFAULT_PRESET, PRESETS
@@ -93,19 +95,8 @@ class MapView(Widget, can_focus=True):
     Storms, buoys and gauges are marks: click one (or step to it with n and N and press Enter) to open it. A drag pans
     the map, the wheel zooms, and hovering a mark names it."""
 
-    BINDINGS = [
-        Binding("plus,equals_sign", "zoom_in", "zoom", key_display="+/-"),
-        Binding("minus", "zoom_out", "zoom out", show=False),
-        Binding("f", "screen.fit", "fit"),
-        Binding("left", "pan(-1, 0)", "Pan left", show=False),
-        Binding("right", "pan(1, 0)", "Pan right", show=False),
-        Binding("up", "pan(0, -1)", "Pan up", show=False),
-        Binding("down", "pan(0, 1)", "Pan down", show=False),
-        Binding("n", "mark(1)", "next mark", show=False),
-        Binding("N", "mark(-1)", "previous mark", show=False),
-        Binding("enter", "open_mark", "open", show=False),
-        Binding("escape", "clear_mark", "clear", show=False),
-    ]
+    NAV_SCOPES: ClassVar[tuple[str, ...]] = ("map",)
+    BINDINGS = nav.bindings("map")
 
     class Changed(Message):
         """The view moved or the scene was replaced; the legend under the map reads the new state."""

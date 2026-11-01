@@ -9,3 +9,8 @@
 - Map marks: forecast points, outlook areas and place names are not clickable; only storms, buoys and gauges are. A gauge click only shows a toast with its newest water level (it has no page yet); pinning from the map waits for PR8's station screen.
 - Map marks: `n`/`N` step through the marks that are on screen only; marks panned out of view are skipped until the map is moved or refitted.
 - Map marks: the map key and the footer do not mention `n`/`N`/`enter` or the click; add them when the chrome is rebuilt (the help screen lists them).
+- Chrome: the global jump keys (`s` stations, `b` buoys, `t` tides, `g` graphics from any screen) wait for the screens PR6-8 build; the key table in `ui/nav.py` is where they go.
+- Chrome: `ui/screens/search.py` is still its own screen with its own Ctrl+P pin (the app's palette is switched off while it is open). PR8 replaces it with a stations-only palette provider and deletes it.
+- Chrome: the feed list is a small modal (`D` or a click on the health slot). A full screen with per-feed history and a manual refresh waits for the station and feed work.
+- Chrome: palette gauge hits show a toast with the newest water level, like the map click, until the station screen exists (PR8).
+- Chrome: the footer cuts whole keys from the right with no "more" marker; a `more` key that opens the help screen at the current screen's section would show that keys were cut.
