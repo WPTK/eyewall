@@ -153,7 +153,7 @@ async def test_clicking_a_gauge_says_what_it_reads_and_changes_nothing() -> None
 async def test_a_drag_that_ends_without_a_click_does_not_swallow_the_next_click() -> None:
     async with running(replay_app(), (120, 30)) as pilot:
         view = await map_of(pilot)
-        mark, (col, row) = alone(view, "buoy")
+        _, (col, row) = alone(view, "buoy")
         await pilot.mouse_down(MapView, offset=(col, row))
         await pilot.hover(MapView, offset=(col + 3, row + 2))
         await pilot.mouse_up(MapView, offset=(col + 3, row + 2))
