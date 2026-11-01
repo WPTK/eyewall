@@ -34,6 +34,11 @@ sys.exit(3)
 pytestmark = pytest.mark.skipif(unavailable_reason() is not None, reason=str(unavailable_reason()))
 
 
+@pytest.mark.xfail(
+    sys.platform == "darwin",
+    strict=False,  # intermittent: it timed out on both macOS jobs on one head and passed on 3.12 on the next
+    reason="#162: superseded pty kit, self-test times out intermittently on the macOS runners (root cause undetermined)",
+)
 def test_keys_mouse_resize_exit_and_kill() -> None:
     with Terminal([sys.executable, "-c", ECHO], 80, 24) as term:
         term.wait_for_text("ready", 20)
