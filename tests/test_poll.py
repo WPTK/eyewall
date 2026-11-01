@@ -1,6 +1,7 @@
 """The poller on a virtual clock: intervals, backoff, away mode, change-triggered refetch and the gated fallback."""
 
 import asyncio
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -623,6 +624,187 @@ async def test_the_refresh_key_cannot_shorten_a_backoff_window():
     assert protocol.STORMS not in poller.due()
     clock.advance(window)
     assert protocol.STORMS in poller.due()
+
+
+# ---- retries must not undo what an earlier attempt stored -----------------------------------------------------------
+
+
+def _gis(adv_num):
+    from eyewall.models.forecast import ForecastGis
+    from eyewall.models.wind import WindRadiiGis
+    from tests.state_support import adv
+
+    return (
+        ForecastGis("ANA", "TS", adv(adv_num), None, T0),
+        WindRadiiGis("al012026", adv(adv_num)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("gis_adv", "text"),
+    [
+        ("31", AdvisorySet(public=make_public("31"))),  # the TCM lags the public advisory of this one
+        ("30A", None),  # an intermediate advisory: the GIS says 30A, the TCM stays 30
+    ],
+)
+def test_a_text_retry_keeps_the_gis_of_the_advisory_that_is_current(gis_adv, text):
+    _, source, store, _, _ = build()
+    source.set_storm("30")
+    store.apply_storms(source.current, T0)
+    cone, radii = _gis(gis_adv)
+    store.apply_products("al012026", T0, key=None, advisories=advisories("30"), forecast_gis=cone, radii_gis=radii)
+    store.apply_products("al012026", T0, key=("x", T0), advisories=text or advisories("30"))
+    state = store.storms["al012026"]
+    assert state.forecast_gis is cone and state.radii_gis is radii
+
+
+def test_a_gis_of_an_older_advisory_still_goes_when_newer_text_arrives():
+    _, source, store, _, _ = build()
+    source.set_storm("30")
+    store.apply_storms(source.current, T0)
+    cone, radii = _gis("30")
+    store.apply_products("al012026", T0, key=None, advisories=advisories("30"), forecast_gis=cone, radii_gis=radii)
+    store.apply_products("al012026", T0, key=None, advisories=advisories("31"))
+    state = store.storms["al012026"]
+    assert state.forecast_gis is None and state.radii_gis is None
+
+
+# ---- the station feeds -----------------------------------------------------------------------------------------------
+
+
+def _storm_with_a_buoy_at_gale(source):
+    source.stations = (station("41047", 26.0, -75.5),)
+    source.buoy_series["41047"] = series("41047", obs(T0 - timedelta(minutes=10), 40))
+    source.set_storm("1")
+    source.texts["1"] = advisories("1")
+
+
+async def test_a_buoy_file_from_the_cache_does_not_hide_a_threshold_crossing():
+    poller, source, _store, _clock, got = build()
+    _storm_with_a_buoy_at_gale(source)
+    source.cached = {protocol.BUOYS}
+    await poller.tick()
+    assert any(e.kind is EventKind.BUOY_THRESHOLD for e in got)
+
+
+async def test_a_buoy_file_from_the_cache_raises_no_silence_notice():
+    poller, source, _store, _clock, got = build()
+    source.stations = (station("41047", 26.0, -75.5),)
+    source.buoy_series["41047"] = series("41047", obs(T0 - timedelta(hours=5), 10))
+    source.set_storm("1")
+    source.texts["1"] = advisories("1")
+    source.cached = {protocol.BUOYS}
+    await poller.tick()
+    assert not any(e.kind is EventKind.BUOY_SILENT for e in got)
+
+
+async def test_a_failed_catalog_refresh_keeps_the_old_list_and_the_observations_flowing():
+    from eyewall.poll import STATION_REFRESH
+
+    poller, source, store, clock, _got = build()
+    _storm_with_a_buoy_at_gale(source)
+    source.tide_stations = (gauge("8000001", 25.5, -75.5),)
+    await poller.tick()
+    source.fail = {"ndbc_stations", "coops_stations"}
+    source.buoy_series["41047"] = series("41047", obs(clock.now() + timedelta(days=1), 60))
+    source.calls.clear()
+    await step(poller, clock, STATION_REFRESH + 1)
+    assert store.stations and store.tide_stations  # the lists we had
+    assert source.count("series:41047") == 1 and source.datums  # and the series and gauges were still read
+    assert poller.freshness(protocol.BUOYS).state is FreshnessState.FRESH
+    assert poller.freshness(protocol.TIDES).state is FreshnessState.FRESH
+
+
+async def test_a_catalog_that_cannot_be_loaded_at_all_fails_the_feed():
+    poller, source, _store, _clock, _ = build()
+    _storm_with_a_buoy_at_gale(source)
+    source.fail = {"ndbc_stations"}
+    results = {r.feed: r for r in await poller.tick()}
+    assert results[protocol.BUOYS].error is not None
+
+
+async def test_a_failed_latest_obs_does_not_stop_the_series():
+    poller, source, _store, _clock, got = build()
+    _storm_with_a_buoy_at_gale(source)
+    source.fail = {"buoys"}
+    results = {r.feed: r for r in await poller.tick()}
+    assert source.count("series:41047") == 1
+    assert any(e.kind is EventKind.BUOY_THRESHOLD for e in got)
+    assert results[protocol.BUOYS].error is not None  # still reported
+
+
+async def test_advisory_text_already_fetched_survives_a_deadline_in_a_later_product():
+    poller, source, store, clock, _got = build()
+    poller.feed_deadline = 0.05
+    source.set_storm("1")
+    source.texts["1"] = advisories("1", area("Tropical Storm Warning", "Keys"))
+    source.forecast_gis = Hang()
+    await poller.tick()
+    state = store.storms["al012026"]
+    assert state.advisories.public is not None  # stored before the slow product, not thrown away with it
+    assert state.fetched_key is None  # not settled
+    del source.forecast_gis  # the host answers again
+    await step(poller, clock, 600)
+    assert source.count("advisory") == 1  # the text is not asked for again, only the product still owed
+    assert store.storms["al012026"].fetched_key is not None
+
+
+async def test_stalled_feeds_wait_out_their_deadlines_together_not_one_after_another():
+    import time
+
+    config = Config(watchlist=WatchlistConfig(ndbc=("41010",), coops=("8721604",)))
+    poller, source, *_ = build(config=config)
+    poller.feed_deadline = 0.3
+    source.current = CurrentStorms()
+    source.stations = (station("41010", 28.9, -78.5),)
+    source.tide_stations = (gauge("8721604", 28.4, -80.6),)
+    source.ndbc_latest = Hang()
+    source.coops_stations = Hang()
+    started = time.monotonic()
+    results = {r.feed: r for r in await poller.tick()}
+    assert time.monotonic() - started < 0.55  # two deadlines in a row would take 0.6
+    assert isinstance(results[protocol.BUOYS].error, TimeoutError)
+    assert isinstance(results[protocol.TIDES].error, TimeoutError)
+
+
+async def test_a_storm_whose_product_hangs_does_not_starve_the_storms_after_it():
+    poller, source, store, _clock, _got = build()
+    poller.feed_deadline = 0.4
+    source.current = CurrentStorms(
+        (make_storm("1", storm_id="al012026"), make_storm("1", storm_id="al022026", name="Bea", lat=30.0))
+    )
+    source.texts["1"] = advisories("1")
+    original = source.forecast_gis
+
+    async def forecast_gis(storm):
+        if storm.id == "al012026":
+            await asyncio.Event().wait()
+        return await original(storm)
+
+    source.forecast_gis = forecast_gis
+    results = await poller.tick()
+    assert isinstance(results[0].error, TimeoutError)
+    assert store.storms["al022026"].fetched_key is not None  # the second storm was served
+    assert store.storms["al022026"].advisories.public is not None
+    assert store.storms["al012026"].fetched_key is None  # the first is asked again, and settles at the cap
+
+
+def test_a_replay_that_steps_back_drops_a_cone_from_a_later_advisory():
+    _, source, store, _, _ = build()
+    source.set_storm("30")
+    store.apply_storms(source.current, T0)
+    cone, radii = _gis("31")
+    store.apply_products("al012026", T0, key=None, advisories=advisories("31"), forecast_gis=cone, radii_gis=radii)
+    older = replace(advisories("30"), public=make_public("30", issued=T0 - timedelta(hours=6)))
+    older = replace(
+        older,
+        forecast=replace(older.forecast, issued=T0 - timedelta(hours=6)),
+        discussion=replace(older.discussion, issued=T0 - timedelta(hours=6)),
+    )
+    store.apply_products("al012026", T0, key=None, advisories=older)
+    state = store.storms["al012026"]
+    assert state.advisories.public.adv_num.number == 30  # type: ignore[union-attr]
+    assert state.forecast_gis is None and state.radii_gis is None
 
 
 # ---- refresh requests and the Retry-After window ------------------------------------------------------------------
