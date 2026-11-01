@@ -193,7 +193,7 @@ def cell_at(x, y):
     return received_cell(m)
 
 
-def find_boundary(axis, fixed, lo, hi, k):
+def find_boundary(axis, fixed, lo, hi, k, none_val=None):
     """smallest pixel along axis where the received cell index becomes >= k (monotone), binary search over [lo,hi]."""
     cache = {}
 
@@ -208,6 +208,8 @@ def find_boundary(axis, fixed, lo, hi, k):
     while hi - lo > 1 and steps < 12:
         mid = (lo + hi) // 2
         v = f(mid)
+        if v is None:
+            v = none_val
         if v is None:
             return None
         if v >= k:
@@ -250,7 +252,8 @@ def main():
         first = None
         for k in ks:
             g = o0 + k * est if first is None else first[1] + (k - first[0]) * est
-            out[k] = find_boundary(axis, fixed, g - 16 if first is None else g - 8, g + 16 if first is None else g + 8, k)
+            out[k] = find_boundary(axis, fixed, g - 16 if first is None else g - 8, g + 16 if first is None else g + 8, k,
+                                   -1 if first is None else 10**6)
             if out[k] is None:
                 return out
             if first is None:
