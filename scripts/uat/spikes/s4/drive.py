@@ -200,7 +200,18 @@ def main():
     if not ready:
         shot("00_launch_failed")
         return
-    time.sleep(3.0)
+    if TERM == "iTerm2":
+        rc, o = sh([PY, os.path.join(S4, "dismiss.py"), "1"], timeout=120)
+        step("dismiss iTerm first-launch dialogs", True, out=o[-400:])
+    # wait until the window size settles (probe logs resize events)
+    last, stable = None, 0
+    for _ in range(30):
+        cur = ([e for e in jl(LOGR) if "cols" in e][-1]["cols"], [e for e in jl(LOGR) if "cols" in e][-1]["rows"], window()[1])
+        stable = stable + 1 if cur == last else 0
+        last = cur
+        if stable >= 6:
+            break
+        time.sleep(0.5)
     activate()
     sz = [e for e in jl(LOGR) if "cols" in e][-1]
     cols, rows = sz["cols"], sz["rows"]
