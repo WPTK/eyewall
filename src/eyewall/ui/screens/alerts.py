@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.events import Resize
 from textual.widgets import DataTable, Static
 
+from eyewall.models.events import Severity
 from eyewall.ui import format as fmt
 from eyewall.ui import nav
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
@@ -43,11 +44,19 @@ class AlertLogScreen(ChromeScreen):
         arrive after an advisory that is later than it; the sort is stable, so equal times stay newest arrival first."""
         return sorted(self.eye.alert_log, key=lambda event: event.time, reverse=True)
 
+    @staticmethod
+    def _event_cell(event: Event) -> Text:
+        """The event's title. A warning is bold and starts with a mark, so under NO_COLOR, where red and amber both
+        turn to grey, the urgent rows are the heaviest ones instead of the faintest."""
+        if event.severity is Severity.WARNING:
+            return Text(f"! {fmt.event_title(event)}", style=f"bold {fmt.SEVERITY_COLORS[event.severity]}")
+        return Text(fmt.event_title(event), style=fmt.SEVERITY_COLORS[event.severity])
+
     def _rows(self) -> list[tuple[str, Text, str, str]]:
         return [
             (
                 f"{event.time:%b %d %H:%M}",
-                Text(fmt.event_title(event), style=fmt.SEVERITY_COLORS[event.severity]),
+                self._event_cell(event),
                 (event.storm_id or "--").upper(),
                 event.message,
             )

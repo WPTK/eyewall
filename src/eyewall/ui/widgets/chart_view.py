@@ -18,7 +18,8 @@ from eyewall.ui.widgets.strips import blank, canvas_strips
 
 
 class ChartView(Widget):
-    """One chart on shared axes. `set_chart` replaces everything it draws; an empty chart says so in `empty`."""
+    """One chart on shared axes. `set_chart` replaces everything it draws; an empty chart says so in `empty`. `y_range`
+    fixes the y axis; without it the axis stretches to the nearest ticks beyond the data."""
 
     DEFAULT_CSS = "ChartView { height: 1fr; min-height: 4; }"
 
@@ -33,6 +34,7 @@ class ChartView(Widget):
         self._x_range: tuple[float, float] = (-24.0, 0.0)
         self._x_ticks: tuple[Tick, ...] = ()
         self._empty = "No data"
+        self._y_range: tuple[float, float] | None = None
         self._strips: list[Strip] | None = None
         self.natural_gutter = 0  # the y label width this chart needs on its own
         self.min_gutter = 0  # the width its siblings need
@@ -45,12 +47,14 @@ class ChartView(Widget):
         x_range: tuple[float, float],
         x_ticks: Sequence[Tick],
         empty: str,
+        y_range: tuple[float, float] | None = None,
     ) -> None:
         self._series = tuple(series)
         self._title = title
         self._x_range = x_range
         self._x_ticks = tuple(x_ticks)
         self._empty = empty
+        self._y_range = y_range
         self._strips = None
         self._measure()
         self.refresh()
@@ -63,7 +67,11 @@ class ChartView(Widget):
             self.refresh()
 
     def _measure(self) -> None:
-        natural = gutter_width(self._series, self.size.height, title=self._title) if self._has_data() else 0
+        natural = (
+            gutter_width(self._series, self.size.height, title=self._title, y_range=self._y_range)
+            if self._has_data()
+            else 0
+        )
         if natural != self.natural_gutter:
             self.natural_gutter = natural
             self.post_message(self.Measured())
@@ -88,6 +96,7 @@ class ChartView(Widget):
             x_range=self._x_range,
             x_ticks=self._x_ticks,
             title=self._title,
+            y_range=self._y_range,
             min_gutter=self.min_gutter,
         )
         return canvas_strips(canvas, width)
