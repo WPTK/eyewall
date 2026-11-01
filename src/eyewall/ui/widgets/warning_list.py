@@ -139,7 +139,7 @@ def blocks(view: View, width: int) -> list[Block]:
     if not view.states:
         return []
     found = items(view)
-    out = [heading("WATCHES AND WARNINGS", SECTION), *unread_blocks(view, width)]
+    out = [heading("Watches and warnings", SECTION), *unread_blocks(view, width)]
     many = len(view.states) > 1
     for index, item in enumerate(found):
         out.append(item_block(item, view, width, first=index == 0, priority=1 if index == 0 else 3 + index, many=many))

@@ -72,7 +72,7 @@ def card(state: StormState, view: View, width: int, *, selected: bool, lead: boo
     nxt = storm_words.next_advisory(state)
     if nxt is not None:
         lines += wrapped(nxt.text, width, style=DIM, prefix="  ", action=action)
-    lines.append(link(view, "open", width, action, key="enter" if selected else ""))
+    lines.append(link(view, "open", action, key="enter" if selected else ""))
     return lines
 
 
@@ -83,7 +83,7 @@ def card_blocks(view: View, width: int) -> list[Block]:
         return []
     chosen = view.chosen
     many = len(view.states) > 1
-    out = [heading("NAMED STORMS", SECTION)]
+    out = [heading("Named storms", SECTION)]
     for index, state in enumerate(view.states):
         selected = chosen is state
         lines = card(state, view, width, selected=selected, lead=many or view.rich)

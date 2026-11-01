@@ -10,7 +10,7 @@ from eyewall.render.basemap import (
     ensure_matches,
     is_detailed,
 )
-from eyewall.render.canvas import Canvas, Mode, Priority, Shade
+from eyewall.render.canvas import Canvas, Mode
 from eyewall.render.projection import Viewport
 from tests.render_support import assert_golden
 
@@ -27,7 +27,9 @@ def count_dots(canvas: Canvas) -> int:
 
 
 def colors(canvas: Canvas) -> set[str | None]:
-    return {canvas.cell(c, r)[1].fg for r in range(canvas.rows) for c in range(canvas.cols)}
+    """Every foreground and background color on the canvas."""
+    cells = [canvas.cell(c, r)[1] for r in range(canvas.rows) for c in range(canvas.cols)]
+    return {s.fg for s in cells} | {s.bg for s in cells}
 
 
 def test_detail_follows_the_zoom():
@@ -43,7 +45,7 @@ def test_each_layer_can_be_switched_off():
     everything = basemap_canvas(GULF, style=style)
     assert colors(everything) >= {"#111111", "#222222", "#333333"}
     no_land = basemap_canvas(GULF, land=False, style=style)
-    assert "#111111" not in colors(no_land) and count_dots(no_land) < count_dots(everything)
+    assert "#111111" not in colors(no_land)
     no_coast = basemap_canvas(GULF, coast=False, style=style)
     assert "#222222" not in colors(no_coast)
     no_borders = basemap_canvas(GULF, borders=False, style=style)
@@ -52,17 +54,17 @@ def test_each_layer_can_be_switched_off():
     assert count_dots(nothing) == 0
 
 
-def test_land_is_dim_and_coast_is_drawn_over_it():
-    style = BasemapStyle(land="#111111", coast="#222222", land_shade=Shade.SOLID)
+def test_land_is_a_flat_background_and_coast_is_drawn_over_it():
+    style = BasemapStyle(land="#111111", coast="#222222")
     canvas = Canvas(GULF.cols, GULF.rows)
     draw_basemap(canvas, GULF, borders=False, style=style)
     x, y = GULF.dot_at(19.5, -89.0)  # inland on the Yucatan
-    assert canvas.dot(x, y)
-    cell = (x // 2, y // 4)
-    assert canvas.cell(*cell)[1].fg == "#111111"
-    cape = GULF.dot_at(28.46, -80.53)  # Cape Canaveral: land meets sea, and the coast outranks the land
+    assert not canvas.dot(x, y)  # no fill dots: the land is a tint, so it cannot speckle
+    assert canvas.cell(x // 2, y // 4)[1].bg == "#111111"
+    sea = GULF.dot_at(25.0, -90.0)  # open Gulf
+    assert canvas.cell(sea[0] // 2, sea[1] // 4)[1].bg is None
+    cape = GULF.dot_at(28.46, -80.53)  # Cape Canaveral: land meets sea, and the coast line sits on the land
     assert canvas.cell(cape[0] // 2, cape[1] // 4)[1].fg == "#222222"
-    assert Priority.COAST > Priority.LAND
 
 
 def test_state_lines_appear_only_when_zoomed_in():
@@ -152,17 +154,29 @@ def test_a_view_of_the_whole_basin_uses_the_coarse_data_and_keeps_the_atolls():
 
 
 def test_lakes_are_holes_in_the_land_with_a_shoreline():
-    style = BasemapStyle(land="#111111", coast="#222222", land_shade=Shade.SOLID)
+    style = BasemapStyle(land="#111111", coast="#222222")
     view = Viewport(45.0, -84.0, 0.05, 120, 40)  # Lake Huron and Lake Michigan
     canvas = Canvas(view.cols, view.rows)
     draw_basemap(canvas, view, coast=False, borders=False, style=style)  # land fill alone, so no shoreline helps
     x, y = view.dot_at(44.8, -82.3)  # open water in Lake Huron
-    assert not canvas.dot(x, y)
-    assert canvas.cell(x // 2, y // 4)[1].fg != "#111111"
+    assert canvas.cell(x // 2, y // 4)[1].bg is None
     x, y = view.dot_at(46.2, -84.6)  # Michigan's Upper Peninsula
-    assert canvas.cell(x // 2, y // 4)[1].fg == "#111111"
+    assert canvas.cell(x // 2, y // 4)[1].bg == "#111111"
 
 
 def test_a_view_with_nothing_in_it_is_blank():
     middle_of_nowhere = Viewport(-30.0, -120.0, 0.1, 80, 24)  # the South Pacific, south of the data
     assert count_dots(basemap_canvas(middle_of_nowhere)) == 0
+
+
+def test_a_basin_view_draws_no_borders_and_no_small_lakes():
+    style = BasemapStyle(land="#111111", coast="#222222", border="#333333", state="#444444")
+    basin = Viewport(35.0, -88.0, 0.35, 120, 40)  # the Gulf and the eastern United States, at basin scale
+    canvas = basemap_canvas(basin, style=style)
+    assert not colors(canvas) & {"#333333", "#444444"}
+    x, y = basin.dot_at(46.0, -87.0)  # Lake Superior, wide enough to keep
+    assert canvas.cell(x // 2, y // 4)[1].bg is None
+    x, y = basin.dot_at(27.0, -80.85)  # Lake Okeechobee, under a cell across: land, not a pinprick hole
+    assert canvas.cell(x // 2, y // 4)[1].bg == "#111111"
+    far = Viewport(30.0, -90.0, 0.05, 120, 40)  # zoomed in, the borders are back
+    assert "#444444" in colors(basemap_canvas(far, style=style))

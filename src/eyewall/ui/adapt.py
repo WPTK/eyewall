@@ -23,7 +23,7 @@ from eyewall.units import convert
 
 # Where each basin sits, as two opposite corners (lat, lon), for the view when no storm is selected.
 BASIN_BOUNDS: dict[str, tuple[LatLon, LatLon]] = {
-    "AL": ((5.0, -100.0), (48.0, -5.0)),
+    "AL": ((5.0, -98.0), (44.0, -14.0)),
     "EP": ((4.0, -140.0), (32.0, -84.0)),
     "CP": ((4.0, -180.0), (30.0, -130.0)),
 }
@@ -37,6 +37,13 @@ def basin_points(basins: tuple[str, ...]) -> list[LatLon]:
     for code in basins or tuple(BASIN_BOUNDS):
         points.extend(BASIN_BOUNDS.get(code, ()))
     return points
+
+
+def quiet_points(basins: tuple[str, ...]) -> list[LatLon]:
+    """What the map fits when no storm is selected: the first enabled basin (the Atlantic unless the reader chose
+    another or switched it off), always. An outlook area outside it is not chased across the hemisphere: the panel
+    says where it is and what its chances are."""
+    return list(BASIN_BOUNDS.get(basins[0] if basins else "AL", BASIN_BOUNDS["AL"]))
 
 
 def _quadrants(radii: QuadrantRadii | None) -> L.QuadrantRadii | None:

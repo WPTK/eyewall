@@ -61,7 +61,7 @@ def test_equal_priorities_drop_the_later_block_first() -> None:
 
 def test_a_group_that_lost_blocks_ends_in_a_more_line() -> None:
     blocks = [block(2, 1, group="g", more="do:x"), block(2, 2, group="g", more="do:x")]
-    lines = fit_blocks(blocks, 3, 30, ">")
+    lines = fit_blocks(blocks, 3, ">")
     assert shown(lines)[:2] == ["row 0", "row 1"]
     assert lines[-1].text.plain.strip() == "+1 more >" and lines[-1].action == "do:x"
 
@@ -145,11 +145,11 @@ async def test_the_cards_say_it_in_plain_sentences() -> None:
     async with running(app, (100, 40)) as pilot:
         await into_the_storm(pilot)
         text = panel_text(app)
-        assert "NAMED STORMS" in text and "WATCHES AND WARNINGS" in text
+        assert "Named storms" in text and "Watches and warnings" in text
         assert "Maximum sustained winds are" in text
         assert "Next intermediate advisory" in text or "Next complete advisory" in text
         assert "Tropical Storm Warning" in text and "conditions expected" in text
-        assert text.index("Warning") < text.index("Watch")  # the most serious first
+        assert text.index("Tropical Storm Warning") < text.index("Tropical Storm Watch")  # the most serious first
 
 
 async def test_the_wide_screen_says_more_on_the_card() -> None:
@@ -226,7 +226,7 @@ async def test_nothing_active_lists_the_stations_on_the_wide_screen() -> None:
     async with running(app, (140, 45)) as pilot:
         await settle(pilot)
         text = " ".join(screen_text(app).split())
-        assert "YOUR STATIONS" in text and "b open the list" in text
+        assert "Your stations" in text and "open the list" in text
         await press(pilot, "b")
         assert type(app.screen).__name__ == "BuoysScreen"
 
