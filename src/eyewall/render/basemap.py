@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from functools import cache, lru_cache
 
 from eyewall.mapdata.loader import KIND_STATE, MapLayer, MapPath, load_layer
+from eyewall.palette import BORDER, COAST, LAND, STATE_LINE
 from eyewall.render.canvas import Canvas, Mode, Priority, Shade
 from eyewall.render.projection import Bounds, Viewport
 
@@ -22,11 +23,11 @@ DETAIL_SWITCH = 0.3
 
 @dataclass(frozen=True)
 class BasemapStyle:
-    land: str = "#3a4658"
+    land: str = LAND
     land_shade: Shade = Shade.LIGHT
-    coast: str = "#9fb3c8"
-    border: str = "#6e7f94"
-    state: str = "#4a5668"
+    coast: str = COAST
+    border: str = BORDER
+    state: str = STATE_LINE
 
 
 DEFAULT_STYLE = BasemapStyle()

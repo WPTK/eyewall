@@ -11,6 +11,7 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Static
 
+from eyewall.palette import HEADING
 from eyewall.ui import stations as st
 from eyewall.ui.screens.search import SearchChoice, SearchScreen
 from eyewall.ui.widgets.station_table import StationTable
@@ -51,8 +52,10 @@ class WatchlistScreen(Screen[None]):
         eye = self.eye
         store, now, preset = eye.store, eye.now(), eye.preset
         buoys, gauges = st.watchlist_buoys(store), st.watchlist_gauges(store)
-        self.query_one("#watch-buoy-title", Static).update(Text(f" Buoys ({len(buoys)})", style="bold #8fd3ff"))
-        self.query_one("#watch-tide-title", Static).update(Text(f" Tide gauges ({len(gauges)})", style="bold #8fd3ff"))
+        self.query_one("#watch-buoy-title", Static).update(Text(f" Buoys ({len(buoys)})", style=f"bold {HEADING}"))
+        self.query_one("#watch-tide-title", Static).update(
+            Text(f" Tide gauges ({len(gauges)})", style=f"bold {HEADING}")
+        )
         columns = st.BUOY_COLUMNS[:2] + st.BUOY_COLUMNS[4:11]
         rows = [(key, cells[:2] + cells[4:11]) for key, cells in st.buoy_rows(store, buoys, now, preset, eye.glyphs)]
         self.query_one("#watch-buoys", StationTable).set_rows(columns, rows)

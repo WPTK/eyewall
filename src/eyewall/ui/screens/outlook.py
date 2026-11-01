@@ -17,11 +17,10 @@ from textual.widgets import DataTable, Static
 
 from eyewall.clock import format_age, format_zulu
 from eyewall.models.outlook import OutlookArea
-from eyewall.palette import risk_color
+from eyewall.palette import DIM, HEADING, risk_color
 from eyewall.ui import adapt
 from eyewall.ui import format as fmt
 from eyewall.ui import stations as st
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.map_view import MapPane, MapView
 from eyewall.ui.widgets.station_table import StationTable
 from eyewall.units import MISSING
@@ -58,7 +57,7 @@ def outlook_text(eye: EyewallApp) -> Text:
         areas = [a for a in text.areas if (a.title, a.description) not in seen]
         seen.update((a.title, a.description) for a in text.areas)
         shown = True
-        out.append(f"{text.region or ' / '.join(fmt.BASIN_NAMES[b] for b in covered)}\n", style="bold #8fd3ff")
+        out.append(f"{text.region or ' / '.join(fmt.BASIN_NAMES[b] for b in covered)}\n", style=f"bold {HEADING}")
         if text.issued is not None:
             out.append(f"Issued {format_zulu(text.issued, day=True)}\n", style=DIM)
         if text.active_systems:

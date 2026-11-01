@@ -23,7 +23,19 @@ from eyewall.models.obs import (
     TideStation,
     TideWind,
 )
-from eyewall.palette import wind_band_color
+from eyewall.palette import (
+    DIM,
+    GUST_SERIES,
+    HEADING,
+    PRESSURE_SERIES,
+    PRESSURE_TREND_CUES,
+    TIDE_BELOW_CUE,
+    TIDE_DIFFERENCE_CUES,
+    WAVE_SERIES,
+    WIND_SERIES,
+    category_color,
+    storm_force,
+)
 from eyewall.render.chart import ChartSeries, Tick
 from eyewall.state.nearby import Located, NearbyStation
 from eyewall.state.store import Store
@@ -32,7 +44,6 @@ from eyewall.state.tides import latest_residual
 from eyewall.state.tides import observation_age as tide_age
 from eyewall.state.trends import SILENT_AFTER, Extremes, interval_extremes
 from eyewall.ui.glyphs import UiGlyphs
-from eyewall.ui.theme import DIM
 from eyewall.units import MISSING, Preset, convert, format_value
 
 NOT_REPORTING = "not reporting"
@@ -40,13 +51,7 @@ WAITING = "waiting"
 UNKNOWN = "unknown"
 FALL_WARN_HPA = -1.0  # a three hour fall of this much is flagged, and of FALL_RAPID_HPA in red
 FALL_RAPID_HPA = -3.0
-RESIDUAL_COLORS = ((4.0, "#ff4d4d"), (2.0, "#ffa63d"), (1.0, "#ffe94a"))  # feet, largest first
-NEGATIVE_RESIDUAL = "#8fd3ff"
 RANGES_H = (24, 48, 72)
-PRESSURE_COLOR = "#4aa3ff"
-WIND_COLOR = "#3ddc84"
-GUST_COLOR = "#ffa63d"
-WAVE_COLOR = "#8fd3ff"
 
 BUOY_COLUMNS = ("ID", "Name", "Dist", "Brg", "Wind", "Gust", "Pres", "dP 3h", "Wave", "WTMP", "Age", "Closest")
 TIDE_COLUMNS = ("ID", "Name", "Dist", "Brg", "Observed", "Predicted", "Residual", "Wind", "Pres", "Age", "Closest")
@@ -125,8 +130,7 @@ def gust_kt(obs: Observation | None) -> float | None:
 
 
 def banded(text: str, kt: float | None) -> Text:
-    color = wind_band_color(kt)
-    return Text(text, style=f"bold {color}" if color else "")
+    return Text(text, style=f"bold {category_color(kt)}" if storm_force(kt) else "")
 
 
 def delta_text(delta_hpa: float | None, preset: Preset, g: UiGlyphs) -> Text:
@@ -136,8 +140,8 @@ def delta_text(delta_hpa: float | None, preset: Preset, g: UiGlyphs) -> Text:
     arrow = g.falling if delta_hpa < -0.05 else g.rising if delta_hpa > 0.05 else g.steady
     value = convert(abs(delta_hpa), "hpa", preset.pressure)
     number = format_value(value, preset.pressure, decimals=2 if preset.pressure == "inhg" else 1, label=False)
-    color = "bold #ff4d4d" if delta_hpa <= FALL_RAPID_HPA else "bold #ffa63d" if delta_hpa <= FALL_WARN_HPA else ""
-    return Text(f"{arrow}{number}", style=color)
+    cue = PRESSURE_TREND_CUES["rapid fall"] if delta_hpa <= FALL_RAPID_HPA else PRESSURE_TREND_CUES["fall"]
+    return Text(f"{arrow}{number}", style=cue.style() if delta_hpa <= FALL_WARN_HPA else "")
 
 
 def closest_text(entry: Entry[Station] | Entry[TideStation], preset: Preset) -> str:
@@ -211,10 +215,10 @@ def buoy_rows(
 
 
 def residual_color(residual_ft: float) -> str:
-    for floor, color in RESIDUAL_COLORS:
+    for floor, cue in TIDE_DIFFERENCE_CUES:
         if residual_ft >= floor:
-            return f"bold {color}"
-    return NEGATIVE_RESIDUAL if residual_ft <= -1.0 else ""
+            return cue.style()
+    return TIDE_BELOW_CUE.style() if residual_ft <= -1.0 else ""
 
 
 def tide_wind(series: TideSeries, now: datetime) -> TideWind | None:
@@ -276,8 +280,7 @@ def tide_row(store: Store, entry: Entry[TideStation], now: datetime, preset: Pre
 
 
 def _wind_style(kt: float | None) -> str:
-    color = wind_band_color(kt)
-    return f"bold {color}" if color else ""
+    return f"bold {category_color(kt)}" if storm_force(kt) else ""
 
 
 def tide_rows(
@@ -321,9 +324,9 @@ def chart_series(
         return None if o.wave_height_m is None else convert(o.wave_height_m, "m", preset.length)
 
     return {
-        "pressure": [line("pressure", PRESSURE_COLOR, pressure)],
-        "wind": [line("wind", WIND_COLOR, wind), line("gust", GUST_COLOR, gust)],
-        "wave": [line("wave", WAVE_COLOR, wave)],
+        "pressure": [line("pressure", PRESSURE_SERIES, pressure)],
+        "wind": [line("wind", WIND_SERIES, wind), line("gust", GUST_SERIES, gust)],
+        "wave": [line("wave", WAVE_SERIES, wave)],
     }
 
 
@@ -401,7 +404,7 @@ def latest_observation_text(
 
 def extremes_text(ext: Extremes, hours: float, preset: Preset, tz: tzinfo | None, *, supl_note: str | None) -> Text:
     out = Text()
-    out.append(f"Last {hours:g} hours\n", style="bold #8fd3ff")
+    out.append(f"Last {hours:g} hours\n", style=f"bold {HEADING}")
 
     def when(moment: datetime | None) -> str:
         if moment is None:

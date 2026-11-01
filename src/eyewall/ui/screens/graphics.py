@@ -10,8 +10,8 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import OptionList, Static
 
+from eyewall.palette import ACCENT, DIM
 from eyewall.ui import format as fmt
-from eyewall.ui.theme import DIM
 from eyewall.ui.widgets.gallery import GalleryPanel
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ class GraphicsScreen(Screen[None]):
         title = self.query_one("#graphics-title", Static)
         if state is None:
             title.update(
-                Text(f" {self.storm_id.upper()} is no longer active. Press Esc to go back.", style="bold #ffa63d")
+                Text(f" {self.storm_id.upper()} is no longer active. Press Esc to go back.", style=f"bold {ACCENT}")
             )
         else:
             storm = state.storm

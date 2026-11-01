@@ -1,28 +1,28 @@
-"""Colors for the interface. Meaning-carrying colors (categories, watches, risk) come from `eyewall.palette`."""
+"""The Textual theme. Every color in it comes from `eyewall.palette`."""
 
 from __future__ import annotations
 
 from textual.theme import Theme
 
-from eyewall.poll import FreshnessState
-
-BACKGROUND = "#0d1117"
-SURFACE = "#121a24"
-PANEL = "#17212d"
-FOREGROUND = "#e6edf5"
-DIM = "#7d8a99"
-ACCENT = "#ffa63d"
-GOOD = "#3ddc84"
-WARN = "#ffe94a"
-BAD = "#ff4d4d"
-INFO = "#4aa3ff"
+from eyewall.palette import (
+    ACCENT,
+    BACKGROUND,
+    BAD,
+    FOREGROUND,
+    GOOD,
+    HEADING,
+    INFO,
+    PANEL,
+    SURFACE,
+    WARN,
+)
 
 THEME_NAME = "eyewall"
 
 EYEWALL_THEME = Theme(
     name=THEME_NAME,
     primary=INFO,
-    secondary="#8fd3ff",
+    secondary=HEADING,
     accent=ACCENT,
     foreground=FOREGROUND,
     background=BACKGROUND,
@@ -33,10 +33,3 @@ EYEWALL_THEME = Theme(
     error=BAD,
     dark=True,
 )
-
-FRESHNESS_COLORS: dict[FreshnessState, str] = {
-    FreshnessState.FRESH: GOOD,
-    FreshnessState.STALE: WARN,
-    FreshnessState.ERROR: BAD,
-    FreshnessState.LOADING: DIM,
-}

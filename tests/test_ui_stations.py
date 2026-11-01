@@ -16,6 +16,7 @@ from eyewall.models.obs import (
     WaterLevelReading,
 )
 from eyewall.models.obs import Parsed as ObsParsed
+from eyewall.palette import TIDE_BELOW_CUE, category_color
 from eyewall.state.store import Store
 from eyewall.state.tides import is_silent, latest_residual, observation_age, predicted_at
 from eyewall.ui import stations as st
@@ -36,7 +37,9 @@ def level(minutes_ago: int, value: float | None) -> WaterLevelReading:
 
 def test_wind_is_banded_at_34_50_and_64_knots() -> None:
     assert st.banded("x", 20).style == ""
-    assert st.banded("x", 34).style != st.banded("x", 50).style != st.banded("x", 64).style
+    assert st.banded("x", 34).style == f"bold {category_color(34)}"
+    assert st.banded("x", 64).style == f"bold {category_color(64)}"
+    assert st.banded("x", 64).style != st.banded("x", 34).style
     assert st.banded("x", 33.9).style == ""
     assert st.banded("x", None).style == ""
     assert st.banded("x", 34).style != ""
@@ -57,7 +60,7 @@ def test_residual_colors_grow_with_the_surge_and_mark_a_drawdown() -> None:
     assert st.residual_color(0.3) == ""
     assert st.residual_color(1.0) != st.residual_color(2.0) != st.residual_color(4.0)
     assert "ffe94a" in st.residual_color(1.4)
-    assert st.residual_color(-1.5) == st.NEGATIVE_RESIDUAL
+    assert st.residual_color(-1.5) == TIDE_BELOW_CUE.style()
     assert st.residual_color(-0.4) == ""
 
 

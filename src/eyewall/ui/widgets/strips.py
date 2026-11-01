@@ -11,6 +11,7 @@ from rich.style import Style as RichStyle
 from textual.strip import Strip
 
 from eyewall.render.canvas import Canvas
+from eyewall.render.canvas import Style as CanvasStyle
 
 PLAIN = RichStyle()
 
@@ -27,6 +28,17 @@ def centered(line: Strip, width: int) -> Strip:
 def canvas_strips(canvas: Canvas, width: int) -> list[Strip]:
     strips = []
     for runs in canvas.rows_as_runs():
-        segments = [Segment(text, RichStyle(color=s.fg, bgcolor=s.bg, bold=s.bold or None)) for text, s in runs]
+        segments = [Segment(text, rich_style(s)) for text, s in runs]
         strips.append(Strip(segments, width))
     return strips
+
+
+def rich_style(style: CanvasStyle) -> RichStyle:
+    """A canvas style as a rich one. Bold, underline and reverse survive `NO_COLOR`, so they carry cues color cannot."""
+    return RichStyle(
+        color=style.fg,
+        bgcolor=style.bg,
+        bold=style.bold or None,
+        underline=style.underline or None,
+        reverse=style.reverse or None,
+    )
