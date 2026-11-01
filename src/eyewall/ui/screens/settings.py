@@ -127,7 +127,7 @@ class SettingsScreen(ModalScreen[Config | None]):
     def on_mount(self) -> None:
         box = self.query_one("#settings-box")
         box.border_title = "Settings"
-        box.border_subtitle = "ctrl+s saves, esc cancels"
+        box.border_subtitle = "ctrl+s saves, esc cancels, tab for more"
         self.query_one("#settings-note").display = False
 
     def values(self) -> dict[str, Any]:

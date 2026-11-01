@@ -45,7 +45,7 @@ def test_every_health_state_has_a_glyph_and_a_word() -> None:
     cases = {
         "◐ 2 feeds late 1h": health(feeds(storms=late, outlook=late), None, UNICODE),
         "✕ 1 feed failing 1h": health(feeds(outlook=failing, storms=late), None, UNICODE),
-        "✕ offline, cached 1h": health(feeds(storms=cached), None, UNICODE),
+        "✕ offline, cached": health(feeds(storms=cached), None, UNICODE),
         "○ checking": health(feeds(storms=loading), None, UNICODE),
     }
     for expected, slot in cases.items():

@@ -59,7 +59,10 @@ def area_marker(area: WatchWarningArea, view: View) -> tuple[str, str]:
     cue = WATCH_WARNING_CUES.get(kind) if kind is not None else None
     if cue is None:
         return view.g.chip, NEUTRAL
-    return PATTERN_SAMPLES[cue.pattern][1 if view.ascii else 0][:MARKER_WIDTH], cue.color
+    stroke = PATTERN_SAMPLES[cue.pattern][1 if view.ascii else 0][:MARKER_WIDTH]
+    # Without color the terminal turns each color into a grey by its brightness, and the dark purple of a surge warning
+    # comes out dimmer than the rest. With no color asked for, keep the text's own color: every heading is as strong.
+    return stroke, "" if view.no_color else cue.color
 
 
 def marker(item: Item, view: View) -> tuple[str, str]:
@@ -73,7 +76,7 @@ def _title(item: Item, view: View, width: int) -> list[Line]:
     return wrapped(
         label,
         width,
-        style=f"bold {color}",
+        style=f"bold {color}".strip(),
         prefix=f"{stroke} ",
         prefix_style=color,
         hang=MARKER_WIDTH + 1,
@@ -161,7 +164,7 @@ def strip_line(view: View, width: int) -> Line | None:
     total = sum(len(i.area.areas) for i in found)
     head = Text(no_wrap=True, overflow="ellipsis")
     head.append(f"{stroke} ", style=color)
-    head.append(collapse(top.area.label), style=f"bold {color}")
+    head.append(collapse(top.area.label), style=f"bold {color}".strip())
     places = [collapse(p) for p in top.area.areas]
     for count in range(len(places), -1, -1):
         body = head.copy()

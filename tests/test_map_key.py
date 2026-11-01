@@ -89,4 +89,5 @@ async def test_the_pane_reserves_every_key_row_when_rings_and_lines_are_drawn(si
         assert rows >= 2 and legend.size.height == rows
         assert legend.region.bottom == pane.region.bottom
         shown = " ".join(screen_text(app).splitlines()[legend.region.y : legend.region.bottom])
-        assert "rings" in shown and "34kt" in shown and "lines" in shown
+        assert "lines" in shown  # the key keeps whole items from the left: the lines first, the rings when there is room
+        assert ("rings" in shown and "34kt" in shown) == (pane.size.width >= 150)

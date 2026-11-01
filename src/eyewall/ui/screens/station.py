@@ -12,8 +12,9 @@ from typing import cast
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.events import Resize
+from textual.message import Message
 from textual.widgets import Static
 
 from eyewall.clock import format_age
@@ -36,6 +37,15 @@ from eyewall.units import LABELS, convert
 BUOY_CHARTS = ("pressure", "wind", "wave")
 GAUGE_CHARTS = ("level", "gwind", "gpressure")
 
+CHART_ROWS = 6  # the least a chart is given: its legend, a plot you can read, the axis and its labels
+CHART_NAMES = {
+    "pressure": "pressure",
+    "wind": "wind",
+    "wave": "wave",
+    "level": "water level",
+    "gwind": "wind",
+    "gpressure": "pressure",
+}
 SMALL_HEIGHT = 30  # rows under which the lead drops the third trend and the extremes line
 
 
@@ -47,6 +57,16 @@ class FollowLine(Static):
         await self.screen.run_action("follow")
 
 
+class ChartStack(Vertical):
+    """The charts' room. When its height changes the screen decides again how many charts fit."""
+
+    class Resized(Message):
+        pass
+
+    def on_resize(self, event: Resize) -> None:
+        self.post_message(self.Resized())
+
+
 class StationScreen(ChromeScreen):
     NAV_SCOPES = ("station",)
     BINDINGS = nav.bindings("station")
@@ -56,6 +76,8 @@ class StationScreen(ChromeScreen):
         self.kind = kind
         self.station_id = station_id.upper()
         self.range_index = 0
+        self.chart_page = 0  # which group of charts shows when the screen is too short for all of them
+        self._visible: tuple[str, ...] = ()
         self.readings = False
         self.about = False
         self.supl: Parsed[SupplementalReading] | None = None
@@ -78,9 +100,10 @@ class StationScreen(ChromeScreen):
         yield Static("", id="station-lead")
         yield FollowLine("", id="station-follow")
         yield Static("", id="station-about")
-        with VerticalScroll(id="station-charts"):
+        with ChartStack(id="station-charts"):
             for name in (*BUOY_CHARTS, *GAUGE_CHARTS):
                 yield ChartView(mode=self.eye.map_mode, id=f"chart-{name}")
+            yield Static("", id="station-more")
         with VerticalScroll(id="station-readings"):
             yield Static("", id="station-table")
         yield FooterBar()
@@ -96,7 +119,6 @@ class StationScreen(ChromeScreen):
             self._ask_supplemental()
         else:
             self.run_worker(self._load_gauge(), name="station-gauge", exit_on_error=False)
-        self.query_one("#station-charts").focus()
         self._draw()
 
     def on_unmount(self) -> None:
@@ -303,8 +325,9 @@ class StationScreen(ChromeScreen):
         ticks = st.time_ticks(hours)
         x_range = (-hours, 0.0)
         show = BUOY_CHARTS if self.is_buoy else GAUGE_CHARTS
+        self._visible = self._chart_page(show)
         for name in (*BUOY_CHARTS, *GAUGE_CHARTS):
-            self.query_one(f"#chart-{name}").display = name in show
+            self.query_one(f"#chart-{name}").display = name in self._visible
         if self.is_buoy:
             series = store.series.get(self.station_id)
             rows = list(series.observations) if series is not None else []
@@ -349,7 +372,7 @@ class StationScreen(ChromeScreen):
         datum = f" above {tide.datum}" if tide is not None else ""
         self._chart("level").set_chart(
             [observed, predicted],
-            title=f"Water level ({LABELS[length]}{datum}); dim line is the predicted tide",
+            title=f"Water level ({LABELS[length]}{datum})",
             x_range=x_range,
             x_ticks=ticks,
             empty=empty,
@@ -377,6 +400,35 @@ class StationScreen(ChromeScreen):
             x_ticks=ticks,
             empty="this gauge has no pressure sensor" if tide is not None and not tide.pressure.items else empty,
         )
+
+    def _chart_page(self, show: tuple[str, ...]) -> tuple[str, ...]:
+        """The charts to show now. Each gets at least CHART_ROWS rows; when they do not all fit, the screen shows as
+        many as do, with a line that says there are more and how to reach them."""
+        height = self.query_one("#station-charts").size.height
+        per = len(show) if height <= 0 else max(1, height // CHART_ROWS)
+        more = self.query_one("#station-more", Static)
+        if per >= len(show):
+            self.chart_page = 0
+            more.display = False
+            return show
+        per = max(1, (height - 1) // CHART_ROWS)  # a row for the line about the others
+        pages = -(-len(show) // per)
+        self.chart_page %= pages
+        shown = show[self.chart_page * per : (self.chart_page + 1) * per]
+        names = " and ".join(CHART_NAMES[n] for n in shown)
+        more.update(
+            Text(
+                f"{names.capitalize()} chart, {self.chart_page + 1} of {pages}. More charts: tab. All numbers: r.",
+                style=DIM,
+            )
+        )
+        more.display = True
+        return shown
+
+    def on_chart_stack_resized(self, event: ChartStack.Resized) -> None:
+        event.stop()
+        if not self.readings:
+            self._draw_charts()
 
     @staticmethod
     def _gauge_points(
@@ -427,6 +479,8 @@ class StationScreen(ChromeScreen):
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
         if action == "about":
             return self.is_buoy
+        if action == "next_chart":
+            return not self.readings
         if action == "show_on_map":
             return self._position() is not None
         return True
@@ -442,6 +496,11 @@ class StationScreen(ChromeScreen):
     def action_range(self) -> None:
         self.range_index = (self.range_index + 1) % len(st.RANGES_H)
         self.notify(f"Showing the last {self.hours} hours.", timeout=2)
+        self._draw()
+
+    def action_next_chart(self) -> None:
+        """Tab: the next chart (or pair) when the screen is too short for all of them."""
+        self.chart_page += 1
         self._draw()
 
     def action_view(self) -> None:

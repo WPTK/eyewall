@@ -13,7 +13,6 @@
 - Chrome: the footer cuts whole keys from the right with no "more" marker; a `more` key that opens the help screen at the current screen's section would show that keys were cut.
 - Main screen: NWS zone alerts (the old Watches and warnings panel listed them beside NHC's) are not on the main screen; it shows NHC's watches and warnings only. The alert log (`A`) still lists them.
 - Main screen: the nothing-active sentence is PR4's "No tropical storms in the ... right now." rather than "No active storms in ..."; change `words.storm.nothing_active` if the owner wants the other wording.
-- Main screen: the legend under the map wraps to a third row at 100 columns (the map key is PR3's); shorten it or drop the scale text on narrow panes.
 - Replay (`R`): the live app closes and a second app starts on the bundled recording, so quitting the replay quits eyewall; returning to live data needs a restart.
 - Main screen: invests and the outlook's areas are not rows on the main screen (an invest is not a named storm). NHC's areas are in the outlook sentences, and the full outlook text is the Outlook tab of the NHC text screen (`O`). The old outlook dialog (`ui/screens/outlook_note.py`) is gone.
 - Main screen: a place list longer than four rows is cut to whole places and counted ("+N more places >"); the full list of places is in the Warnings text on the Storm screen's NHC text tabs.
@@ -27,3 +26,10 @@
 - Chrome: the global jump keys for stations (`s`) and tides (`t`) from any screen are not added; `b` opens Buoys and gauges from the main and Storm screens and `/` finds any station from anywhere.
 - NHC text: the screen is a reformatted view, not NHC's bulletin as issued. The models keep parsed sections, so hard-wrapped lines are joined, some sections are collapsed, and numbers follow the chosen units; the watches and warnings text is kept as NHC wrote it. A raw view (`r`) needs the raw bulletin kept on the model.
 - Storm screen: per-storm NWS alerts and the count of coast segments on the map left the Storm screen with the old Watches and warnings panel (the unused `products.watches_warnings` is deleted). The alert log (`A`) still lists NWS alerts; a per-storm alerts section can return later.
+- UAT P3: after a click on a map mark and Esc back, the mark stays selected, so Enter on the main screen opens the station rather than the storm (help says "Esc clears the mark").
+- UAT P3: Buoys and gauges at 80x24 cuts a long station name with an ellipsis that touches the distance ("Surface M... 160 nm WNW"); leave a gap or shorten the name first.
+- UAT P3: a watch or warning's place text has an odd hanging indent in the narrow side column.
+- UAT P3: the lead sentence at 120x30 can end with an orphan line ("at 15 kt.").
+- UAT P3: the Outlook tab of the NHC text screen is headed "NHC text (reformatted)", which means nothing for an outlook; also "No outlook for the enabled basins." in the replay.
+- UAT P3: land is a dot-density mask, so coastlines are hard to read at some zooms; the city names do the work.
+- UAT not verified: the hover tooltip on a mark (needs a real terminal) and the main screen with two storms (no two-storm fixture).

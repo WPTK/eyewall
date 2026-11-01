@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.widgets import OptionList, Static
+from textual.widgets import Static
 
 from eyewall.palette import ACCENT, DIM
 from eyewall.ui import format as fmt
@@ -33,7 +33,7 @@ class GraphicsScreen(ChromeScreen):
     def on_mount(self) -> None:
         gallery = self.query_one(GalleryPanel)
         gallery.set_active(True)
-        gallery.query_one(OptionList).focus()
+        gallery.focus_list()
         self.refresh_data()
 
     def on_screen_suspend(self) -> None:
@@ -52,8 +52,7 @@ class GraphicsScreen(ChromeScreen):
         else:
             storm = state.storm
             head = Text(no_wrap=True, overflow="ellipsis")
-            head.append(f" {fmt.class_label(storm)} ", style=f"bold {fmt.storm_color(storm)}")
-            head.append(storm.name.upper(), style="bold")
-            head.append("  graphics", style=DIM)
+            head.append(f" {storm.name.title() or storm.id.upper()}", style=f"bold {fmt.storm_color(storm)}")
+            head.append("  pictures", style=DIM)
             title.update(head)
         self.query_one(GalleryPanel).refresh_data()

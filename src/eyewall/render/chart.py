@@ -216,6 +216,8 @@ def render_chart(
             col = len(title) + 2
         for s in series:
             if s.name:
+                if col + len(s.name) + 2 > cols:
+                    break  # an entry is whole or absent, never cut
                 canvas.text(col, 0, glyphs.legend, s.color, Priority.LABEL)
                 canvas.text(col + 2, 0, s.name, style.text, Priority.LABEL)
                 col += len(s.name) + 4

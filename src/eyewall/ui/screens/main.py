@@ -60,10 +60,10 @@ def lead_text(view: View) -> Text:
         return Text(word, style="bold")
     if view.storms_old:
         # The feed has stopped answering: never say "no storms" (or a storm's state) as if it were current.
-        ago = f" (last update {format_age(view.storms_age)} ago)" if view.storms_age is not None else ""
+        reason = _old_reason(view)
         if not view.states:
-            return Text(f"Storm data unavailable{ago}.", style="bold")
-        note = f" Storm data is not updating{ago}."
+            return Text(f"Storm data unavailable ({reason}).", style="bold")
+        note = f" Storm data is not updating ({reason})."
     else:
         note = ""
     if not view.states:
@@ -76,6 +76,18 @@ def lead_text(view: View) -> Text:
     if pending:
         text += " " + _unread_sentence(pending, len(view.states))
     return Text(text + note, style="bold")
+
+
+def _old_reason(view: View) -> str:
+    """Why the storm data is old, in the words the health slot uses; the age only when it is known and worth saying."""
+    if view.storms_cached:
+        return "offline, cached"
+    ago = (
+        f", last update {format_age(view.storms_age)} ago"
+        if view.storms_age is not None and view.storms_age >= 60
+        else ""
+    )
+    return f"storms feed failing{ago}"
 
 
 def _unread_sentence(pending: list[StormState], total: int) -> str:

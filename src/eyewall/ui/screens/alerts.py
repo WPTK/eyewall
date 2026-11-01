@@ -14,7 +14,7 @@ from eyewall.ui import nav
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 
 if TYPE_CHECKING:
-    pass
+    from eyewall.models.events import Event
 
 
 class AlertLogScreen(ChromeScreen):
@@ -38,6 +38,11 @@ class AlertLogScreen(ChromeScreen):
         if self._message_width(self._rows()) != self._built_width:
             self.refresh_data()
 
+    def _newest_first(self) -> list[Event]:
+        """The log by the time of the event, newest first. The log itself is in arrival order, and a buoy reading can
+        arrive after an advisory that is later than it; the sort is stable, so equal times stay newest arrival first."""
+        return sorted(self.eye.alert_log, key=lambda event: event.time, reverse=True)
+
     def _rows(self) -> list[tuple[str, Text, str, str]]:
         return [
             (
@@ -46,7 +51,7 @@ class AlertLogScreen(ChromeScreen):
                 (event.storm_id or "--").upper(),
                 event.message,
             )
-            for event in self.eye.alert_log
+            for event in self._newest_first()
         ]
 
     def _fixed_widths(self, rows: list[tuple[str, Text, str, str]]) -> list[int]:
