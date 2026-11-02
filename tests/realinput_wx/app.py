@@ -1,17 +1,23 @@
-"""The eyewall adapter over the vendored ``tests/uat_kit`` terminal: launching the built exe, reading the screen for sense.
+"""The eyewall adapter over the tui-test kit (``tests/uat_kit_wx``): launching the built exe, reading the screen for sense.
 
 Only this module knows how eyewall lays out its screen (crumb in row 0, footer in the last row, ``reverse`` video on
-the marked map glyph). Swapping the driver means changing ``App._term`` and the few ``self._term`` calls here.
+the marked map glyph). Every launch gets the isolated environment of ``tests/uat_kit_wx/isolation.py`` and is asserted
+isolated before it starts, exactly as ``Run`` does; the session guard in ``conftest`` hashes the real folders after.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from tests.uat_kit import Terminal
+from tests.uat_kit_wx import Terminal
+from tests.uat_kit_wx.ew_driver import sgr
+from tests.uat_kit_wx.isolation import assert_isolated, isolated_env
 
 # Strings that mean a screen is broken, whatever it is showing.
 BAD_TEXT = ("Traceback", "Exception", "NameError", "KeyError", "AttributeError", "TypeError", "ValueError")
@@ -58,13 +64,13 @@ def parse_help(lines: list[str], section: str = "") -> tuple[list[tuple[str, str
     sentence. Pages overlap when scrolled, so callers de-duplicate."""
     rows: list[tuple[str, str, str]] = []
     for raw in lines:
-        m = re.match(r"^\s*│  (\S.*?)\s*(?:│|▌.*)?$", raw)
+        m = re.match(r"^\s*│  (\S.*?)\s*[▁▂▃▄▅▆▇█]?\s*(?:│|▌.*)?$", raw)
         if not m:
             continue
         body = m.group(1)
-        km = re.match(r"^(\S(?:.*?\S)?) {3,}(\S.*?)$", body)
-        if km:
-            rows.append((section, km.group(1), km.group(2)))
+        # the key cell is 21 columns wide, then two spaces, then the sentence (a key row can be 2-spaced inside)
+        if len(body) > 23 and body[21:23] == "  " and body[:21].strip() and body[23] != " ":
+            rows.append((section, body[:21].strip(), body[23:].strip()))
         elif body.strip() and not body.startswith("Esc closes"):
             section = body.strip()
     return rows, section
@@ -91,11 +97,15 @@ def help_tokens(keys: str) -> list[str]:
 
 
 # Keys the kit's table lacks: sent as the raw character a terminal sends.
-RAW_KEYS = {"backspace": "\x7f", "ctrl+p": "\x10", "ctrl+s": "\x13", "pageup": "\x1b[5~", "pagedown": "\x1b[6~"}
+RAW_KEYS = {"backspace": "", "ctrl+p": "", "ctrl+s": "", "pageup": "[5~", "pagedown": "[6~"}
 
 
 class App:
-    """The exe on a pseudo-console. ``violations`` collects every contradiction ``sense`` finds after an action."""
+    """The exe on a pseudo-console. ``violations`` collects every contradiction ``sense`` finds after an action.
+
+    ``root`` is the scratch directory every path the launch can write to lives in; pass one to share a home between
+    several launches (the upgrade scenario). ``fake`` is a ``FakeNoaa`` whose proxy variables the launch inherits.
+    """
 
     def __init__(
         self,
@@ -104,41 +114,25 @@ class App:
         cols: int = 120,
         rows: int = 30,
         *,
-        proxy: str | None = None,
+        fake: Any = None,
         extra_env: dict[str, str] | None = None,
         cwd: Path | None = None,
         sense: bool = True,
         state_root: Path | None = None,
     ) -> None:
+        self.dir = state_root if state_root is not None else Path(tempfile.mkdtemp(prefix="ew-app-"))
+        self._own_dir = state_root is None
         env = {
-            "HOME": "{dir}/home",
-            "USERPROFILE": "{dir}/home",
-            "TEMP": "{dir}/tmp",
-            "TMP": "{dir}/tmp",
-            "XDG_STATE_HOME": "{dir}/xdg-state",
             "BROWSER": "cmd /c exit 0 #%s",  # `o` in Pictures must not open a real browser
             "PYTHONUTF8": "1",
             "PYTHONIOENCODING": "utf-8",
-            "NO_COLOR": "",
+            "WSLENV": "",
         }
-        if state_root is not None:  # one home shared by several runs (upgrade and uninstall scenarios)
-            for sub in ("home", "appdata", "localappdata", "xdg-config", "xdg-data", "xdg-cache", "xdg-state", "tmp"):
-                (state_root / sub).mkdir(parents=True, exist_ok=True)
-            env.update(
-                HOME=str(state_root / "home"),
-                USERPROFILE=str(state_root / "home"),
-                APPDATA=str(state_root / "appdata"),
-                LOCALAPPDATA=str(state_root / "localappdata"),
-                XDG_CONFIG_HOME=str(state_root / "xdg-config"),
-                XDG_DATA_HOME=str(state_root / "xdg-data"),
-                XDG_CACHE_HOME=str(state_root / "xdg-cache"),
-                XDG_STATE_HOME=str(state_root / "xdg-state"),
-                TEMP=str(state_root / "tmp"),
-                TMP=str(state_root / "tmp"),
-            )
-        if proxy:
-            env.update(HTTP_PROXY=proxy, HTTPS_PROXY=proxy, ALL_PROXY=proxy, http_proxy=proxy, https_proxy=proxy)
+        if fake is not None:
+            env.update(fake.env())
         env.update(extra_env or {})
+        env.update(isolated_env(self.dir))  # last: a caller cannot point a launch at the real profile
+        assert_isolated(env, self.dir)  # asserted before every launch
         self.args = args
         self.exe = exe
         self._term = Terminal(
@@ -149,10 +143,7 @@ class App:
             env_remove=("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "NO_COLOR"),
             cwd=cwd,
         )
-        for d in ("home", "tmp", "xdg-state"):
-            (self._term.dir / d).mkdir(parents=True, exist_ok=True)
-        self.dir: Path = self._term.dir
-        self.pid: int = self._term.pid
+        self.pid: int | None = self._term.pid
         self.violations: list[str] = []
         self.do_sense = sense
         self.log: list[str] = []
@@ -160,6 +151,8 @@ class App:
     # -- plumbing -------------------------------------------------------------------------------------------------
     def close(self) -> None:
         self._term.close()
+        if self._own_dir:
+            shutil.rmtree(self.dir, ignore_errors=True)
 
     def __enter__(self) -> App:
         return self
@@ -191,33 +184,20 @@ class App:
     def dump(self) -> str:
         return "\n".join(f"{i:02d}|{ln}" for i, ln in enumerate(self.lines()))
 
-    def style(self, x: int, y: int) -> tuple[str, str, bool, bool]:
-        """(fg, bg, bold, reverse) of one cell, read from the emulator behind the kit."""
-        with self._term._lock:
-            c = self._term._screen.buffer[y][x]
-            return str(c.fg), str(c.bg), bool(c.bold), bool(c.reverse)
+    def cells(self) -> list[Any]:
+        """Every cell on the screen with its colours and attributes (tui-test's ``Cell``)."""
+        return list(self._term._run(self._term._t.cells(0, 0, self.cols, self.rows)))
 
     def reverse_cells(self, glyphs: str) -> list[tuple[int, int]]:
         """Cells showing one of ``glyphs`` in reverse video (the marked map symbol)."""
-        out = []
-        with self._term._lock:
-            for y, line in enumerate(self._term._screen.display):
-                for x, ch in enumerate(line):
-                    if ch in glyphs and self._term._screen.buffer[y][x].reverse:
-                        out.append((x, y))
-        return out
+        return [(c.x, c.y) for c in self.cells() if c.char in glyphs and c.inverse]
 
-    def row_bg(self, y: int) -> str:
-        """Most common background on a row: a highlighted list row differs from the rows around it."""
-        counts: dict[str, int] = {}
-        with self._term._lock:
-            for x in range(self.cols):
-                bg = str(self._term._screen.buffer[y][x].bg)
-                counts[bg] = counts.get(bg, 0) + 1
-        return max(counts, key=lambda k: counts[k])
+    def modes(self) -> dict[str, bool]:
+        """The terminal modes the program has switched on or off (alternate screen, mouse reporting, paste)."""
+        return dict(self._term.state().modes)
 
-    def row_has_reverse_or_bg(self, y: int, base_bg: str) -> bool:
-        return self.row_bg(y) != base_bg
+    def mouse_mode(self) -> str:
+        return str(self._term.state().mouse_mode)
 
     def crumb(self) -> list[str]:
         return [t for t, _ in parse_crumb(self.lines()[0])]
@@ -276,6 +256,17 @@ class App:
             elif time.monotonic() - stamp >= quiet:
                 return
 
+    def toasts(self) -> bool:
+        """Whether a toast (a boxed ▌ column over the screen) is showing."""
+        return any("▌" in ln and "▐" not in ln for ln in self.lines())
+
+    def clear_toasts(self, timeout: float = 15.0) -> None:
+        """Wait for the toasts on screen to expire, so they do not sit over the text a test reads."""
+        end = time.monotonic() + timeout
+        while self.toasts() and time.monotonic() < end:
+            time.sleep(0.2)
+        self.settle(0.3)
+
     # -- acting ---------------------------------------------------------------------------------------------------
     def key(self, *names: str, settle: bool = True) -> None:
         for n in names:
@@ -301,12 +292,12 @@ class App:
         return x, y
 
     def hover(self, x: int, y: int) -> None:
-        self._term.mouse("move", x, y)
+        self._term.send_raw(sgr("move", x, y))
         self.settle(0.25)
         self._sense()
 
     def wheel(self, x: int, y: int, up: bool) -> None:
-        self._term.mouse("wheel_up" if up else "wheel_down", x, y)
+        self._term.send_raw(sgr("up" if up else "down", x, y))
         self.settle(0.25)
         self._sense()
 

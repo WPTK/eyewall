@@ -162,13 +162,16 @@ def test_every_footer_cell_acts_like_its_key(app: App, checks) -> None:  # type:
             prep = MAP_PREP.get(cell.key, []) if screen in ("Home", "Full map") else []
             home(app)
             app.key(*nav)
-            app.key("f", *prep)  # the map's zoom and pan persist, so start each comparison from a known view
+            mapped = screen in ("Home", "Full map")
+            if mapped:
+                app.key("f", *prep)  # the map's zoom and pan persist, so start each comparison from a known view
             base = sig(app)
             app.click(cell.mid, cell.y)
             by_click = sig(app)
             home(app)
             app.key(*nav)
-            app.key("f", *prep)
+            if mapped:
+                app.key("f", *prep)
             for _ in range(4):  # a toggle (follow, sort, hours) may have changed state; cycle back to the start
                 if sig(app) == base:
                     break
@@ -215,7 +218,7 @@ def test_every_link_opens_what_it_says(app: App, checks) -> None:  # type: ignor
         links = [
             (m.start(), y, m.group(0).strip())
             for y, ln in enumerate(app.lines())
-            if (m := re.search(r"\S.*›|Click here", ln))
+            if (m := re.search(r"[A-Za-z0-9][^│⠀-⣿]*›|Click here", ln))
         ]
         checks(f"{screen}: has a link", bool(links), app.dump())
         for x, y, text in links:

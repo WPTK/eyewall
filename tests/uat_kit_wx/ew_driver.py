@@ -1,9 +1,8 @@
 """The second eyewall adapter: runs the exe (or ``python -m eyewall``) on either terminal kit and reads the screen.
 
-``driver="wx"`` is the tui-test kit vendored here (``tests/uat_kit_wx``); ``driver="old"`` is the pywinpty/pyte kit in
-``tests/uat_kit``. Both expose the same surface (Terminal, send_keys, send_raw, click, screen, wait_exit), so a scenario
-is written once and run on both. Traps handled here: the exit code is a method on one kit and an attribute on the other;
-NO_COLOR is cleared; PYTHONUTF8=1; cells are 0-based.
+``driver="wx"`` is the tui-test kit vendored here (``tests/uat_kit_wx``), the only driver since the pywinpty/pyte kit was
+removed. Traps handled here: the exit code is a method on one kit version and an attribute on another; NO_COLOR is
+cleared; PYTHONUTF8=1; cells are 0-based.
 """
 
 from __future__ import annotations
@@ -34,12 +33,10 @@ RAW = {
 
 
 def terminal_class(driver: str) -> Any:
-    if driver == "wx":
-        from tests.uat_kit_wx import Terminal
-    elif driver == "old":
-        from tests.uat_kit import Terminal
-    else:
+    if driver != "wx":
         raise ValueError(driver)
+    from tests.uat_kit_wx import Terminal
+
     return Terminal
 
 
@@ -145,19 +142,8 @@ class Run:
 
     def inverse_marks(self, glyphs: str) -> list[tuple[int, int, str]]:
         """Cells showing one of ``glyphs`` in reverse video: the marked map symbol."""
-        out = []
-        if self.driver == "wx":
-            cells = self.t._run(self.t._t.cells(0, 0, self.cols, self.rows))
-            for c in cells:
-                if c.char in glyphs and c.inverse:
-                    out.append((c.x, c.y, c.char))
-        else:
-            with self.t._lock:
-                for y, line in enumerate(self.t._screen.display):
-                    for x, ch in enumerate(line):
-                        if ch in glyphs and self.t._screen.buffer[y][x].reverse:
-                            out.append((x, y, ch))
-        return out
+        cells = self.t._run(self.t._t.cells(0, 0, self.cols, self.rows))
+        return [(c.x, c.y, c.char) for c in cells if c.char in glyphs and c.inverse]
 
     # -- waiting
     def poll(self, pred: Callable[[Run], bool], timeout: float, step: float = 0.01) -> float | None:

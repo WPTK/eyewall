@@ -1,0 +1,174 @@
+{
+  "captures": [
+    {
+      "kind": "current_storms",
+      "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "params": null,
+      "status": 200,
+      "file": "current_storms/CurrentStorms.json",
+      "fetched_at": "2026-11-02T03:58:28+00:00",
+      "bytes": 24,
+      "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7"
+    },
+    {
+      "kind": "outlook_at",
+      "url": "https://tgftp.nws.noaa.gov/data/raw/ab/abnt20.knhc.two.at.txt",
+      "params": null,
+      "status": 200,
+      "file": "outlook_at/two_at.txt",
+      "fetched_at": "2026-11-02T03:58:28+00:00",
+      "bytes": 273,
+      "sha256": "4808d4017ae05f0668715fddad1fd4cc89b938d5124c65aa17e1465e01a7cead"
+    },
+    {
+      "kind": "outlook_ep",
+      "url": "https://tgftp.nws.noaa.gov/data/raw/ab/abpz20.knhc.two.ep.txt",
+      "params": null,
+      "status": 200,
+      "file": "outlook_ep/two_ep.txt",
+      "fetched_at": "2026-11-02T03:58:29+00:00",
+      "bytes": 719,
+      "sha256": "83fad0b0b253f520a05f2020dcced463e8436a5af78bbb73eea04206639ecfe0"
+    },
+    {
+      "kind": "outlook_cp",
+      "url": "https://tgftp.nws.noaa.gov/data/raw/ac/acpn50.phfo.two.cp.txt",
+      "params": null,
+      "status": 200,
+      "file": "outlook_cp/two_cp.txt",
+      "fetched_at": "2026-11-02T03:58:29+00:00",
+      "bytes": 770,
+      "sha256": "562a0740030ba67db80bfa2e280a8c159d8f33a3cdb255aaa75f780711d9c94a"
+    },
+    {
+      "kind": "alerts",
+      "url": "https://api.weather.gov/alerts/active",
+      "params": {
+        "event": "Hurricane Warning,Hurricane Watch,Tropical Storm Warning,Tropical Storm Watch,Storm Surge Warning,Storm Surge Watch,Hurricane Force Wind Warning,Extreme Wind Warning,Tropical Cyclone Statement"
+      },
+      "status": 200,
+      "file": "alerts/alerts_active.json",
+      "fetched_at": "2026-11-02T03:58:30+00:00",
+      "bytes": 208,
+      "sha256": "6717d04f2237db4c94465996a07374f12e061bb0981c71bf3021bca84bb43a52"
+    },
+    {
+      "kind": "ndbc_stations",
+      "url": "https://www.ndbc.noaa.gov/activestations.xml",
+      "params": null,
+      "status": 200,
+      "file": "ndbc_stations/activestations.xml",
+      "fetched_at": "2026-11-02T03:58:31+00:00",
+      "bytes": 272486,
+      "sha256": "7d77ecb123c5d87f0932b7e0ca9007c4d3b603f8bf8dead77ef93c8d37796b23"
+    },
+    {
+      "kind": "ndbc_latest",
+      "url": "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt",
+      "params": null,
+      "status": 200,
+      "file": "ndbc_latest/latest_obs.txt",
+      "fetched_at": "2026-11-02T03:58:32+00:00",
+      "bytes": 98532,
+      "sha256": "8c16f8c723c1016785b9e472a06738b7162536c9d508d99e0ff728e252581f3e"
+    },
+    {
+      "kind": "ndbc_5day",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.txt",
+      "params": null,
+      "status": 200,
+      "file": "ndbc_5day/41010_5day.txt",
+      "fetched_at": "2026-11-02T03:58:32+00:00",
+      "bytes": 67022,
+      "sha256": "ce5327ad2519ca91dea8304c6107e3b0a8b32233d30119b69e989a45b626f111"
+    },
+    {
+      "kind": "ndbc_spec",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.spec",
+      "params": null,
+      "status": 200,
+      "file": "ndbc_spec/41010_5day.spec",
+      "fetched_at": "2026-11-02T03:58:33+00:00",
+      "bytes": 16661,
+      "sha256": "9dff9adbc38394871fa430e2c805dd2532d9180e5111ed51dc9dbf5f9bf9c321"
+    },
+    {
+      "kind": "ndbc_supl",
+      "url": "https://www.ndbc.noaa.gov/data/5day2/41010_5day.supl",
+      "params": null,
+      "status": 200,
+      "file": "ndbc_supl/41010_5day.supl",
+      "fetched_at": "2026-11-02T03:58:34+00:00",
+      "bytes": 34224,
+      "sha256": "284db0f7544b83452b4fe6a86860756c75fa04cce9f244337dba9655bf6c06f5"
+    },
+    {
+      "kind": "coops_stations",
+      "url": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json",
+      "params": {
+        "type": "waterlevels"
+      },
+      "status": 200,
+      "file": "coops_stations/stations_waterlevels.json",
+      "fetched_at": "2026-11-02T03:58:34+00:00",
+      "bytes": 777388,
+      "sha256": "4f39d2b63ad9d921456ed3bfaee4a429711d49f756f763552e9ff30cb96f1490"
+    },
+    {
+      "kind": "coops_water_level",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "water_level",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "datum": "MLLW",
+        "date": "recent"
+      },
+      "status": 200,
+      "file": "coops_water_level/water_level_8721604.json",
+      "fetched_at": "2026-11-02T03:58:35+00:00",
+      "bytes": 53930,
+      "sha256": "4d101d3b16a6c9ed9c28bf79b01f182f9746a9ca572f77bedafb00370421519d"
+    },
+    {
+      "kind": "coops_wind",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "wind",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "date": "recent"
+      },
+      "status": 200,
+      "file": "coops_wind/wind_8721604.json",
+      "fetched_at": "2026-11-02T03:58:35+00:00",
+      "bytes": 60675,
+      "sha256": "70db44182396edd67a6a200fc38ec7e7363a6e71fd06d9f05d6016a9fd6a0389"
+    },
+    {
+      "kind": "coops_pressure",
+      "url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+      "params": {
+        "product": "air_pressure",
+        "station": "8721604",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+        "application": "eyewall",
+        "date": "recent"
+      },
+      "status": 200,
+      "file": "coops_pressure/air_pressure_8721604.json",
+      "fetched_at": "2026-11-02T03:58:36+00:00",
+      "bytes": 37500,
+      "sha256": "2e7800c97596de784a40cba244c928594e170569d0ee9c449ee220171b670067"
+    }
+  ],
+  "failed": []
+}

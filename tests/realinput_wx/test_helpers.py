@@ -1,16 +1,11 @@
-"""CI-safe tests of the real-input harness itself: no exe, no pseudo-console. They run in the default suite."""
+"""CI-safe tests of the real-input harness itself: no exe, no pseudo-console. They run in the default suite.
+
+The fault proxy and the isolation have their own tests in ``tests/uat_kit_wx``."""
 
 from __future__ import annotations
 
-import socket
-
-import pytest
-
-pyte = pytest.importorskip("pyte")
-
-from .app import help_tokens, parse_crumb, parse_footer, parse_help, sense_violations  # noqa: E402
-from .netproxy import Proxy  # noqa: E402
-from .walk import header_clock  # noqa: E402
+from .app import help_tokens, parse_crumb, parse_footer, parse_help, sense_violations
+from .walk import header_clock
 
 FOOTER = " +/- zoom  f fit  enter open  b buoys  t NHC text" + " " * 40 + "? help  ^p menu  q quit"
 
@@ -95,28 +90,9 @@ def test_sense_rules_catch_contradictions() -> None:
     assert any("grammar" in v for v in sense_violations(grammar, 80, 24))
 
 
-def test_pyte_roundtrip_of_an_sgr_screen() -> None:
-    screen = pyte.Screen(20, 3)
-    stream = pyte.Stream(screen)
-    stream.feed("\x1b[7m●\x1b[0m ok")
-    assert screen.display[0].startswith("● ok")
-    assert screen.buffer[0][0].reverse and not screen.buffer[0][2].reverse
-
-
 def test_header_clock_reads_the_replay_time() -> None:
     class Fake:
         def header_status(self) -> str:
             return "3 alerts  Tue 19 Aug 03:25Z adv 31  ▶ replay 300x"
 
     assert header_clock(Fake()) == "Tue 19 Aug 03:25Z"  # type: ignore[arg-type]
-
-
-def test_proxy_refuses_while_blocked_and_counts_requests() -> None:
-    p = Proxy(blocked=True)
-    try:
-        with socket.create_connection(("127.0.0.1", p.port), timeout=5) as s:
-            s.sendall(b"CONNECT example.invalid:443 HTTP/1.1\r\nHost: example.invalid:443\r\n\r\n")
-            assert s.recv(100).startswith(b"HTTP/1.1 503")
-        assert p.requests == ["CONNECT example.invalid:443 HTTP/1.1"]
-    finally:
-        p.close()

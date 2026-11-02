@@ -71,25 +71,37 @@ is nearly certain about, so a report means a real leftover.
 
 ## Real-input run on the built exe
 
-`tests/realinput` runs the built artifact, not the source, and drives it the way a terminal does. It starts the Windows
-exe from an empty directory with no repo, no venv and no config (`HOME`, `USERPROFILE`, `APPDATA` and the `XDG_*`
-variables point at empty temp directories) on a ConPTY pseudo-console (pywinpty), writes the bytes a terminal sends
-(key sequences, SGR mouse move, press and release, wheel) and reads the screen back through pyte, so Textual's real input
-parser runs. The driver is the vendored `tests/uat_kit/` (from wxbrief, commit noted in each file); `tests/realinput/app.py`
-is the eyewall adapter that knows where the crumb, footer and marks are.
+`tests/realinput_wx` runs the built artifact, not the source, and drives it the way a terminal does. It starts the
+Windows exe from an empty directory with no repo, no venv and no config (`HOME`, `USERPROFILE`, `APPDATA` and the `XDG_*`
+variables point at empty temp directories; `tests/uat_kit_wx/isolation.py` asserts this before every launch) on a ConPTY
+pseudo-console, writes the bytes a terminal sends (key sequences, SGR mouse move, press and release, wheel) and reads
+the screen and its colours back, so Textual's real input parser runs. The driver is `tui-test` (pinned in the dev
+extras) wrapped by `tests/uat_kit_wx/` (`ew_driver.py`, `scenarios.py`, and `fakenoaa.py`, a local proxy that serves the
+saved NOAA payloads to the exe); `tests/realinput_wx/app.py` is the eyewall adapter that knows where the crumb, footer
+and marks are.
 
 ```powershell
-$env:EYEWALL_EXE = "dist\eyewall.exe"     # a build from scriptsuild_exe.ps1, or any exe
-.venv\Scripts\python -m pytest tests/realinput -m realinput
-.venv\Scripts\python scripts/realinput.py --exe dist\eyewall.exe    # same, plus one results table (also saved as JSON)
+$env:EYEWALL_EXE = "dist\eyewall.exe"     # a build from scripts\build_exe.ps1, or any exe
+.venv\Scripts\python -m pytest tests/realinput_wx -m realinput
 ```
 
 Without `EYEWALL_EXE` the suite downloads the release asset `eyewall-windows-x86_64.exe` of `EYEWALL_RELEASE` (default
 `v0.9.0`) into an empty temp directory. The tests are marked `realinput` and do not run in the default suite or in CI;
-`tests/realinput/test_helpers.py` (the harness's own tests, no exe needed) does. The walkthrough alone takes about 12 minutes; the whole real-input run has not been timed yet. Results
-go to `EYEWALL_REAL_RESULTS` (default: the temp directory). Every walkthrough item prints PASS, FAIL, XFAIL or SKIP with the
-assertion that decided it. A defect found by the run is filed as an issue and listed in `tests/realinput/known.py`; its
-item is then expected to fail and the run fails when it starts passing, so the entry has to be deleted with the fix.
+`tests/realinput_wx/test_helpers.py` (the harness's own tests, no exe needed) does. The run is heavy: take the
+machine's heavy-job lock and keep 6 GB of RAM free. Results go to `EYEWALL_REAL_RESULTS` (default: the temp directory)
+and print as one table at the end. A defect found by the run is filed as an issue and its test is a strict
+`xfail` naming the issue (see `tests/realinput_wx/test_defects.py`): it fails the run when it starts passing, so the
+marker is removed with the fix.
+
+## Scripted checks that need no exe
+
+Offline, in the default suite: `tests/test_faults.py` breaks one NOAA host at a time (timeout, HTTP 500, bad JSON,
+empty body) under the real source, parsers and screens, and asserts an error or empty state, a retry path, no leaked
+exception or URL text, and that a slow cold start updates without a keypress; `tests/test_contrast.py` computes WCAG
+contrast for every text style the theme can draw on a dark and a light terminal; `tests/test_sizes.py` visits every
+screen at six sizes (80x24 up to 280x70). A check that fails today is a strict `xfail` naming its issue.
+`tests/test_real_corpus.py` replays the dated captures in `tests/fixtures/real/` through the parsers;
+`python scripts/capture_real.py` records a new dated capture from the live feeds (never run by the test suite).
 
 ## Configuration while developing
 

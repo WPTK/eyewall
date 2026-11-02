@@ -73,14 +73,6 @@ def test_live_resizes_recover(app: App, checks) -> None:  # type: ignore[no-unty
     checks.done()
 
 
-def _mode_state(raw: bytes) -> dict[str, str]:
-    state: dict[str, str] = {}
-    for m in re.finditer(rb"\x1b\[\?([\d;]+)([hl])", raw):
-        for mode in m.group(1).decode().split(";"):
-            state[mode] = m.group(2).decode()
-    return state
-
-
 def test_q_quits_cleanly(artifact: Path, checks) -> None:  # type: ignore[no-untyped-def]
     app = start_replay(artifact, pause=False)
     try:
@@ -90,21 +82,31 @@ def test_q_quits_cleanly(artifact: Path, checks) -> None:  # type: ignore[no-unt
         app.key("q")
         checks("q on a second screen does not quit", app.alive(), app.dump())
         home(app)
-        raw_before = bytes(app._term._raw)
-        modes = _mode_state(raw_before)
+        modes = app.modes()
         checks(
             "terminal modes: the app turned on mouse reporting and the alt screen",
-            {"1006", "1049"} <= {m for m, s in modes.items() if s == "h"},
-            str(modes),
+            modes.get("alternate_screen") is True and app.mouse_mode() != "none",
+            f"{modes}, mouse {app.mouse_mode()}",
         )
         app.key("q", settle=False)
         code = app.wait_exit(20)
         checks("q on Home exits with code 0", code == 0, f"exit code {code}")
         app.settle(1.0)
-        left_on = sorted(m for m, s in _mode_state(bytes(app._term._raw)).items() if s == "h")
-        checks("exit leaves no terminal mode on (mouse, alt screen, focus, paste)", not left_on, f"still on: {left_on}")
+        after = app.modes()
+        left_on = sorted(m for m in ("alternate_screen", "bracketed_paste", "application_cursor_keys") if after.get(m))
+        if app.mouse_mode() != "none":
+            left_on.append(f"mouse:{app.mouse_mode()}")
+        if not after.get("cursor_visible"):
+            left_on.append("cursor hidden")
+        checks(
+            "exit leaves no terminal mode on (mouse, alt screen, paste) and the cursor back", not left_on, f"{left_on}"
+        )
         alive = [p for p in family if psutil.pid_exists(p) and psutil.Process(p).status() != psutil.STATUS_ZOMBIE]
-        checks("exit leaves no process behind", not alive, f"still running: {alive}")
+        checks(
+            "exit leaves no process behind",
+            not alive,
+            f"still running: {[(p, psutil.Process(p).name(), psutil.Process(p).status()) for p in alive]}",
+        )
     finally:
         app.close()
     checks.done()

@@ -17,6 +17,8 @@ import pytest
 from .app import App, help_tokens, parse_help
 from .walk import header_clock, home, is_paused, sig, start_replay, ticks
 
+# Keys the help lists once, under Anywhere, that the plan also presses from a storm page.
+FROM_ANYWHERE = {("Storm", "g")}
 KEY_SECTIONS = {"Map", "Storm", "NHC text", "Buoys and gauges", "Station", "Pictures", "Anywhere", "Replay"}
 NAMES = {"enter": "enter", "esc": "escape", "backspace": "backspace", "tab": "tab", "space": "space", "^p": "ctrl+p"}
 
@@ -324,7 +326,7 @@ def test_plan_covers_the_help(app: App, checks) -> None:  # type: ignore[no-unty
     for p in PLAN:
         checks(
             f"plan key [{p.section}] {p.token} is in the help",
-            (p.section, norm(p.token)) in advertised,
+            (p.section, norm(p.token)) in advertised or (p.section, p.token) in FROM_ANYWHERE,
             "the test presses a key the help does not list",
         )
     checks.done()
