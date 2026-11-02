@@ -49,6 +49,7 @@ dev = [
     # real-input suite (tests/realinput, tests/uat_kit): test-only, never runtime dependencies
     "pyte>=0.8.2",
     "pywinpty>=2.0; sys_platform == 'win32'",
+    "tui-test==0.1.1",  # tests/uat_kit_wx, the second driver (wxbrief e01891b)
 ]
 
 [project.urls]
