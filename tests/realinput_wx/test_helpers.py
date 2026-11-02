@@ -38,13 +38,14 @@ def test_crumb_segments_and_columns() -> None:
 HELP = [
     "                     ╭──────────────────────────────╮",
     "                     │  Map                         │",
-    "                     │  j  k  Enter    previous or next storm; open its page │",
-    "                     │  1  2  3  a     Atlantic, East Pacific                │",
-    "                     │  +/-            zoom in                  │",
+    "                     │  j  k  Enter            previous or next storm; open its page │",
+    "                     │  1  2  3  a             Atlantic, East Pacific                │",
+    "                     │  +/-                    zoom in                  │",
+    "                     │  Left  Right  Up  Down  pan the map",
     "                     │  Anywhere                    │",
-    "                     │  Esc  Backspace   go back one screen          │",
-    "                     │                 and a continuation          │",
-    "                     │  [  ]           previous or next advisory ▌ toast text",
+    "                     │  Esc  Backspace         go back one screen          │",
+    "                     │                         and a continuation          │",
+    "                     │  [  ]                   previous or next advisory ▌ toast text",
 ]
 
 
@@ -54,6 +55,7 @@ def test_help_rows_and_tokens() -> None:
         ("Map", "j  k  Enter"),
         ("Map", "1  2  3  a"),
         ("Map", "+/-"),
+        ("Map", "Left  Right  Up  Down"),
         ("Anywhere", "Esc  Backspace"),
         ("Anywhere", "[  ]"),
     ]
