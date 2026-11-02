@@ -1,24 +1,13 @@
-"""Quiet-day / offline run on the built exe: live mode (no flags) with the network cut by a local proxy, then restored."""
+"""Quiet-day / offline run on the built exe: live mode (no flags) with the network cut by the fault proxy, then restored."""
 
 from __future__ import annotations
 
 import re
 import time
-from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
 from .app import App
-from .netproxy import Proxy
 from .walk import home
-
-
-@pytest.fixture
-def proxy() -> Iterator[Proxy]:
-    p = Proxy(blocked=True)
-    yield p
-    p.close()
 
 
 def _failing(app: App) -> int:
@@ -26,10 +15,13 @@ def _failing(app: App) -> int:
     return int(m.group(1)) if m else 0
 
 
-def test_offline_start_walk_and_recovery(artifact: Path, proxy: Proxy, checks) -> None:  # type: ignore[no-untyped-def]
-    app = App(artifact, [], 120, 30, proxy=proxy.url)
+def test_offline_start_walk_and_recovery(artifact: Path, fake_noaa, internet, checks) -> None:  # type: ignore[no-untyped-def]
+    fake = fake_noaa(default="real")  # tunnels to the real NOAA once unblocked, so the recovery is the real one
+    fake.blocked = True  # the network is cut: every CONNECT answers 503
+    app = App(artifact, [], 120, 30, fake=fake)
     try:
         app.wait_text("Home", 90)
+        app.wait_for(lambda a: _failing(a) >= 1 or "offline" in a.lines()[0], 120, "the first fetch to fail")
         app.settle(2.0)
         text = app.text()
         checks(
@@ -43,12 +35,13 @@ def test_offline_start_walk_and_recovery(artifact: Path, proxy: Proxy, checks) -
         head = app.lines()[0]
         checks("offline start: the top bar reports failing feeds", _failing(app) >= 1 or "offline" in head, head)
         checks("offline start: top bar does not claim the data is ok", not re.search(r"data ok|● ", head), head)
+        counted = _failing(app)  # a dialog blanks the top bar, so count first
         app.key("D")
         failing_rows = [ln for ln in app.lines() if "✕" in ln]
         checks(
             "offline: the Feeds dialog lists as many failing feeds as the top bar counts",
-            len(failing_rows) == _failing(app),
-            f"{len(failing_rows)} rows vs top bar {_failing(app)}\n{app.dump()}",
+            len(failing_rows) == counted,
+            f"{len(failing_rows)} rows vs top bar {counted}\n{app.dump()}",
         )
         home(app)
         for keys, expect, label in (
@@ -77,8 +70,8 @@ def test_offline_start_walk_and_recovery(artifact: Path, proxy: Proxy, checks) -
         home(app)
         checks("offline: no contradictions", not app.violations, "\n".join(app.violations))
         # back online
-        before = len(proxy.requests)
-        proxy.blocked = False
+        before = len(fake.log)
+        fake.blocked = False
         app.key("r")
         end = time.monotonic() + 75
         while time.monotonic() < end and _failing(app):
@@ -86,7 +79,7 @@ def test_offline_start_walk_and_recovery(artifact: Path, proxy: Proxy, checks) -
         checks(
             "recovery: after the network returns and r is pressed, no feed is failing within 75 s",
             _failing(app) == 0,
-            f"{len(proxy.requests) - before} requests went out after unblocking; top bar: {app.lines()[0]!r}",
+            f"{len(fake.log) - before} requests went out after unblocking; top bar: {app.lines()[0]!r}",
         )
         app.key("D")
         checks("recovery: Feeds dialog shows no failing feed", not any("✕" in ln for ln in app.lines()), app.dump())

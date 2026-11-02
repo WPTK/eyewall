@@ -1,6 +1,6 @@
 """Second-driver classification scenarios for the eyewall first-run suspicions.
 
-usage: python -m tests.uat_kit_wx.scenarios SCENARIO [--driver wx|old|both] [--exe PATH] [--out DIR]
+usage: python -m tests.uat_kit_wx.scenarios SCENARIO [--driver wx] [--exe PATH] [--out DIR]
 
 Takes the shared lock, launches the exe (copied to a fresh temp dir) behind a fake NOAA proxy where needed, and writes
 screen dumps and a facts JSON to ``--out``. Test-only: nothing here changes application code.
@@ -637,12 +637,12 @@ def s11_alerts_count(driver: str, exe: Path, out: Path) -> dict[str, Any]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("scenario")
-    ap.add_argument("--driver", default="both")
+    ap.add_argument("--driver", default="wx", choices=["wx"])
     ap.add_argument("--exe", type=Path, default=DEFAULT_EXE)
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--n", type=int, default=10)
     a = ap.parse_args()
-    drivers = ["wx", "old"] if a.driver == "both" else [a.driver]
+    drivers = [a.driver]
     results: list[Any] = []
     with heavy_lock(f"uat-kit second driver: {a.scenario}"):
         main_prefix = [str(MAIN_PY), "-m", "eyewall"]

@@ -7,6 +7,7 @@ repo, a venv of ours or a config: only the wheel and an empty directory.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -16,6 +17,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from tests.uat_kit_wx.isolation import assert_isolated, isolated_env
 
 from .app import App
 from .conftest import COLLECTOR
@@ -42,6 +45,14 @@ def wheel() -> Iterator[Path]:
     )
     yield next(out.glob("eyewall-*.whl"))
     shutil.rmtree(out, ignore_errors=True)
+
+
+def isolated(work: Path) -> dict[str, str]:
+    """The caller's environment with every writable location moved under ``work``, asserted before the launch."""
+    env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME")}
+    env.update(PYTHONUTF8="1", **isolated_env(work))
+    assert_isolated(env, work)
+    return env
 
 
 def _run(
@@ -72,19 +83,20 @@ def test_wheel_installs_and_runs_on_every_python(wheel: Path, checks, note) -> N
             if r.returncode:
                 continue
             exe = venv / "Scripts" / "eyewall.exe"
-            r = _run([str(exe), "--version"], work)
+            iso = isolated(work)
+            r = _run([str(exe), "--version"], work, iso)
             checks(
                 f"py{version}: eyewall --version",
                 r.returncode == 0 and re.match(r"eyewall \d+\.\d+\.\d+", r.stdout) is not None,
                 r.stdout + r.stderr,
             )
-            r = _run([str(exe), "--demo", "--summary"], work)
+            r = _run([str(exe), "--demo", "--summary"], work, iso)
             checks(
                 f"py{version}: eyewall --demo --summary prints sentences",
                 r.returncode == 0 and "Erin" in r.stdout,
                 (r.stdout + r.stderr)[-400:],
             )
-            r = _run([str(exe), "--selftest"], work)
+            r = _run([str(exe), "--selftest"], work, iso)
             checks(
                 f"py{version}: eyewall --selftest",
                 r.returncode == 0 and "selftest ok" in r.stdout,
@@ -98,13 +110,14 @@ def test_wheel_installs_and_runs_on_every_python(wheel: Path, checks, note) -> N
                     "import importlib.resources as r, eyewall; p=r.files('eyewall'); print((p/'demo'/'erin2025').is_dir(), (p/'mapdata').is_dir())",
                 ],
                 work,
+                iso,
             )
             checks(
                 f"py{version}: package data (demo recording, map data) is inside the wheel",
                 r.stdout.split() == ["True", "True"],
                 r.stdout + r.stderr,
             )
-            app = App(exe, ["--demo"], 120, 30, cwd=work)
+            app = App(exe, ["--demo"], 120, 30, cwd=work, state_root=work / "app")
             try:
                 app.wait_text("Erin", 90)
                 app.settle(1.5)

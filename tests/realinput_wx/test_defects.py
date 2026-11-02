@@ -112,3 +112,15 @@ def test_summary_exits_1_when_a_feed_could_not_be_fetched(exe, fake_noaa, intern
     require(re.search(r"Erin", p.stdout), f"the summary did not run: exit {p.returncode}\n{p.stdout}\n{p.stderr}")
     assert p.returncode == 1, f"{feed} refused: exit {p.returncode}, stdout says:\n{p.stdout}"
     assert re.search(r"unavailable|could not|failed", p.stdout + p.stderr, re.I), f"{feed} refused and nothing says so"
+
+
+@xfail(146)
+def test_a_16_colour_terminal_is_drawn_in_16_colours(exe) -> None:
+    """``TERM=xterm`` with no ``COLORTERM`` is a 16-colour terminal: the app must not paint truecolor onto it."""
+    with Run("wx", exe, ["--demo"], 120, 30, env={"TERM": "xterm", "COLORTERM": ""}) as r:
+        require(r.wait_text("Erin", 60), r.dump())
+        r.settle(1.5)
+        cells = r.t._run(r.t._t.cells(0, 0, r.cols, r.rows))
+        used = {str(c.fg) for c in cells} | {str(c.bg) for c in cells}
+        used.discard("default")
+        assert len(used) <= 16, f"{len(used)} distinct colours on a 16-colour terminal, e.g. {sorted(used)[:6]}"

@@ -19,6 +19,7 @@ def start_replay(
     app.settle(1.0)
     if pause:
         set_paused(app, True)
+    app.clear_toasts()
     return app
 
 
@@ -49,7 +50,10 @@ def ticks(app: App, seconds: float = 3.0) -> tuple[str, str]:
 def home(app: App) -> None:
     """Back to the first screen with no dialog open, by Esc (what a person does)."""
     for _ in range(10):
-        if app.crumb() == ["Home"] and not app.has_dialog():
+        if (
+            app.crumb() == ["Home"] and not app.has_dialog() and "esc back" not in app.lines()[-1]
+        ):  # the full map and the map focus show Home too
+            app.clear_toasts()
             return
         app.key("escape")
     raise AssertionError("could not get back to Home with Esc\n" + app.dump())

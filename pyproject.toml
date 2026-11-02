@@ -46,10 +46,8 @@ dev = [
     "vulture>=2.14",
     "mypy>=1.13",
     "build>=1,<2",
-    # real-input suite (tests/realinput, tests/uat_kit): test-only, never runtime dependencies
-    "pyte>=0.8.2",
-    "pywinpty>=2.0; sys_platform == 'win32'",
-    "tui-test==0.1.1",  # tests/uat_kit_wx, the second driver (wxbrief e01891b)
+    # real-input suite (tests/realinput_wx, tests/uat_kit_wx): test-only, never runtime dependencies
+    "tui-test==0.1.1",  # ConPTY terminal driver and screen reader (wxbrief e01891b)
 ]
 
 [project.urls]
