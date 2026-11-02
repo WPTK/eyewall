@@ -26,6 +26,7 @@ from tests.uat.inventory.worlds import SCREEN_NAMES, launch
 SCREENS = tuple(n for n in SCREEN_NAMES if n not in ("palette", "search"))
 PROFILES = {"dark": (0, 0, 0), "light": (255, 255, 255)}
 TEXT, DECORATIVE = 4.5, 3.0
+IMAGE_CELLS = set("▀▄█ ")  # half and full blocks: how a picture is drawn without graphics support
 RGB = tuple[int, int, int]
 Style = tuple[RGB | None, RGB | None, bool, str]  # foreground, background, dim, kind ("text" or "glyph")
 
@@ -95,6 +96,8 @@ async def _collect() -> dict[Style, str]:
                         st = seg.style
                         text = seg.text.strip()
                         if not text or st is None or st.color is None:
+                            continue
+                        if set(text) <= IMAGE_CELLS:  # picture pixels (half-cell fallback), not text
                             continue
                         kind = "text" if any(ch.isalnum() for ch in text) else "glyph"
                         key: Style = (_rgb(st.color), _rgb(st.bgcolor) if st.bgcolor else None, bool(st.dim), kind)
