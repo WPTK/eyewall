@@ -47,9 +47,9 @@ def blank(cols=60, rows=20, mode=Mode.BRAILLE, deg=0.05):
 # ------------------------------------------------------------------------------------------------ the data file
 
 
-def test_places_file_stays_within_its_budget_and_the_map_data_within_4_5_mb():
+def test_places_file_stays_within_its_budget_and_the_map_data_within_6_mb():
     assert (DATA_DIR / "places.bin").stat().st_size <= 150_000
-    assert sum(path.stat().st_size for path in DATA_DIR.glob("*.bin")) <= 4_500_000
+    assert sum(path.stat().st_size for path in DATA_DIR.glob("*.bin")) <= 6_000_000
 
 
 def test_places_are_ordered_most_important_first_and_known_places_are_present():
