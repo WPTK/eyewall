@@ -87,26 +87,57 @@ def area_count(outlook: Outlook | None, enabled: Sequence[str]) -> int:
     return 0 if outlook is None else len(_areas(outlook, enabled))
 
 
-def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str]) -> list[Words]:
+def _summaries(outlook: Outlook, enabled: Sequence[str], covered: set[str]) -> list[Words]:
+    """NHC's own summary for each enabled basin that has no area, as issued, once per basin. One text can speak for two
+    basins (the East and Central Pacific): each is judged on its own, so an area in one leaves the other's quiet said.
+    With more than one basin shown, each line leads with its name, so `not expected` is not read for the wrong ocean."""
+    found: dict[str, tuple[int, str]] = {}
+    for index, text in enumerate(outlook.texts):
+        summary = collapse(text.summary)
+        if not summary or text.areas:
+            continue
+        for code in text_basins(text):
+            name = BASIN_NAMES[code]
+            if code in enabled and name not in covered:
+                found.setdefault(name, (index, summary))
+    named = len(found) > 1 or bool(covered)
+    order = [BASIN_NAMES[c] for c in ("AL", "EP", "CP")]
+    return [
+        Words(f"{name}: {found[name][1]}" if named else found[name][1], (f"outlook.texts[{found[name][0]}].summary",))
+        for name in order
+        if name in found
+    ]
+
+
+def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str], *, summaries: bool = True) -> list[Words]:
     """`NHC is watching 1 area in the Atlantic: a 70% chance it forms within 7 days, and 30% within 2 days.`
 
-    With several areas, a lead sentence and one line each. With none, the outlook's own summary as issued.
+    With several areas, a lead sentence and one line each. A basin with none says so in NHC's own summary, after the
+    areas of the others.
     """
     if outlook is None:
         return [Words("Waiting for the first outlook.")]
     areas = _areas(outlook, enabled)
-    if len(areas) == 1:
-        return [Words(f"NHC is watching 1 area{_in(areas[0])}: {_chances(areas[0])}.", areas[0].sources)]
-    if areas:
-        lead = Words(f"NHC is watching {len(areas)} areas.", ("outlook.gis.systems",))
-        return [lead, *(Words(f"{a.label}: {_chances(a)}.", a.sources) for a in areas)]
     out: list[Words] = []
-    seen: set[str] = set()
-    for index, text in enumerate(outlook.texts):
-        if not set(text_basins(text)) & set(enabled):
-            continue
-        summary = collapse(text.summary)
-        if summary and summary not in seen:
-            seen.add(summary)
-            out.append(Words(summary, (f"outlook.texts[{index}].summary",)))
+    if len(areas) == 1:
+        out = [Words(f"NHC is watching 1 area{_in(areas[0])}: {_chances(areas[0])}.", areas[0].sources)]
+    elif areas:
+        lead = Words(f"NHC is watching {len(areas)} areas.", ("outlook.gis.systems",))
+        out = [lead, *(Words(f"{a.label}: {_chances(a)}.", a.sources) for a in areas)]
+    if summaries:
+        out += _summaries(outlook, enabled, {a.basin for a in areas})
     return out or [Words("No outlook has been issued yet.")]
+
+
+OUTLOOK_OLD = "The outlook could not be updated, so what follows may be out of date."
+
+
+def current_sentences(
+    outlook: Outlook | None, enabled: Sequence[str], *, old: bool, summaries: bool = True
+) -> list[str]:
+    """The outlook in sentences. When its feed has failed or stopped, a warning leads and only the areas it named
+    follow: `not expected` is not said on the strength of an answer that may be stale."""
+    if old and outlook is not None:
+        areas = outlook_sentences(outlook, enabled, summaries=False) if area_count(outlook, enabled) else []
+        return [OUTLOOK_OLD, *(w.text for w in areas)]
+    return [w.text for w in outlook_sentences(outlook, enabled, summaries=summaries)]

@@ -364,9 +364,14 @@ class NhcClient:
         return tuple(found)
 
     async def outlook_basin(self, basin: Basin, *, fallback: bool = False) -> OutlookText | None:
-        """One basin's outlook text; None when NOAA has none. A failed fetch or an unparsable text raises."""
+        """One basin's outlook text; None when NOAA serves none (404). A failed fetch, an empty 200 or an unparsable
+        text raises: an outlook that said nothing is not an outlook that said "nothing expected"."""
         response = await self.fetch_outlook_text(basin, fallback=fallback)
-        return parse_two(response.value) if response.value else None
+        if response.value is None:
+            return None
+        if not response.value.strip():
+            raise ParseError(f"the {basin.value} outlook came back empty")
+        return parse_two(response.value)
 
     async def outlook_gis(self) -> OutlookGis:
         """The outlook areas. A zip NOAA does not serve (404) is no areas; any other failure raises."""

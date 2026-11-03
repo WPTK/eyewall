@@ -257,7 +257,7 @@ async def test_a_long_outlook_is_counted_on_the_strip_and_opens_on_click(monkeyp
     sentences = [Words("NHC is watching 6 areas.")] + [
         Words(f"Area {i}: a {10 * i}% chance it forms within 2 days and {20 * i}% within 7 days.") for i in range(1, 7)
     ]
-    monkeypatch.setattr("eyewall.ui.words.outlook.outlook_sentences", lambda *a: sentences)
+    monkeypatch.setattr("eyewall.ui.words.outlook.outlook_sentences", lambda *a, **k: sentences)
     monkeypatch.setattr("eyewall.ui.words.outlook.area_count", lambda *a: 3)
     app = scripted_app()
     async with running(app, (80, 24)) as pilot:

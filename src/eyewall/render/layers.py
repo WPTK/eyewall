@@ -201,7 +201,6 @@ EMPTY_SCENE = MapScene()
 
 # ----------------------------------------------------------------------------------------------------------- drawing
 
-_RING_STEPS = 12  # points per quadrant of a wind radii outline, one every 7.5 degrees of bearing
 _RISK_SHADES = {"low": Shade.HATCH_LIGHT, "medium": Shade.HATCH_MEDIUM, "high": Shade.HATCH_HEAVY}
 _WARNING_ORDER = (
     WatchWarning.TROPICAL_STORM_WATCH,
@@ -218,18 +217,6 @@ class _Label(NamedTuple):
     color: str
     bold: bool
     centered: bool
-
-
-def _radii_outline(lat: float, lon: float, quadrants: QuadrantRadii) -> list[LatLon]:
-    """A closed outline made of one quarter-circle arc per quadrant. Where neighbouring quadrants differ, the outline
-    steps along the radial line between them, as the NHC wind radii polygons do. Coordinates are rounded to a
-    meter so the result does not depend on the platform's trigonometry."""
-    points: list[LatLon] = []
-    for q, radius in enumerate(quadrants):
-        for step in range(_RING_STEPS + 1):
-            dest = destination((lat, lon), q * 90.0 + step * 90.0 / _RING_STEPS, max(0.0, radius))
-            points.append((round(dest[0], 5), round(dest[1], 5)))
-    return points
 
 
 def _centroid(ring: Sequence[tuple[float, float]]) -> tuple[float, float]:
@@ -317,12 +304,23 @@ def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSt
 
 
 def _draw_radii(canvas: Canvas, view: Viewport, storm: StormScene, style: MapStyle) -> None:
+    if not storm.radii:
+        return
+    from eyewall.radii_shape import radii_lines  # pyproj and shapely take 0.4 s to import: only a map with radii pays
+
     for radii in storm.radii:
         for knots, quadrants in ((34, radii.kt34), (50, radii.kt50), (64, radii.kt64)):
-            if quadrants is None or not any(quadrants):
+            if quadrants is None:
                 continue
-            outline = view.project_path(_radii_outline(radii.lat, radii.lon, quadrants))
-            canvas.polyline(outline, category_color(knots), Priority.RADII, dash=RING_PATTERNS[knots], closed=True)
+            for line in radii_lines((radii.lat, radii.lon), quadrants):
+                closed = len(line) > 3 and line[0] == line[-1]
+                canvas.polyline(
+                    view.project_path(line),
+                    category_color(knots),
+                    Priority.RADII,
+                    dash=RING_PATTERNS[knots],
+                    closed=closed,
+                )
 
 
 def _draw_stations(
