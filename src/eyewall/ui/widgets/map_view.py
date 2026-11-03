@@ -108,6 +108,13 @@ class MapView(Widget, can_focus=True):
             super().__init__()
             self.mark = mark
 
+    class MarkSelected(Message):
+        """A click chose a storm that was not the selected one; the screen selects it and its list row follows."""
+
+        def __init__(self, mark: Mark) -> None:
+            super().__init__()
+            self.mark = mark
+
     def __init__(
         self,
         *,
@@ -128,6 +135,8 @@ class MapView(Widget, can_focus=True):
         self._strips: list[Strip] | None = None
         self._hits: Hits = EMPTY_HITS
         self.focused_mark: Mark | None = None
+        self.selected_mark: Mark | None = None  # the storm the list has selected: bold and underlined
+        self.selectable: frozenset[str] = frozenset()  # listed storms: click selects, next opens
         self._press: tuple[int, int] | None = None  # where the last drag step was, while the button is held
         self._dragged = False
 
@@ -202,9 +211,11 @@ class MapView(Widget, can_focus=True):
         strips = canvas_strips(canvas, view.cols)
         if self.focused_mark is not None and self.focused_mark not in self._hits.order:
             self.focused_mark = None  # the mark left the map
-        cell = None if self.focused_mark is None else self._hits.cell_of(self.focused_mark)
-        if cell is not None and 0 <= cell[1] < len(strips):
-            strips[cell[1]] = reverse_cell(strips[cell[1]], cell[0])  # reverse video survives NO_COLOR
+        for mark, ring in ((self.selected_mark, False), (self.focused_mark, True)):
+            cell = None if mark is None else self._hits.cell_of(mark)
+            if cell is not None and 0 <= cell[1] < len(strips):
+                # reverse video (the focus ring) and underline survive NO_COLOR; the ring wins on the same mark
+                strips[cell[1]] = reverse_cell(strips[cell[1]], cell[0], ring=ring)
         return strips
 
     def _rows(self) -> list[Strip]:
@@ -307,7 +318,7 @@ class MapView(Widget, can_focus=True):
             return
         marks = self.hits.at(event.x, event.y)
         if len(marks) == 1:
-            self._open(marks[0])
+            self._activate(marks[0])
         elif marks:
             self._choose(marks)
         else:
@@ -350,6 +361,26 @@ class MapView(Widget, can_focus=True):
         self.refresh()
         self.post_message(self.Changed())  # the legend names the marked mark
 
+    def set_selected(self, mark: Mark | None) -> None:
+        """Highlight the mark of the row the list has selected."""
+        if mark != self.selected_mark:
+            self.selected_mark = mark
+            self._show()
+
+    def focus_mark(self, mark: Mark | None) -> None:
+        """Put the focus ring on a mark (or take it off)."""
+        self.focused_mark = mark
+        self._show()
+
+    def _activate(self, mark: Mark) -> None:
+        """A click: where a list selects, the first click on a storm selects it and the next opens it."""
+        if mark.kind == "storm" and mark.id in self.selectable and mark != self.selected_mark:
+            self.selected_mark = mark
+            self._show()
+            self.post_message(self.MarkSelected(mark))
+        else:
+            self._open(mark)
+
     def _open(self, mark: Mark) -> None:
         self.focused_mark = mark
         self._show()
@@ -358,7 +389,7 @@ class MapView(Widget, can_focus=True):
     def _choose(self, marks: tuple[Mark, ...]) -> None:
         def picked(mark: Mark | None) -> None:
             if mark is not None:
-                self._open(mark)
+                self._activate(mark)
 
         self.app.push_screen(MarkChooser([(m, self.describe(m)) for m in marks]), picked)
 
