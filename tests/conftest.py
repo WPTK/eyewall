@@ -58,3 +58,18 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "live" in item.keywords:
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _terminal_state_stays_put() -> Iterator[None]:
+    """`cli.main` applies the detected terminal (Textual's colour system, NO_COLOR) for the process; a test that goes
+    through it must not change how every later test in the worker renders."""
+    from textual import constants
+
+    colour_system, no_color = constants.COLOR_SYSTEM, os.environ.get("NO_COLOR")
+    yield
+    setattr(constants, "COLOR_SYSTEM", colour_system)  # noqa: B010 (Final in the stubs)
+    if no_color is None:
+        os.environ.pop("NO_COLOR", None)
+    else:
+        os.environ["NO_COLOR"] = no_color

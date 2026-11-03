@@ -138,6 +138,7 @@ eyewall --basin AL                # only the Atlantic; repeat the flag for EP an
 eyewall --summary                 # print what is happening in plain sentences, then exit
 eyewall --glyphs ascii            # plain symbols for terminals that cannot draw braille
 eyewall --headless --until +12h   # no interface; print events as they happen
+eyewall --diagnose                # print versions, terminal abilities, file paths and feed reachability for a bug report
 ```
 
 Other flags: `--config PATH` and `--no-config` for the settings file, `--state-dir DIR` for where seen events are kept,
