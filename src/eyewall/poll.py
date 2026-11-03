@@ -19,7 +19,8 @@ succeeding or stop happening, or when the source had to answer from its disk cac
 failed poll the delay doubles per consecutive failure up to `backoff_max` and never drops below the normal
 interval. A server that says 429 or 5xx counts as a failure even when the disk cache answered for it, and its
 Retry-After sets a floor on the wait. `refresh()` wakes the loop and makes every feed due, but never sooner than
-`REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. A feed that runs past
+`REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. It does cut through the
+failure backoff, but not a Retry-After. A feed that runs past
 `FEED_DEADLINE` seconds is cut off. A tick polls storms first, then the other due feeds together, so one hung host
 costs only its own deadline.
 
@@ -140,7 +141,8 @@ class _FeedState:
     from_cache: bool = False
     polls: int = 0
     last_attempt: float | None = None
-    not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
+    not_before: float = 0.0  # a Retry-After or backoff window that the watchlist and away-mode requests may not shorten
+    limited_until: float = 0.0  # a server's own Retry-After: not even the refresh key may ask before it
     requested: float | None = (
         None  # when a refresh asked for this feed's next poll, if it did so during the current one
     )
@@ -313,10 +315,11 @@ class Poller:
 
     def refresh(self, *, throttled: bool = False) -> None:
         """Make every feed due now and wake the loop. With `throttled` (the refresh key on live data) a feed attempted
-        less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead."""
+        less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead. The key skips our own failure
+        backoff (the user asked) but never a server's Retry-After."""
         now = self.clock.monotonic()
         for state in self._feeds.values():
-            floor = state.not_before
+            floor = state.limited_until
             if throttled and state.last_attempt is not None:
                 floor = max(floor, state.last_attempt + REFRESH_MIN_GAP)
             if throttled and floor > now:
@@ -407,6 +410,7 @@ class Poller:
             wait = max(wait, min(retry_after, self.config.backoff_max))
         state.next_at = self.clock.monotonic() + wait
         state.not_before = state.next_at if (state.failures or retry_after) else 0.0
+        state.limited_until = state.next_at if retry_after else 0.0
         if state.requested is not None and not state.not_before:  # asked for again while this poll was running
             state.next_at = min(state.next_at, max(state.requested, self.clock.monotonic()))
         shown: list[Event] = []

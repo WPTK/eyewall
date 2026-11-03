@@ -12,6 +12,7 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import EventKind
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
+from eyewall.net import RateLimited
 from eyewall.poll import (
     FALLBACK_ATTEMPTS,
     PRODUCT_ATTEMPTS,
@@ -613,16 +614,35 @@ class Boom:
         raise EOFError("truncated")
 
 
-async def test_the_refresh_key_cannot_shorten_a_backoff_window():
+async def test_the_refresh_key_cuts_through_a_failure_backoff_but_keeps_the_minimum_gap():
     poller, source, _, clock, _ = build()
     source.fail.add("storms")
     await poller.tick()
     window = poller._feeds[protocol.STORMS].next_at - clock.monotonic()
     assert window > 2 * REFRESH_MIN_GAP
+    source.fail.clear()  # the network is back; the user presses r
+    clock.advance(REFRESH_MIN_GAP / 3)
+    poller.refresh(throttled=True)
+    assert protocol.STORMS not in poller.due()  # too soon after the last attempt
+    clock.advance(REFRESH_MIN_GAP)
+    assert protocol.STORMS in poller.due()  # long before the backoff window ends
+    await poller.tick()
+    assert poller.freshness(protocol.STORMS).state is FreshnessState.FRESH
+
+
+async def test_the_refresh_key_cannot_shorten_a_retry_after():
+    poller, source, _, clock, _ = build()
+
+    async def limited():
+        source.calls.append("storms")
+        raise RateLimited("fake://storms", 900.0)
+
+    source.storms = limited
+    await poller.tick()
     clock.advance(REFRESH_MIN_GAP + 1)
     poller.refresh(throttled=True)
     assert protocol.STORMS not in poller.due()
-    clock.advance(window)
+    clock.advance(900.0)
     assert protocol.STORMS in poller.due()
 
 

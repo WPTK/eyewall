@@ -173,3 +173,22 @@ def test_a_live_summary_without_the_storms_feed_exits_one(monkeypatch, capsys):
     monkeypatch.setattr(headless, "run_live", fake)
     assert cli.main(["--no-config", "--summary"]) == 1
     assert capsys.readouterr().out.splitlines() == ["Storm data unavailable."]
+
+
+async def test_a_failed_optional_feed_is_named_even_when_no_station_line_could_say_so():
+    result = await erin()
+    lines = summary_lines(result.store, PRESETS["us"], result.ended, EDT, frozenset({"tides", "alerts", "satellite"}))
+    assert "Water level data unavailable." in lines
+    assert "Weather alert data unavailable." in lines
+    assert "Satellite data unavailable." in lines
+    assert "Buoy data unavailable." not in lines
+
+
+@pytest.mark.parametrize("feed", ["tides", "buoys", "alerts", "satellite", "outlook"])
+def test_a_live_summary_where_one_feed_failed_names_it_and_exits_one(monkeypatch, capsys, feed):
+    async def fake(config, state_dir, until, *, emit=None):
+        return HeadlessResult(store=Store(config), ended=T0, feeds_ok=5, feeds_failed=1, failed_feeds={feed})
+
+    monkeypatch.setattr(headless, "run_live", fake)
+    assert cli.main(["--no-config", "--summary"]) == 1
+    assert "data unavailable." in capsys.readouterr().out
