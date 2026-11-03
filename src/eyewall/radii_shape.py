@@ -93,8 +93,9 @@ def radii_shape(center: LatLon, radii_nm: QuadrantRadiiNm) -> Polygon | MultiPol
 
 
 def radii_rings(center: LatLon, radii_nm: QuadrantRadiiNm) -> list[list[LatLon]]:
-    """The outlines of radii_shape as (lat, lon) rings, one per part, each closed. Empty when there is no shape."""
+    """The outlines of radii_shape as (lat, lon) rings, one per part, each closed. Empty when there is no shape.
+    Rounded to about a meter so the drawing does not depend on the platform's floating point (geod and GEOS output)."""
     shape = radii_shape(center, radii_nm)
     if shape is None:
         return []
-    return [[(y, x) for x, y in part.exterior.coords] for part in _polygons(shape)]
+    return [[(round(y, 5), round(x, 5)) for x, y in part.exterior.coords] for part in _polygons(shape)]
