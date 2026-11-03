@@ -82,10 +82,11 @@ def _load(args: argparse.Namespace) -> LoadResult:
 
 
 def _selftest() -> int:
-    """Parse the bundled recording through the whole poller and draw one map frame; 0 if it all worked."""
+    """Parse the bundled recording, draw a map frame and a wind radii shape through the whole stack; 0 if all worked."""
     try:
         from eyewall.config import Config
         from eyewall.headless import run_replay
+        from eyewall.radii_shape import radii_shape
         from eyewall.render.basemap import basemap_canvas
         from eyewall.render.projection import Viewport
         from eyewall.sources.bundle import demo_bundle_path
@@ -95,6 +96,8 @@ def _selftest() -> int:
             raise RuntimeError("the packaged stylesheet ui/app.tcss is missing")
         result = asyncio.run(run_replay(ReplaySource(demo_bundle_path()), Config(), None, "+1h"))
         frame = basemap_canvas(Viewport(25.0, -75.0, 0.05, 80, 24)).to_text()
+        if radii_shape((20.0, 179.5), (150.0, 150.0, 150.0, 150.0)) is None:  # pyproj's PROJ data and shapely's GEOS
+            raise RuntimeError("the wind radii geometry drew nothing")
         if not result.events or not frame.strip():
             raise RuntimeError(f"{len(result.events)} event(s), frame {'blank' if not frame.strip() else 'drawn'}")
     except Exception as exc:  # any failure of a frozen build is the answer
