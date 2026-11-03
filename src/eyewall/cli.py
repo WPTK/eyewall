@@ -88,6 +88,26 @@ def _load(args: argparse.Namespace) -> LoadResult:
     return load_config(args.config, use_file=not args.no_config)
 
 
+MAPDATA_FILES = tuple(
+    f"{name}.bin" for name in ("coast", "coast_lo", "land", "land_lo", "lakes", "lakes_lo", "borders", "places")
+)
+
+
+def missing_package_data() -> list[str]:
+    """The data files an installation must carry (map data, attribution, stylesheet, demo recording) not found."""
+    from eyewall.sources.bundle import BundleError, demo_bundle_path
+
+    root = importlib.resources.files("eyewall")
+    wanted = [("mapdata", name) for name in MAPDATA_FILES] + [("mapdata", "ATTRIBUTION.md"), ("ui", "app.tcss")]
+    missing = [f"{folder}/{name}" for folder, name in wanted if not root.joinpath(folder, name).is_file()]
+    try:
+        if not (demo_bundle_path() / "manifest.toml").is_file():
+            missing.append("demo/erin2025/manifest.toml")
+    except BundleError:
+        missing.append("demo/erin2025")
+    return missing
+
+
 def _selftest() -> int:
     """Parse the bundled recording, draw a map frame and a wind radii shape through the whole stack; 0 if all worked."""
     try:
@@ -99,8 +119,8 @@ def _selftest() -> int:
         from eyewall.sources.bundle import demo_bundle_path
         from eyewall.sources.replay import ReplaySource
 
-        if not (Path(str(importlib.resources.files("eyewall"))) / "ui" / "app.tcss").is_file():
-            raise RuntimeError("the packaged stylesheet ui/app.tcss is missing")
+        if missing := missing_package_data():
+            raise RuntimeError(f"package data is missing: {', '.join(missing)}")
         result = asyncio.run(run_replay(ReplaySource(demo_bundle_path()), Config(), None, "+1h"))
         frame = basemap_canvas(Viewport(25.0, -75.0, 0.05, 80, 24)).to_text()
         if radii_shape((20.0, 179.5), (150.0, 150.0, 150.0, 150.0)) is None:  # pyproj's PROJ data and shapely's GEOS
