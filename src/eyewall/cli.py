@@ -87,7 +87,7 @@ MAPDATA_FILES = tuple(
 
 
 def missing_package_data() -> list[str]:
-    """The data files an installation must carry (map data, attribution, stylesheet, demo recording) that are missing."""
+    """The data files an installation must carry (map data, attribution, stylesheet, demo recording) not found."""
     from eyewall.sources.bundle import BundleError, demo_bundle_path
 
     root = importlib.resources.files("eyewall")
