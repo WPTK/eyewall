@@ -130,7 +130,7 @@ python -m venv .venv
 
 **Supported systems.** Windows 11 is the supported Windows; CI and the binary build run on GitHub's `windows-latest`
 (Windows Server). The Linux binaries are built on Debian 11 (glibc 2.31) and should work on any glibc 2.31 or newer
-distribution; Alpine and other musl systems are not supported. macOS has no minimum version stated.
+distribution; Alpine and other musl systems are not supported. The downloadable macOS binaries need macOS 14 or later (their pinned pyproj wheels do); a pip install works on older versions.
 
 `eyewall --selftest` checks an installation: it replays an hour of the bundled storm and prints `selftest ok`.
 

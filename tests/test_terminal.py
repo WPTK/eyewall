@@ -284,3 +284,23 @@ def test_ctrl_c_during_diagnose_exits_130(monkeypatch: pytest.MonkeyPatch) -> No
         raise KeyboardInterrupt
 
     assert diagnose(monkeypatch, interrupted, "--no-config") == 130
+
+
+def test_an_exception_textual_handles_itself_still_gets_a_crash_log_and_a_failing_status(
+    guard: list[str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from textual.app import App
+
+    from eyewall.app import run_checked
+
+    class Broken(App[None]):
+        def on_mount(self) -> None:
+            raise ValueError("handler broke")
+
+    # Textual prints its own traceback and returns from run(); only run_checked turns that into a crash.
+    assert cli._guarded(lambda: run_checked(Broken()) or 0, caps({})) == 1
+    err = capsys.readouterr().err
+    logs = list(tmp_path.glob("crash-*.log"))
+    assert len(logs) == 1 and logs[0].name in err
+    assert "ValueError" in logs[0].read_text(encoding="utf-8")
+    assert guard == ["restore"]
