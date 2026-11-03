@@ -38,6 +38,16 @@ def _load(data: bytes | str) -> Any:
         raise ParseError(f"not JSON: {exc}") from exc
 
 
+def _items(document: dict[str, Any], key: str) -> list[Any]:
+    """The list under `key`; absent or null is empty, and any other non-list value is a damaged payload."""
+    value = document.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ParseError(f"{key} is not a list")
+    return value
+
+
 def _text(value: Any) -> str | None:
     if value is None:
         return None
@@ -80,7 +90,7 @@ def parse_alerts(data: bytes | str) -> AlertsResult:
         raise ParseError("alerts payload is not a JSON object")
     alerts: list[WatchWarningAlert] = []
     skipped = 0
-    for feature in document.get("features") or []:
+    for feature in _items(document, "features"):
         properties = feature.get("properties") if isinstance(feature, dict) else None
         if not isinstance(properties, dict) or not _text(properties.get("event")):
             skipped += 1
@@ -122,7 +132,7 @@ def parse_product_list(data: bytes | str) -> tuple[ProductListing, ...]:
     if not isinstance(document, dict):
         raise ParseError("product list is not a JSON object")
     listing: list[ProductListing] = []
-    for item in document.get("@graph") or []:
+    for item in _items(document, "@graph"):
         if isinstance(item, dict) and _text(item.get("id")):
             listing.append(
                 ProductListing(
