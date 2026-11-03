@@ -29,3 +29,21 @@ async def test_toasts_already_showing_are_cleared_when_the_terminal_shrinks() ->
         await settle(pilot)
         assert not app._notifications
         assert "Needs at least 60x16" in screen_text(app)
+
+
+async def test_toasts_from_screens_are_dropped_too_and_work_again_after_growing_back() -> None:
+    app = replay_app()
+    async with running(app, (50, 12)) as pilot:
+        await settle(pilot)
+        assert type(app.screen).__name__ == "TooSmallScreen"
+        app.screen.notify("from a screen", timeout=30)
+        app.notify("from the app", timeout=30)
+        await settle(pilot)
+        assert not app._notifications
+        await pilot.resize_terminal(100, 30)
+        await settle(pilot)
+        assert type(app.screen).__name__ == "MainScreen"
+        assert not app._notifications  # dropped, not queued
+        app.notify("after growing back", timeout=30, markup=False)
+        await settle(pilot)
+        assert [n.message for n in app._notifications] == ["after growing back"]

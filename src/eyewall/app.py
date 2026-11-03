@@ -247,9 +247,12 @@ class EyewallApp(App[bool]):
         self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every bar follows a resize
 
     def notify(self, message: str, **kwargs: Any) -> None:
-        """Toasts are not shown while the terminal is too small: they would be drawn over the size message."""
-        if not isinstance(self.screen, TooSmallScreen):
-            super().notify(message, **kwargs)
+        """Toasts are not shown while the terminal is too small: they would be drawn over the size message. A toast
+        dropped there is gone, not queued: the news is on the screens (the alert log, the cards) when the terminal
+        grows back."""
+        if self.screen_stack and isinstance(self.screen_stack[-1], TooSmallScreen):
+            return
+        super().notify(message, **kwargs)
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
