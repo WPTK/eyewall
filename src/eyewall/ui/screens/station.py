@@ -30,6 +30,7 @@ from eyewall.state.trends import wave_trend, wind_trend
 from eyewall.ui import nav, station_view
 from eyewall.ui import stations as st
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
+from eyewall.ui.focus import show
 from eyewall.ui.widgets.chart_view import ChartView
 from eyewall.ui.words import station as words
 from eyewall.units import LABELS, convert
@@ -110,7 +111,6 @@ class StationScreen(ChromeScreen):
 
     def on_mount(self) -> None:
         eye = self.eye
-        self.query_one("#station-readings").display = False
         self.query_one("#station-about").display = False
         if self.is_buoy:
             eye.poller.extra_buoys.add(self.station_id)
@@ -310,7 +310,7 @@ class StationScreen(ChromeScreen):
         about.display = self.about
         if self.about:
             about.update(Text(words.about_buoy_winds().text, style=DIM))
-        self.query_one("#station-readings").display = self.readings
+        show(self, self.query_one("#station-readings"), self.readings)
         self.query_one("#station-charts").display = not self.readings
         if self.readings:
             self._draw_readings()
