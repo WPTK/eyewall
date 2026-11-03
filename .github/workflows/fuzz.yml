@@ -1,0 +1,39 @@
+name: Fuzz
+
+# The parser property tests at 5000 examples each instead of the 60 of a normal run (the "fuzz" hypothesis profile in
+# tests/conftest.py). Runs when a v* tag is pushed, in parallel with release.yml, and on demand. It is advisory: not wired
+# into the release (it cannot stop or delay the binaries), not a pull-request check, read-only, and it never publishes.
+# Its job is to find the input a short run missed; a failure is a bug to fix in the next release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Parser fuzz (5000 examples)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HYPOTHESIS_PROFILE: fuzz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Run the parser fuzz tests
+        run: python -m pytest tests/test_fuzz_parsers.py tests/test_nhc_robust.py -q -p no:cacheprovider --timeout=0
+      - name: Keep the failing examples
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hypothesis-examples
+          path: .hypothesis/
+          if-no-files-found: ignore
+          include-hidden-files: true

@@ -8,6 +8,7 @@ normalised to upper case once, here, and can be seven characters long. Some entr
 
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
@@ -22,9 +23,10 @@ _DTD = re.compile(rb"<!(DOCTYPE|ENTITY)", re.IGNORECASE)
 
 def _float(value: str | None) -> float | None:
     try:
-        return None if value is None else float(value)
+        number = None if value is None else float(value)
     except ValueError:
         return None
+    return number if number is not None and math.isfinite(number) else None
 
 
 def _flag(attributes: Mapping[str, str], name: str) -> bool | None:

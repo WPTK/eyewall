@@ -8,6 +8,7 @@ from collections.abc import Iterator
 
 import psutil
 import pytest
+from hypothesis import HealthCheck, settings
 
 # Test runs are bounded so a runaway test fails instead of exhausting the machine. Time: pytest-timeout, set in
 # pyproject.toml. Memory: resource.setrlimit does not exist on Windows, so each test process (the main one and every
@@ -73,3 +74,13 @@ def _terminal_state_stays_put() -> Iterator[None]:
         os.environ.pop("NO_COLOR", None)
     else:
         os.environ["NO_COLOR"] = no_color
+
+
+# Hypothesis profiles. "ci" is what every regular run uses. "fuzz" is the tag-time pass (.github/workflows/fuzz.yml,
+# `HYPOTHESIS_PROFILE=fuzz`): the same tests with many more examples, so the regular matrix does not get slower.
+_COMMON = {"deadline": None, "suppress_health_check": [HealthCheck.function_scoped_fixture, HealthCheck.too_slow]}
+# "ci" is derandomized with no example database, so a regular run is repeatable and a failure there is never a new find.
+# "fuzz" is random and prints the blob that reproduces a failure.
+settings.register_profile("ci", max_examples=60, derandomize=True, database=None, **_COMMON)
+settings.register_profile("fuzz", max_examples=5000, print_blob=True, **_COMMON)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
