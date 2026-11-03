@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from textual.pilot import Pilot
 from textual.widgets import Input
@@ -321,3 +323,25 @@ async def test_q_does_nothing_inside_the_full_screen_map_and_the_footer_agrees()
         assert "q quit" not in bottom(app)
         await press(pilot, "q")
         assert not app._exit
+
+
+@pytest.mark.parametrize("size", [(80, 24), (60, 16)])
+async def test_the_top_bar_counts_down_to_the_next_full_advisory(
+    size: tuple[int, int],
+) -> None:
+    app = replay_app()
+    async with running(app, size) as pilot:
+        await into_the_storm(pilot)
+        app.replay.clock.set(datetime(2026, 9, 1, 0, 46, tzinfo=UTC))  # the fake clock: 2h14m before 0300Z
+        app._for_screens("refresh_status")
+        await settle(pilot)
+        assert app.now() == datetime(2026, 9, 1, 0, 46, tzinfo=UTC)
+        text = top(app)
+        assert "paused" in text  # the replay/freshness slot always stays
+        assert "next full advisory 2h14m" in text
+
+
+async def test_no_countdown_without_an_active_storm() -> None:
+    app = scripted_app()
+    async with running(app, (80, 24)):
+        assert "next full advisory" not in top(app)
