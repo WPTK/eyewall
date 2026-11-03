@@ -11,6 +11,7 @@ from eyewall.palette import DIM
 from eyewall.sources import protocol
 from eyewall.ui import nav, station_view
 from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
+from eyewall.ui.focus import show
 from eyewall.ui.widgets.station_list import StationList
 
 NEAR, YOURS = "near", "yours"
@@ -45,7 +46,6 @@ class BuoysScreen(ChromeScreen):
         yield FooterBar()
 
     def on_mount(self) -> None:
-        self.query_one(StationList).focus()
         self.refresh_data()
 
     def _near_label(self) -> str:
@@ -90,7 +90,7 @@ class BuoysScreen(ChromeScreen):
                 head += " Buoy data unavailable."
         ordered = station_view.sort_rows(rows, mode)
         self.query_one(StationList).set_rows(ordered, preset)
-        self.query_one(StationList).display = bool(ordered)
+        show(self, self.query_one(StationList), bool(ordered))
         self.query_one("#buoys-head", Static).update(Text(head, style="bold"))
         empty_note = self.query_one("#buoys-empty", Static)
         empty_note.display = bool(empty)
