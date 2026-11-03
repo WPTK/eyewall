@@ -17,7 +17,7 @@ Each git worktree needs its own `.venv`; create it before anything else.
 
 ## Checks
 
-CI runs these on Windows, Linux and macOS with Python 3.12, 3.13 and 3.14. Run them locally
+CI runs these on Windows, Linux and macOS with Python 3.12 and 3.13 (3.14 on Linux is informational). Run them locally
 before every pull request:
 
 ```powershell
