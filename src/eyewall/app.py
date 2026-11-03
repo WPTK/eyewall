@@ -25,6 +25,7 @@ from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
 from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
+from eyewall.issuance import countdown
 from eyewall.models.events import Event, Severity
 from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
@@ -176,13 +177,15 @@ class EyewallApp(App[bool]):
 
     def top_bar_extras(self) -> list[tuple[str, str | None]]:
         """What the top bar shows beside the breadcrumb when there is room, most important first: the alert
-        count, the idle marker, the replay time."""
+        count, the idle marker, the time to the next full advisory, the replay time."""
         extras: list[tuple[str, str | None]] = []
         if self.alert_log:
             count = len(self.alert_log)
             extras.append((f"{count} alert" + ("" if count == 1 else "s"), "app:alerts"))
         if self.poller.away:
             extras.append(("idle", None))
+        if self.store.storms:  # the schedule means nothing with no storm to issue for
+            extras.append((f"next full advisory {countdown(self.now())}", None))
         replay = self.replay_status()
         if replay is not None:  # the clock is the first to go when the bar is tight
             when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")

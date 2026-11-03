@@ -180,3 +180,12 @@ def test_a_footer_key_is_clickable_across_its_whole_width() -> None:
 def test_a_wide_character_does_not_break_the_width() -> None:
     row = footer_row([FooterItem("w", "台風台風台風", "key:w")], [*PINNED, BACK], 40)
     assert row.text.cell_len == 40 or cell_len(row.text.plain) == 40
+
+
+def test_the_advisory_countdown_goes_before_the_health_slot_when_the_bar_is_tight() -> None:
+    slot = health(feeds(), None, UNICODE)
+    extras = [("next full advisory 2h14m", None)]
+    roomy = top_bar(["Home", "Erin"], slot, extras, 60, UNICODE).text.plain
+    tight = top_bar(["Home", "Erin", "Buoy 41047", "Advisory text"], slot, extras, 60, UNICODE).text.plain
+    assert "next full advisory 2h14m" in roomy
+    assert "next full advisory" not in tight and "ok" in tight
