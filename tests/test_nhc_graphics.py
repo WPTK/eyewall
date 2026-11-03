@@ -1,8 +1,11 @@
 from collections import Counter
 from datetime import UTC, datetime
 
+import pytest
+
 from eyewall.models.graphics import GraphicKind
 from eyewall.models.storm import AdvNum
+from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.graphics import (
     parse_floater_listing,
     parse_floater_products,
@@ -150,8 +153,13 @@ def test_floater_loop_falls_back_to_the_newest_time_ranged_gif():
     assert product.still_time == datetime(2026, 10, 25, 15, 10, tzinfo=UTC)
 
 
-def test_an_empty_floater_listing_has_no_urls():
-    product = parse_floater_listing("<html></html>", "al052025", "GEOCOLOR")
+def test_a_floater_listing_with_no_links_is_not_a_listing():
+    with pytest.raises(ParseError):
+        parse_floater_listing("<html></html>", "al052025", "GEOCOLOR")
+
+
+def test_a_floater_listing_that_links_only_its_parent_has_no_urls():
+    product = parse_floater_listing('<a href="../">Parent</a>', "al052025", "GEOCOLOR")
     assert (product.still_url, product.latest_url, product.loop_url) == (None, None, None)
 
 

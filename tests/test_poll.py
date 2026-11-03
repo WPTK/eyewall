@@ -12,6 +12,7 @@ from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import EventKind
 from eyewall.models.storm import CurrentStorms
 from eyewall.models.watches import AlertsResult
+from eyewall.net import FetchError, RateLimited
 from eyewall.poll import (
     FALLBACK_ATTEMPTS,
     PRODUCT_ATTEMPTS,
@@ -613,16 +614,35 @@ class Boom:
         raise EOFError("truncated")
 
 
-async def test_the_refresh_key_cannot_shorten_a_backoff_window():
+async def test_the_refresh_key_cuts_through_a_failure_backoff_but_keeps_the_minimum_gap():
     poller, source, _, clock, _ = build()
     source.fail.add("storms")
     await poller.tick()
     window = poller._feeds[protocol.STORMS].next_at - clock.monotonic()
     assert window > 2 * REFRESH_MIN_GAP
+    source.fail.clear()  # the network is back; the user presses r
+    clock.advance(REFRESH_MIN_GAP / 3)
+    poller.refresh(throttled=True)
+    assert protocol.STORMS not in poller.due()  # too soon after the last attempt
+    clock.advance(REFRESH_MIN_GAP)
+    assert protocol.STORMS in poller.due()  # long before the backoff window ends
+    await poller.tick()
+    assert poller.freshness(protocol.STORMS).state is FreshnessState.FRESH
+
+
+async def test_the_refresh_key_cannot_shorten_a_retry_after():
+    poller, source, _, clock, _ = build()
+
+    async def limited():
+        source.calls.append("storms")
+        raise RateLimited("fake://storms", 900.0)
+
+    source.storms = limited
+    await poller.tick()
     clock.advance(REFRESH_MIN_GAP + 1)
     poller.refresh(throttled=True)
     assert protocol.STORMS not in poller.due()
-    clock.advance(window)
+    clock.advance(900.0)
     assert protocol.STORMS in poller.due()
 
 
@@ -837,3 +857,62 @@ async def test_a_refresh_asked_for_during_a_feeds_own_poll_is_not_lost():
     source.storms = slow
     await poller.tick()
     assert protocol.STORMS in poller.due()
+
+
+async def test_a_short_retry_after_is_not_stretched_by_the_failure_backoff():
+    poller, source, _, clock, _ = build()
+    source.fail.add("storms")
+    for _ in range(5):
+        await poller.tick()
+        clock.advance(poller.seconds_until(protocol.STORMS))
+    source.fail.clear()
+
+    async def limited():
+        source.calls.append("storms")
+        raise RateLimited("fake://storms", 5.0)
+
+    source.storms = limited
+    await poller.tick()
+    clock.advance(REFRESH_MIN_GAP)
+    poller.refresh(throttled=True)
+    assert protocol.STORMS in poller.due()
+
+
+async def test_a_refresh_pressed_during_a_failing_poll_is_kept():
+    poller, source, _, clock, _ = build()
+
+    async def failing():
+        poller.refresh(throttled=True)
+        raise FetchError("fake://storms", "network down")
+
+    source.storms = failing
+    await poller.tick()
+    assert poller.delay(protocol.STORMS) > REFRESH_MIN_GAP  # the backoff alone would wait longer
+    clock.advance(REFRESH_MIN_GAP)
+    assert protocol.STORMS in poller.due()
+
+
+async def test_holding_the_refresh_key_costs_one_extra_poll_per_gap():
+    poller, source, _, clock, _ = build()
+    await poller.tick()
+    before = source.count("storms")
+    for _ in range(100):
+        clock.advance(0.29)
+        poller.refresh(throttled=True)
+        await poller.tick()
+    assert source.count("storms") == before  # 29 s in, the gap holds
+    clock.advance(2)
+    await poller.tick()
+    assert source.count("storms") - before == 1
+
+
+async def test_an_unthrottled_refresh_still_honours_a_retry_after():
+    poller, source, _, _clock, _ = build()
+
+    async def limited():
+        raise RateLimited("fake://storms", 600.0)
+
+    source.storms = limited
+    await poller.tick()
+    poller.refresh()
+    assert protocol.STORMS not in poller.due()
