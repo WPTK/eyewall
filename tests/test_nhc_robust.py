@@ -184,3 +184,31 @@ def test_a_header_time_that_overflows_utc_reads_as_missing():
     from eyewall.providers.nhc.times import parse_header_time
 
     assert parse_header_time("1100 PM EDT Dec 31 9999") is None
+
+
+def test_bdeck_skips_a_fix_whose_coordinates_are_out_of_range() -> None:
+    text = nhc_text("atcf/bal062026.dat")
+    damaged = text.replace("342W", "3342W", 1).replace("321N", "9321N", 1)
+    clean = atcf.parse_bdeck(text)
+    track = atcf.parse_bdeck(damaged)
+    assert track.skipped == clean.skipped + 2
+    assert all(-90 <= fix.lat <= 90 and -180 < fix.lon <= 180 for fix in track.fixes)
+
+
+def test_bdeck_wraps_an_eastern_longitude_past_the_dateline() -> None:
+    line = "AL, 06, 2026091712,   , BEST,   0, 321N, 1900E,  15, 1018, DB,   0\n"
+    assert atcf.parse_bdeck(line).fixes[0].lon == -170.0
+
+
+@pytest.mark.parametrize("field", ["latitudeNumeric", "longitudeNumeric"])
+def test_current_storms_drops_an_absurd_coordinate(field: str) -> None:
+    storm = parse_current_storms(json.dumps({"activeStorms": [{"id": "al012026", field: 1e308}]})).storms[0]
+    assert storm.lat is None
+    assert storm.lon is None
+
+
+@pytest.mark.parametrize(("parse", "key"), [(alerts.parse_alerts, "features"), (alerts.parse_product_list, "@graph")])
+def test_alerts_non_list_container_is_a_parse_error(parse, key: str) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(ParseError):
+        parse(json.dumps({key: 1e308}))
+    parse(json.dumps({key: None}))  # absent or null stays quiet, as an empty list does

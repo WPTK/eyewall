@@ -121,7 +121,12 @@ def _storm(entry: dict[str, Any]) -> Storm | None:
     storm_id = _text(entry.get("id"))
     if storm_id is None:
         return None
+    lat = _coordinate(entry.get("latitudeNumeric"), entry.get("latitude"))
     lon = _coordinate(entry.get("longitudeNumeric"), entry.get("longitude"))
+    if lat is not None and not -90.0 <= lat <= 90.0:
+        lat = None
+    if lon is not None and not -180.0 <= lon <= 360.0:
+        lon = None
     return Storm(
         id=storm_id.lower(),
         bin_number=(_text(entry.get("binNumber")) or "").upper() or None,
@@ -130,7 +135,7 @@ def _storm(entry: dict[str, Any]) -> Storm | None:
         classification_text=_text(entry.get("classification")) or "",
         intensity_kt=_int(entry.get("intensity")),
         pressure_mb=_int(entry.get("pressure")),
-        lat=_coordinate(entry.get("latitudeNumeric"), entry.get("latitude")),
+        lat=lat,
         lon=wrap_lon(lon) if lon is not None else None,
         movement_dir_deg=_int(entry.get("movementDir")),
         movement_speed_mph=_number(entry.get("movementSpeed")),
