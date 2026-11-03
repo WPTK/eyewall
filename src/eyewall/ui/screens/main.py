@@ -245,7 +245,7 @@ class MainScreen(ChromeScreen):
         state = eye.store.storms.get(eye.selected or "")
         if state is not None and adapt.storm_scene(state).near_extent():
             return None
-        return adapt.quiet_focus(eye.basin_view)
+        return adapt.quiet_focus(eye.basin_view, eye.store)
 
     def _fit_points(self) -> list[tuple[float, float]]:
         eye = self.eye

@@ -407,12 +407,21 @@ class Canvas:
                             fg[i] = color
                             prios[i] = prio
 
-    def tint_polygon(self, rings: Iterable[Sequence[Dot]], color: str, edge: str | None = None) -> None:
+    def tint_polygon(
+        self,
+        rings: Iterable[Sequence[Dot]],
+        color: str,
+        edge: str | None = None,
+        *,
+        cut: tuple[float, float, float] | None = None,
+    ) -> None:
         """Give the background of every cell inside the rings (even-odd, so a ring inside another one is a hole) a
         color. A cell the rings only partly cover is not tinted whole: with `edge` it shows the covered dots in that
         color instead (unless something of higher priority than a coastline was drawn there), so the shore follows
         the ring to the dot rather than to the cell. Without `edge`, a cell at least half covered is tinted, as dots
-        and text drawn on a tinted cell keep it and the area reads as one flat fill."""
+        and text drawn on a tinted cell keep it and the area reads as one flat fill. `cut` is (top, bottom, right) in
+        dots, where the data itself stops: a cell touching one of those lines is not a shore, so it keeps the whole-cell
+        rule."""
         dots_x, dots_y, cols = self.dots_x, self.dots_y, self.cols
         crossings: list[list[float]] = [[] for _ in range(self.height)]
         for ring in rings:
@@ -443,11 +452,28 @@ class Canvas:
         if self.mode is Mode.ASCII:
             edge = None  # ' . : cannot draw the shape of a part-covered cell
         for i, mask in enumerate(covered):
-            if mask == full or (edge is None and mask.bit_count() >= half):
-                self._bg[i] = color
-            elif mask and edge is not None and self.mode is not Mode.ASCII:
+            if mask == full or (edge is not None and mask.bit_count() > 0.75 * dots_x * dots_y):
+                self._bg[i] = color  # a cell nearly all land reads as land, not as a bright dotted patch
+            elif not mask:
+                continue
+            elif edge is None or self._on_cut(i, cut):
+                if mask.bit_count() >= half:
+                    self._bg[i] = color
+            else:
                 self._edge[i] = mask
                 self._edge_fg[i] = edge
+
+    def _on_cut(self, i: int, cut: tuple[float, float, float] | None) -> bool:
+        """Whether cell i touches a line where the map data is cut off (see tint_polygon)."""
+        if cut is None:
+            return False
+        top, bottom, right = cut
+        x, y = (i % self.cols) * self.dots_x, (i // self.cols) * self.dots_y
+        return (
+            (y < top + 1 and y + self.dots_y > top - 1)
+            or (y < bottom + 1 and y + self.dots_y > bottom - 1)
+            or (x < right + 1 and x + self.dots_x > right - 1)
+        )
 
     # ------------------------------------------------------------------------------------------------ text, markers
 

@@ -186,19 +186,9 @@ def test_a_basin_view_draws_no_borders_and_no_small_lakes():
 
 QUIET_BOX = [(5.0, -98.0), (44.0, -14.0)]
 QUIET_FOCUS = (22.0, -68.0)
-# Map widget sizes (cols, rows) the quiet screen gets at 80x24, 100x40, 120x30 and 200x50.
-QUIET_SIZES = [(80, 15), (66, 36), (86, 26), (150, 46)]
-# How far a vertex may sit from the true Natural Earth line, per tier (the tolerances in scripts/build_mapdata.py).
-FULL_TOLERANCE_DEG = 0.002
-LO_TOLERANCE_DEG = 0.03
-
-
-@pytest.mark.parametrize(("cols", "rows"), QUIET_SIZES)
-def test_the_quiet_map_data_error_stays_a_small_part_of_a_dot(cols, rows):
-    view = Viewport.fit_points(QUIET_BOX, cols, rows, max_deg_per_dot=0.5, focus=QUIET_FOCUS)
-    tolerance = FULL_TOLERANCE_DEG if is_detailed(view) else LO_TOLERANCE_DEG
-    assert view.deg_per_dot <= 0.5
-    assert tolerance <= 0.1 * view.deg_per_dot  # the coarse copy is still within a tenth of a dot of the true shore
+# Map widget sizes (cols, rows) the quiet screen gets at 80x24, 100x40, 120x30 and 200x50 (tests/test_map_resolution.py
+# reads them off the screen and checks these are still right).
+QUIET_SIZES = {"80x24": (80, 15), "100x40": (66, 36), "120x30": (86, 26), "200x50": (150, 46)}
 
 
 def test_a_shore_cell_shows_the_dots_on_the_land_side_not_a_whole_tinted_cell():
@@ -227,7 +217,46 @@ def test_the_coastline_off_leaves_no_edge_dots():
     assert "#9fb3c8" not in colors(canvas)
 
 
-@pytest.mark.parametrize(("name", "cols", "rows"), [("120x30", 86, 26), ("200x50", 150, 46)])
-def test_the_quiet_coastline_golden(name, cols, rows):
+@pytest.mark.parametrize("name", ["100x40", "120x30", "200x50"])
+def test_the_quiet_coastline_golden(name):
+    cols, rows = QUIET_SIZES[name]
     view = Viewport.fit_points(QUIET_BOX, cols, rows, max_deg_per_dot=0.5, focus=QUIET_FOCUS)
     assert_golden(f"quiet_atlantic_{name}.txt", basemap_canvas(view).to_text())
+
+
+@pytest.mark.parametrize("mode", [Mode.BRAILLE, Mode.HALF, Mode.ASCII])
+def test_a_part_covered_cell_in_every_mode(mode):
+    # Land to the right of x = 1: in braille half of every cell's dots, in the 1 by 2 dot modes the whole cell.
+    shore = [(1.0, -1.0), (1.0, 9.0), (9.0, 9.0), (9.0, -1.0)]
+    canvas = Canvas(3, 2, mode)
+    canvas.tint_polygon([shore], "#land", "#edge")
+    glyph, style = canvas.cell(0, 0)
+    if mode is Mode.BRAILLE:
+        assert (glyph, style.fg, style.bg) == ("⢸", "#edge", None)
+    else:
+        assert glyph == " " and style.bg is None  # x = 0 is outside; a 1 dot wide cell is all or nothing
+    assert canvas.cell(1, 0)[1].bg == "#land"
+
+
+def test_a_half_block_cell_shows_the_land_half():
+    canvas = Canvas(1, 1, Mode.HALF)
+    canvas.tint_polygon([[(-1.0, 1.0), (2.0, 1.0), (2.0, 3.0), (-1.0, 3.0)]], "#land", "#edge")
+    assert canvas.cell(0, 0) == ("▄", canvas.cell(0, 0)[1]) and canvas.cell(0, 0)[1].fg == "#edge"
+
+
+def test_a_cell_nearly_all_land_is_land_tint_not_a_dotted_patch():
+    # Seven dots of eight inside: a small hole takes the top-left one.
+    canvas = Canvas(1, 1)
+    land = [(-1.0, -1.0), (3.0, -1.0), (3.0, 5.0), (-1.0, 5.0)]
+    hole = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    canvas.tint_polygon([land, hole], "#land", "#edge")
+    assert canvas.cell(0, 0)[1].bg == "#land"
+
+
+def test_a_cell_on_the_cut_of_the_data_keeps_the_whole_cell_rule():
+    # Land down to y = 6 where the data is cut; the cell holding y = 6 is half land and must be a tint, not edge dots.
+    canvas = Canvas(1, 2)
+    canvas.tint_polygon(
+        [[(-1.0, -1.0), (3.0, -1.0), (3.0, 6.0), (-1.0, 6.0)]], "#land", "#edge", cut=(-50.0, 6.0, 99.0)
+    )
+    assert canvas.cell(0, 1)[1].bg == "#land" and canvas.cell(0, 1)[1].fg is None
