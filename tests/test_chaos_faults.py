@@ -110,7 +110,6 @@ async def test_a_not_modified_answer_returns_the_cached_storm_list(noaa, tmp_pat
         await source.aclose()
 
 
-@pytest.mark.xfail(strict=True, reason="#192: a 304 with no body behind it is read as an empty storm list")
 async def test_a_not_modified_answer_nobody_asked_for_is_not_an_empty_storm_list(noaa, tmp_path):  # type: ignore[no-untyped-def]
     """A 304 with no validators sent and nothing cached has no body to go with it. It must not read as 'no storms'."""
     noaa.get(STORMS_URL).mock(side_effect=sequence(httpx.Response(304)))
@@ -197,11 +196,6 @@ async def test_an_empty_outlook_text_is_a_failed_fetch(noaa, tmp_path):  # type:
         await source.aclose()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#171: an empty or unparseable NESDIS listing is read as 'no satellite pictures'. Whichever PR merges second "
-    "(this one or the #171 fix, fix-feed-silence) removes this mark.",
-)
 async def test_an_empty_satellite_listing_is_a_failed_fetch(noaa, tmp_path):  # type: ignore[no-untyped-def]
     noaa.get(ids.floater_url()).respond(200, content=b"")
     _, source, _, _ = build(noaa, tmp_path)

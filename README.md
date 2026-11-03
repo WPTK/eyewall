@@ -145,8 +145,10 @@ Other flags: `--config PATH` and `--no-config` for the settings file, `--state-d
 
 `eyewall --summary` prints the current storms, their watches and warnings, the nearby buoy and tide gauge reports and
 the outlook as plain sentences, once, and exits. It needs no terminal interface, so it works in a script, over SSH or
-with a screen reader. When a feed could not be fetched it says which data is unavailable, and exits with status 1,
-instead of reporting a quiet day. It also works with `--demo` and `--replay`.
+with a screen reader. When any feed (storms, outlook, alerts, buoys, tide gauges, satellite) could not be fetched it
+says which data is unavailable, and exits with status 1, instead of reporting a quiet day. What was fetched is
+still printed on stdout, and a line on stderr names the feeds that failed. Status 2 means a bad argument or an
+unreadable replay. It also works with `--demo` and `--replay`, which fetch nothing and so report no failed feeds.
 
 ## Replay
 

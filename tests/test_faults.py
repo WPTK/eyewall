@@ -55,12 +55,6 @@ XFAIL: dict[tuple[str, str, str], str] = {
     **{
         (panel.name, mode, "retry"): "#164" for panel in PANELS for mode in ("timeout", "http-500", "bad-json", "empty")
     },
-    **{
-        (panel, mode, check): "#171"
-        for panel in ("pictures",)
-        for mode in ("bad-json", "empty")
-        for check in ("header", "feeds", "retry")
-    },
 }
 
 
