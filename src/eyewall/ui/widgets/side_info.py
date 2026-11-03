@@ -27,9 +27,9 @@ def outlook_text(view: View) -> list[str]:
     store = view.store
     if store.outlook is None:
         return ["Outlook data unavailable."] if protocol.OUTLOOK in view.failed else []
-    if not view.states or outlook_words.area_count(store.outlook, view.basins):
-        return [w.text for w in outlook_words.outlook_sentences(store.outlook, view.basins)]
-    return []
+    if view.states and not outlook_words.area_count(store.outlook, view.basins):
+        return []
+    return outlook_words.current_sentences(store.outlook, view.basins, old=view.outlook_old, summaries=not view.states)
 
 
 def stations_text(view: View) -> str | None:

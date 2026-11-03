@@ -24,12 +24,14 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "scripts" / "binary-constraints.txt"
 # Pip platform tags (comma separated) per release binary. The Linux ones stand in for the python:3.12-bullseye
 # container, whose glibc 2.31 takes manylinux_2_28 wheels.
+# The macOS tags match the macos-15 runners: pyproj publishes one wheel per macOS floor (11 gives 3.6.1, 14 and up
+# 3.8), and an older tag made the two Macs disagree.
 PLATFORMS = (
     "win_amd64",
     "manylinux_2_28_x86_64,manylinux2014_x86_64,manylinux_2_17_x86_64",
     "manylinux_2_28_aarch64,manylinux2014_aarch64,manylinux_2_17_aarch64",
-    "macosx_11_0_arm64",
-    "macosx_10_13_x86_64",
+    "macosx_15_0_arm64",
+    "macosx_15_0_x86_64",
 )
 PYTHON_VERSION = "3.12"
 SKIP = {"pyinstaller"}
