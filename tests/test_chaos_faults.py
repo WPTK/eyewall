@@ -25,6 +25,7 @@ from eyewall.sources.live import LiveSource
 from eyewall.state.alerts import AlertEngine
 from eyewall.state.store import Store
 from tests.nhc_fixtures import nhc_bytes
+from tests.state_support import make_storm
 
 NOW = datetime(2026, 9, 29, 22, tzinfo=UTC)
 STORM = "al062026"
@@ -185,7 +186,6 @@ async def test_a_first_poll_with_nothing_in_it_is_a_failure_not_a_quiet_day(noaa
         await source.aclose()
 
 
-@pytest.mark.xfail(strict=True, reason="#171: an empty outlook text is read as 'no outlook'")
 async def test_an_empty_outlook_text_is_a_failed_fetch(noaa, tmp_path):  # type: ignore[no-untyped-def]
     for basin in ids.Basin:
         noaa.get(ids.outlook_url(basin)).respond(200, content=b"")
@@ -193,6 +193,21 @@ async def test_an_empty_outlook_text_is_a_failed_fetch(noaa, tmp_path):  # type:
     try:
         with pytest.raises(Exception):  # noqa: B017 - any failure; what matters is that it is not an empty outlook
             await source.outlook()
+    finally:
+        await source.aclose()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="#171: an empty or unparseable NESDIS listing is read as 'no satellite pictures'. Whichever PR merges second "
+    "(this one or the #171 fix, fix-feed-silence) removes this mark.",
+)
+async def test_an_empty_satellite_listing_is_a_failed_fetch(noaa, tmp_path):  # type: ignore[no-untyped-def]
+    noaa.get(ids.floater_url()).respond(200, content=b"")
+    _, source, _, _ = build(noaa, tmp_path)
+    try:
+        with pytest.raises(Exception):  # noqa: B017 - any failure; what matters is that it is not "no pictures"
+            await source.satellite(make_storm("1", storm_id=STORM, name="Ana"))
     finally:
         await source.aclose()
 
