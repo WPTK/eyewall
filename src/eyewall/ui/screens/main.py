@@ -31,6 +31,7 @@ from eyewall.ui.chrome import ChromeScreen, FooterBar, TopBar
 from eyewall.ui.widgets import side_info, storm_cards, warning_list
 from eyewall.ui.widgets.map_view import MapPane, MapView
 from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, View
+from eyewall.ui.words import outlook as outlook_words
 from eyewall.ui.words import storm as storm_words
 
 REFRESH_SECONDS = 30.0  # the ages on the cards move without a new poll
@@ -258,7 +259,22 @@ class MainScreen(ChromeScreen):
         eye.open_text(eye.selected, "outlook")
 
     def action_open_storm(self) -> None:
-        self.eye.open_storm(self.eye.selected)
+        """Enter: the selected storm; on a quiet Home, the outlook that names the areas NHC is watching."""
+        eye = self.eye
+        if eye.selected is not None:
+            eye.open_storm(eye.selected)
+        elif self._outlook_areas():
+            eye.open_text(None, "outlook")
+
+    def _outlook_areas(self) -> int:
+        eye = self.eye
+        return outlook_words.area_count(eye.store.outlook, eye.basin_view)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Enter is offered only when it does something: a storm to open, or on a quiet day an area to read about."""
+        if action == "open_storm" and self.eye.selected is None:
+            return self._outlook_areas() > 0
+        return super().check_action(action, parameters)
 
     def action_buoys(self) -> None:
         """The stations near the selected storm, or Your stations when there is no storm to look at."""

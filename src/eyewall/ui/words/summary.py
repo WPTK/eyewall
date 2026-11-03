@@ -107,7 +107,7 @@ def summary_lines(
             _gauge_line(store, e.station, now, preset, failed) for e in store.nearby_tides(storm_id, now)[:MAX_GAUGES]
         ]
         blocks.append(block + buoys + gauges)
-    blocks.append([w.text for w in outlook_words.outlook_sentences(store.outlook, enabled)])
+    blocks.append(outlook_words.current_sentences(store.outlook, enabled, old=protocol.OUTLOOK in failed))
     out: list[str] = []
     for block in blocks:
         if out:
