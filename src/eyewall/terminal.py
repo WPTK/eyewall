@@ -47,12 +47,14 @@ def _color(env: Mapping[str, str], windows: bool) -> ColorDepth:
     term = env.get("TERM", "").lower()
     if env.get("NO_COLOR") or term == "dumb":
         return "none"
+    if windows and (env.get("WT_SESSION") or env.get("TERM_PROGRAM")):  # before any TERM guess: ssh sets TERM too
+        return "truecolor"
     if env.get("COLORTERM", "").lower() in ("truecolor", "24bit"):
         return "truecolor"
     if "256color" in term or "direct" in term:
         return "256"
     if windows and not term:
-        return "truecolor" if env.get("WT_SESSION") or env.get("TERM_PROGRAM") else "256"
+        return "256"
     return "16"
 
 
@@ -100,20 +102,37 @@ def detect(
 
 
 def apply(caps: Capabilities) -> None:
-    """Tell Textual what `caps` decided: its colour system, and NO_COLOR for a terminal with none."""
+    """Tell Textual what `caps` decided: its colour system (left on auto for 16 colours), NO_COLOR for none."""
     from textual import constants
 
-    setattr(constants, "COLOR_SYSTEM", caps.rich_color_system or "auto")  # noqa: B010 (Final in the stubs)
-    if caps.color == "none":
+    if caps.color in ("truecolor", "256"):
+        setattr(constants, "COLOR_SYSTEM", caps.rich_color_system)  # noqa: B010 (Final in the stubs)
+    elif caps.color == "none":
+        setattr(constants, "COLOR_SYSTEM", None)  # noqa: B010
         os.environ["NO_COLOR"] = os.environ.get("NO_COLOR") or "1"
 
 
+def terminal_stream() -> TextIO | None:
+    """The stream Textual draws on, if it is a terminal: stderr on POSIX, stdout on Windows (the other as fallback)."""
+    order = (sys.__stdout__, sys.__stderr__) if sys.platform == "win32" else (sys.__stderr__, sys.__stdout__)
+    for stream in order:
+        try:
+            if stream is not None and stream.isatty():
+                return stream
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def restore(stream: TextIO | None = None) -> None:
-    """Write `RESTORE_SEQUENCE` to a terminal (never a file or pipe); harmless when the app already restored it."""
-    out = stream if stream is not None else sys.__stdout__
+    """After an abnormal exit write `RESTORE_SEQUENCE` to the terminal (never a file or pipe).
+
+    It only turns terminal modes off; it does not save or restore termios or Windows console modes.
+    """
+    out = stream if stream is not None else terminal_stream()
+    if out is None:
+        return
     try:
-        if out is None or not out.isatty():
-            return
         out.write(RESTORE_SEQUENCE)
         out.flush()
     except (OSError, ValueError):

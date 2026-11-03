@@ -6,9 +6,11 @@ import argparse
 import asyncio
 import contextlib
 import importlib.resources
+import signal
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from eyewall import __version__, diagnostics, terminal
 from eyewall.config import BASINS, GLYPH_SETS, Config, LoadResult, apply_overrides, default_path, load_config
@@ -244,8 +246,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     glyphs = args.glyphs or (None if caps.unicode else "ascii")
     config = apply_overrides(loaded.config, basins=args.basin, glyph_set=glyphs)
     if args.diagnose:
-        for line in diagnostics.diagnose_lines(caps, config, _config_path(args)):
-            print(line)
+        try:
+            for line in diagnostics.diagnose_lines(caps, config, _config_path(args), loaded, args.state_dir):
+                print(line)
+        except KeyboardInterrupt:
+            return 130
         return 0
     warnings = loaded.warnings
     for warning in warnings:
@@ -269,15 +274,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _guarded(run: Callable[[], int], caps: terminal.Capabilities) -> int:
-    """Run the full-screen app; whatever happens, leave the terminal usable, and log an unexpected crash."""
+    """Run the full-screen app; after an abnormal exit (crash, Ctrl-C, SIGTERM/SIGHUP) switch the terminal's modes
+    off once, and log an unexpected crash. A clean exit is left to Textual."""
     terminal.apply(caps)
+    abnormal = True
+    previous: dict[int, Any] = {}
+    if sys.platform != "win32":
+
+        def terminate(signum: int, _frame: Any) -> None:
+            raise SystemExit(128 + signum)
+
+        for name in ("SIGTERM", "SIGHUP"):
+            with contextlib.suppress(ValueError, OSError):  # not the main thread
+                previous[getattr(signal, name)] = signal.signal(getattr(signal, name), terminate)
     try:
-        return run()
+        code = run()
+        abnormal = False
+        return code
     except KeyboardInterrupt:
         return 130
-    except Exception as exc:
-        terminal.restore()
+    except SystemExit:
+        raise
+    except BaseException as exc:  # includes asyncio.CancelledError: a crash log beats a bare traceback
         print(diagnostics.crash_message(exc, diagnostics.write_crash_log(exc, caps)), file=sys.stderr)
         return 1
     finally:
-        terminal.restore()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if abnormal:
+            terminal.restore()

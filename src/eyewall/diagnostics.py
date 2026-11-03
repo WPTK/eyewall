@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import getpass
+import os
 import platform
+import re
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -11,12 +15,14 @@ from pathlib import Path
 from platformdirs import user_log_dir
 
 from eyewall import __version__
-from eyewall.config import Config
+from eyewall.config import Config, LoadResult
+from eyewall.headless import HeadlessResult
 from eyewall.state.alerts import default_state_dir
 from eyewall.terminal import Capabilities
 
 ISSUES_URL = "https://github.com/WPTK/eyewall/issues"
 KEEP_LOGS = 10
+FEED_TIMEOUT = 30.0  # seconds for the one feed poll of --diagnose
 
 
 def log_dir() -> Path:
@@ -24,11 +30,17 @@ def log_dir() -> Path:
 
 
 def scrub(text: str) -> str:
-    """Replace the home directory (and the user name in it) with `~`."""
-    home = str(Path.home())
-    for variant in {home, home.replace("\\", "/")}:
-        if variant and variant not in ("/", "\\"):
-            text = text.replace(variant, "~")
+    """Replace the home directory (any case on Windows, either slash) with `~` and the user name with `<user>`."""
+    flags = re.IGNORECASE if os.name == "nt" else 0
+    homes = {str(Path.home()), os.path.expanduser("~")}
+    homes |= {h.replace("\\", "/") for h in homes}
+    for home in sorted(homes, key=len, reverse=True):
+        if home and home not in ("/", "\\", "~"):
+            text = re.sub(re.escape(home), "~", text, flags=flags)
+    with contextlib.suppress(Exception):
+        user = getpass.getuser()
+        if len(user) >= 3:
+            text = re.sub(rf"(?<!\w){re.escape(user)}(?!\w)", "<user>", text, flags=flags)
     return text
 
 
@@ -51,15 +63,16 @@ def write_crash_log(exc: BaseException, caps: Capabilities, *, now: datetime | N
     stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
     body = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     text = "\n".join([*header(caps), "", scrub(body)])
+    directory = log_dir()
     try:
-        directory = log_dir()
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / f"crash-{stamp}.log"
         path.write_text(text, encoding="utf-8")
-        for old in sorted(directory.glob("crash-*.log"))[:-KEEP_LOGS]:
-            old.unlink(missing_ok=True)
     except OSError:
         return None
+    with contextlib.suppress(OSError):  # a log that will not prune is still a written log
+        for old in sorted(directory.glob("crash-*.log"))[:-KEEP_LOGS]:
+            old.unlink(missing_ok=True)
     return path
 
 
@@ -72,19 +85,30 @@ def crash_message(exc: BaseException, path: Path | None) -> str:
     )
 
 
-def diagnose_lines(caps: Capabilities, config: Config, config_path: Path | None) -> list[str]:
+def diagnose_lines(
+    caps: Capabilities, config: Config, config_path: Path | None, loaded: LoadResult, state_dir: Path | None = None
+) -> list[str]:
     """The report. Feed reachability is one poll through the same runner `--summary` uses."""
     from eyewall.headless import run_live
 
     lines = header(caps)
     lines.append(f"config {tilde(config_path) if config_path else '(none: --no-config)'}")
-    lines.append(f"data {tilde(default_state_dir())}")
+    if loaded.broken:
+        lines.append("config file could not be read; the defaults are in use")
+    lines.extend(f"config warning: {scrub(w)}" for w in loaded.warnings)
+    lines.append(f"data {tilde(state_dir or default_state_dir())}")
     lines.append(f"crash logs {tilde(log_dir())}")
+
+    async def poll() -> HeadlessResult:
+        return await asyncio.wait_for(run_live(config, state_dir, None), FEED_TIMEOUT)
+
     try:
-        result = asyncio.run(run_live(config, None, None))
+        result = asyncio.run(poll())
         failed = sorted(result.failed_feeds)
         detail = f" ({', '.join(failed)})" if failed else ""
         lines.append(f"feeds {result.feeds_ok} ok, {result.feeds_failed} failed{detail}")
+    except TimeoutError:
+        lines.append(f"feeds did not answer within {FEED_TIMEOUT:g} s")
     except Exception as exc:  # the report must still print
         lines.append(f"feeds could not be polled: {type(exc).__name__}: {scrub(str(exc))}")
     return lines
