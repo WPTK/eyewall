@@ -25,7 +25,7 @@ from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 
 from eyewall.config import Config, save_config, toggle_watch, watchlist_ids
-from eyewall.issuance import countdown
+from eyewall.issuance import advisory_status
 from eyewall.models.events import Event, Severity
 from eyewall.models.graphics import FloaterProduct
 from eyewall.models.obs import Parsed, SupplementalReading
@@ -185,7 +185,13 @@ class EyewallApp(App[bool]):
         if self.poller.away:
             extras.append(("idle", None))
         if self.store.storms:  # the schedule means nothing with no storm to issue for
-            extras.append((f"next full advisory {countdown(self.now())}", None))
+            issued = [
+                p.issued
+                for state in self.store.storms.values()
+                for p in (state.advisories.forecast, state.advisories.public, state.advisories.discussion)
+                if p is not None and p.issued is not None
+            ]
+            extras.append((advisory_status(self.now(), max(issued, default=None)), None))
         replay = self.replay_status()
         if replay is not None:  # the clock is the first to go when the bar is tight
             when = f"{replay.moment:%a %d %b %H:%MZ}" + (f" adv {replay.adv}" if replay.adv else "")
