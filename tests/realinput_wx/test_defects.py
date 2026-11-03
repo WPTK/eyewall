@@ -1,8 +1,8 @@
-"""Defects found by the second-driver UAT, each pinned by a strict xfail keyed by its issue number.
+"""Defects found by the second-driver UAT, each now fixed and closed, kept as regression tests.
 
-Every test asserts what the README promises. On the published v0.9.0 exe it fails (XFAIL); the day the defect is fixed
-it passes, strict xfail turns that into a failure, and the marker comes off. A scene that does not come up raises
-``Precondition`` (not an AssertionError), so a broken harness can never pass for an expected failure.
+Every test asserts what the README promises. They fail on the published v0.9.0 exe, which still has the defects, and
+pass on a build that has the fixes (set ``EYEWALL_EXE``). A scene that does not come up raises ``Precondition`` (not an
+AssertionError), so a broken harness can never pass for a defect.
 """
 
 from __future__ import annotations
@@ -19,11 +19,6 @@ from tests.uat_kit_wx.payloads import active_storm_routes, nhc_routes
 from .support import NHC, STAR, body, demo_paused, require
 
 
-def xfail(issue: int) -> pytest.MarkDecorator:
-    return pytest.mark.xfail(strict=True, raises=AssertionError, reason=f"#{issue}")
-
-
-@xfail(164)
 def test_r_after_the_network_returns_recovers_the_feeds(exe, fake_noaa) -> None:
     """README: ``r`` refreshes every feed now. Offline, then online, then ``r``: the storms must come back."""
     fake = fake_noaa(modes={NHC: "origin"}, routes=nhc_routes("populated"))
@@ -42,7 +37,6 @@ def test_r_after_the_network_returns_recovers_the_feeds(exe, fake_noaa) -> None:
         )
 
 
-@xfail(165)
 def test_quiet_day_home_enter_does_what_the_footer_says(exe, fake_noaa) -> None:
     """A footer label is shown only when the key does something. Quiet day, nothing marked: ``enter open``."""
     fake = fake_noaa(modes={NHC: "origin"}, routes=nhc_routes("empty"))
@@ -69,7 +63,6 @@ def _pictures_screen_explains_itself(r: Run) -> None:
     assert not advertised, f"the footer advertises {sorted(advertised)} with nothing to open or copy\n" + r.dump()
 
 
-@xfail(166)
 def test_pictures_in_demo_is_not_blank(exe) -> None:
     """``--demo`` has no pictures. README's first-run path says press ``g``: say why it is empty, advertise no dead keys."""
     with demo_paused(exe) as r:
@@ -79,7 +72,6 @@ def test_pictures_in_demo_is_not_blank(exe) -> None:
         _pictures_screen_explains_itself(r)
 
 
-@xfail(166)
 def test_pictures_for_an_active_storm_nothing_lists_is_not_blank(exe, fake_noaa) -> None:
     """The same defect on the live path: an active storm that NESDIS lists no pictures for (the usual case early on)."""
     routes = active_storm_routes(satellite=False)
@@ -105,7 +97,6 @@ SUMMARY_CASES = {
 
 
 @pytest.mark.parametrize("feed", list(SUMMARY_CASES))
-@xfail(167)
 def test_summary_exits_1_when_a_feed_could_not_be_fetched(exe, fake_noaa, internet, feed: str) -> None:
     fake = fake_noaa(modes={NHC: "origin", SUMMARY_CASES[feed]: "refuse"}, routes=nhc_routes("populated"))
     p = run_cli(exe, ["--summary"], fake=fake)
@@ -114,7 +105,6 @@ def test_summary_exits_1_when_a_feed_could_not_be_fetched(exe, fake_noaa, intern
     assert re.search(r"unavailable|could not|failed", p.stdout + p.stderr, re.I), f"{feed} refused and nothing says so"
 
 
-@xfail(146)
 def test_a_16_colour_terminal_is_drawn_in_16_colours(exe) -> None:
     """``TERM=xterm`` with no ``COLORTERM`` is a 16-colour terminal: the app must not paint truecolor onto it."""
     with Run("wx", exe, ["--demo"], 120, 30, env={"TERM": "xterm", "COLORTERM": ""}) as r:

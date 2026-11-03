@@ -98,10 +98,14 @@ async def click_links(w: W, name: str, rec: Any) -> None:
 
     for kind in (SidePanel, Page):
         for panel in list(screen.query(kind)):
+            if not panel.display or panel.size.height == 0:
+                continue  # hidden (the full-screen map hides #side and #strip): there is nothing to click
             lines = panel._state.lines if kind is SidePanel else panel._lines
             for index, line in enumerate(lines):
                 if not line.action:
                     continue
+                if shown == "alerts" and line.action == "app:alerts":
+                    continue  # the link to the screen already showing: nothing to change
                 item = f"click:link:{shown}:{panel.id}:{normalise(line.action)}"
                 if item in done:
                     continue

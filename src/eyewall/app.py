@@ -780,6 +780,7 @@ class EyewallApp(App[bool]):
             self.replay_over = False
             self.poller.refresh()
             await self.poller.tick()
+            self._for_screens("refresh_status")  # the clock moved: redraw the text that shows its age
 
 
 def run_checked(app: App[Any]) -> Any:

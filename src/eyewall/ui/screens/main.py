@@ -35,7 +35,6 @@ from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, View
 from eyewall.ui.words import outlook as outlook_words
 from eyewall.ui.words import storm as storm_words
 
-REFRESH_SECONDS = 30.0  # the ages on the cards move without a new poll
 MEDIUM_FROM = (100, 30)  # columns and rows at which the column beside the map fits
 LARGE_FROM = (160, 40)
 STRIP_ROWS = 4  # the most the strip under the map takes on a small terminal
@@ -197,7 +196,6 @@ class MainScreen(ChromeScreen):
         self.query_one("#side", SidePanel).set_builder(lambda width: side_blocks(self._view(), width))
         self.query_one("#strip", SidePanel).set_builder(lambda width: strip_blocks(self._view(), width))
         self._apply_tier(self.size.width, self.size.height)
-        self.set_interval(REFRESH_SECONDS, self._paint)
         self.map_view.focus()
         self.refresh_data()
 
@@ -229,6 +227,11 @@ class MainScreen(ChromeScreen):
         many = len(ids) > 1  # the list shows a selected row only then, so the map shows a selected mark only then
         self.map_view.selectable = frozenset(ids) if many else frozenset()  # only listed storms select on a click
         self.map_view.set_selected(Mark("storm", eye.selected) if many and eye.selected else None)
+        self._paint()
+
+    def refresh_status(self) -> None:
+        """The app calls this once a second and on pause or step: the bars and the storm text move with the clock."""
+        super().refresh_status()
         self._paint()
 
     def _paint(self) -> None:

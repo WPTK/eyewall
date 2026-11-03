@@ -86,6 +86,13 @@ def marked(a: App, b: str) -> bool:
     return bool(a.reverse_cells("◉●▲"))
 
 
+def storm_centred(a: App, b: str) -> bool:
+    """The view moved and the storm's mark (◉) now sits in the middle of the map, give or take a few cells."""
+    width = a.map_width()
+    marks = [(x, y) for x, y in a.find_all("◉") if x < width and 2 <= y < a.rows - 2]
+    return sig(a) != b and any(abs(x - width // 2) <= 3 and abs(y - a.rows // 2) <= 5 for x, y in marks)
+
+
 ONE_STORM = "only one storm is active, so there is no other storm to move to"
 PLAN: list[P] = [
     # ---- Map
@@ -150,7 +157,16 @@ PLAN: list[P] = [
     P("Map", "n", [], ["n"], marked, "next storm, buoy or gauge: marks one", undo=["escape"]),
     P("Map", "N", [], ["N"], marked, "previous storm, buoy or gauge: marks one", undo=["escape"]),
     P("Map", "escape", [], ["n", "escape"], lambda a, b: not marked(a, b), "clear the mark"),
-    P("Map", "c", [], ["left", "left", "c"], lambda a, b: sig(a) == b, "center on the storm"),
+    P("Map", "c", [], ["left", "left", "c"], storm_centred, "center on the storm"),
+    P(
+        "Map",
+        "w",
+        [],
+        ["w"],
+        has("is at the centre of the map."),
+        "centre the map on the next outlook area",
+        undo=["f"],
+    ),
     P("Map", "l", [], ["l"], has("Map layers"), "map layers", undo=["escape"]),
     # ---- Storm
     P(
@@ -216,6 +232,7 @@ PLAN: list[P] = [
         ["m"],
         lambda a, b: a.crumb() == ["Home"] and marked(a, b),
         "show this station on the map",
+        undo=["escape"],
     ),
     P(
         "Station",
