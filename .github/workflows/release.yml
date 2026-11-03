@@ -174,7 +174,7 @@ jobs:
             exe=./eyewall
           fi
           chmod +x "$exe"
-          "$exe" --version
+          [ "$("$exe" --version)" = "eyewall ${TAG#v}" ] || { echo "--version does not say ${TAG#v}: a stale asset?"; exit 1; }
           "$exe" --selftest
           "$exe" --replay demo --headless --until +1h
 
@@ -196,9 +196,8 @@ jobs:
       - name: Download the published wheel, sdist and SHA256SUMS
         run: |
           mkdir verify && cd verify
-          gh release download "$TAG" --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS
-          # the tar.gz binaries are not wanted here
-          rm -f eyewall-*-*.tar.gz
+          # the versioned names only: the wheel and the sdist, not the eyewall-<platform> binaries
+          gh release download "$TAG" --pattern 'eyewall-[0-9]*' --pattern SHA256SUMS
           ls -la
       - name: Check them against the published SHA256SUMS
         working-directory: verify
@@ -206,10 +205,15 @@ jobs:
           grep -E '\.whl$|^[0-9a-f]+  eyewall-[0-9][^ ]*\.tar\.gz$' SHA256SUMS > wanted.txt
           [ "$(wc -l < wanted.txt)" -eq 2 ] || { echo "expected the wheel and the sdist in SHA256SUMS"; cat wanted.txt; exit 1; }
           sha256sum -c wanted.txt
-      - name: Install the published wheel into a clean venv and self-test it
+      - name: Install the published wheel and the published sdist, each into a clean venv, and self-test them
         working-directory: verify
         run: |
-          python -m venv ../venv
-          ../venv/bin/pip install --quiet ./*.whl
-          ../venv/bin/eyewall --version
-          ../venv/bin/eyewall --selftest
+          for kind in wheel sdist; do
+            python -m venv "../venv-$kind"
+          done
+          ../venv-wheel/bin/pip install --quiet ./*.whl
+          ../venv-sdist/bin/pip install --quiet ./*.tar.gz
+          for kind in wheel sdist; do
+            [ "$(../venv-$kind/bin/eyewall --version)" = "eyewall ${TAG#v}" ] || { echo "$kind: --version does not say ${TAG#v}"; exit 1; }
+            ../venv-$kind/bin/eyewall --selftest
+          done

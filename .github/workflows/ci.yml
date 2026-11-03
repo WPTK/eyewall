@@ -68,7 +68,9 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install build twine
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install build==1.6.1 twine==7.0.0
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - name: Install the wheel into a clean venv

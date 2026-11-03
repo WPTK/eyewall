@@ -87,11 +87,11 @@ MAPDATA_FILES = tuple(
 
 
 def missing_package_data() -> list[str]:
-    """The data files an installation must carry (map data, places, stylesheet, demo recording) that are not there."""
+    """The data files an installation must carry (map data, attribution, stylesheet, demo recording) that are missing."""
     from eyewall.sources.bundle import BundleError, demo_bundle_path
 
     root = importlib.resources.files("eyewall")
-    wanted = [("mapdata", name) for name in MAPDATA_FILES] + [("ui", "app.tcss")]
+    wanted = [("mapdata", name) for name in MAPDATA_FILES] + [("mapdata", "ATTRIBUTION.md"), ("ui", "app.tcss")]
     missing = [f"{folder}/{name}" for folder, name in wanted if not root.joinpath(folder, name).is_file()]
     try:
         if not (demo_bundle_path() / "manifest.toml").is_file():
