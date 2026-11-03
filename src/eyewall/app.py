@@ -417,14 +417,21 @@ class EyewallApp(App[bool]):
             return
         self.push_screen(StationScreen(kind, station_id))
 
-    async def show_on_map(self, lat: float, lon: float, label: str) -> None:
-        """`m` on a station: back to the map, centred on it."""
+    async def show_on_map(self, lat: float, lon: float, label: str, mark: tuple[str, str] | None = None) -> None:
+        """`m` on a station: back to the map, centred on it, with its mark highlighted. `mark` is the station's kind
+        (`ndbc` or `coops`) and id."""
         while len(self.screen_stack) > 1:
             await self.pop_screen()
         root = self.screen
         if isinstance(root, MainScreen):
             root.show_map()
             root.map_view.center_on((lat, lon))
+            if mark is not None:
+                kind, station_id = ("buoy" if mark[0] == "ndbc" else "gauge"), mark[1].lower()
+                root.map_view.focused_mark = next(
+                    (m for m, _ in root.map_view.hits.drawn if m.kind == kind and m.id.lower() == station_id), None
+                )
+                root.map_view._show()
             self.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
 
     def open_graphics(self, storm_id: str | None) -> None:
