@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import random
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -112,9 +113,20 @@ def retry_after_seconds(response: httpx.Response) -> float | None:
     return max(0.0, seconds) if math.isfinite(seconds) else None
 
 
-def retry_delay(retry_after: float | None, attempt: int, backoff: float = 1.0) -> float:
-    """How long to wait before retry number `attempt`: the server's Retry-After (capped), else exponential backoff."""
-    return min(retry_after, MAX_RETRY_AFTER) if retry_after is not None else backoff * 2**attempt
+def retry_delay(
+    retry_after: float | None,
+    attempt: int,
+    backoff: float = 1.0,
+    rng: Callable[[], float] = random.random,
+) -> float:
+    """How long to wait before retry number `attempt`.
+
+    The server's Retry-After (capped at MAX_RETRY_AFTER) wins and is never jittered. Otherwise full jitter: uniform on
+    0..backoff*2**attempt, so clients and the feeds of one poll do not retry in lockstep. `rng` returns [0, 1).
+    """
+    if retry_after is not None:
+        return min(retry_after, MAX_RETRY_AFTER)
+    return backoff * 2**attempt * rng()
 
 
 async def fetch_bytes(
@@ -130,8 +142,9 @@ async def fetch_bytes(
     retries: int = RETRIES,
     backoff: float = 1.0,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    rng: Callable[[], float] = random.random,
 ) -> Fetched:
-    """GET a URL, retrying transport errors, 429 and 5xx with backoff.
+    """GET a URL, retrying transport errors, 429 and 5xx with jittered exponential backoff.
 
     A 304 comes back as a Fetched with not_modified set. A 404 comes back the same way, as missing, only when
     allow_404 is true (a buoy that stopped reporting is normal, not an error). Anything else raises a FetchError.
@@ -167,13 +180,13 @@ async def fetch_bytes(
         except httpx.RequestError as exc:  # transport errors, but also DecodingError and TooManyRedirects
             if attempt >= retries:
                 raise NetworkError(url, str(exc) or type(exc).__name__) from exc
-            await sleep(backoff * 2**attempt)
+            await sleep(retry_delay(None, attempt, backoff, rng))
             attempt += 1
             continue
         if status == 429 or status >= 500:
             if attempt >= retries:
                 raise RateLimited(url, retry_after) if status == 429 else HttpError(url, status)
-            await sleep(retry_delay(retry_after, attempt, backoff))
+            await sleep(retry_delay(retry_after, attempt, backoff, rng))
             attempt += 1
             continue
         raise HttpError(url, status)
