@@ -120,11 +120,6 @@ COLLECTOR = Collector()
 # reported XFAIL and does not fail the test, and when it passes (XPASS) the run fails so the entry gets deleted.
 KNOWN: dict[str, str] = {
     "list -> map:": "#151",  # opening a station from the list does not highlight its mark on the map
-    "[Station] m:": "#151",
-    "recovery:": "#164",  # r does nothing while feeds are in failure back-off
-    "59x16: no toast covers": "#175",
-    "60x15: no toast covers": "#175",
-    "40x10: no toast covers": "#175",
 }
 
 
@@ -135,8 +130,7 @@ def issue_for(item: str) -> str | None:
 class Checks:
     """Soft assertions for a walkthrough: every item is recorded, then the test fails once with all that went wrong.
 
-    A defect that has its own test carries a strict xfail keyed by its issue (``test_defects``); one found inside a
-    walkthrough is listed in ``KNOWN`` by item prefix.
+    A defect found inside a walkthrough is listed in ``KNOWN`` by item prefix.
     """
 
     def __init__(self, scenario: str) -> None:

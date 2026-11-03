@@ -3,6 +3,8 @@ opens it, and the nothing-active state says so."""
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
@@ -238,3 +240,22 @@ async def test_a_replay_has_no_replay_offer() -> None:
         assert "start the replay" not in screen_text(app)
         await press(pilot, "R")
         assert not app._exit
+
+
+async def test_home_and_storm_show_the_same_age_at_the_same_clock() -> None:
+    """The clock moves with no new poll (a paused or stepped replay): Home redraws on the next status refresh, so its
+    "Updated" age is the Storm screen's, not the one from the last 30 s redraw."""
+    app = replay_app()
+    async with running(app, (200, 50)) as pilot:
+        await into_the_storm(pilot)
+        app.paused = False
+        app.replay.clock.advance(7200)  # two hours with no poll
+        app.action_play_pause()  # pausing redraws the bars and, with them, the Home text
+        await settle(pilot)
+        home = " ".join(screen_text(app).split())
+        await press(pilot, "enter")
+        assert isinstance(app.screen, StormScreen)
+        storm = " ".join(screen_text(app).split())
+        age = re.search(r"Updated (\S+) ago", storm)
+        assert age is not None
+        assert f"Updated {age[1]} ago" in home

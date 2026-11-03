@@ -37,6 +37,7 @@
 - Never open a screen over the too-small notice, and keep toasts off it ([`54433e7`](https://github.com/WPTK/eyewall/commit/54433e7), [#190](https://github.com/WPTK/eyewall/pull/190); [`c418ff6`](https://github.com/WPTK/eyewall/commit/c418ff6), [#210](https://github.com/WPTK/eyewall/pull/210))
 - Reject out-of-range coordinates and non-list containers in the NHC parsers ([`e04cfff`](https://github.com/WPTK/eyewall/commit/e04cfff), [#178](https://github.com/WPTK/eyewall/pull/178))
 - Draw sub-cell shorelines and keep a quiet-day map no coarser than 0.5 degrees per dot ([`ce1e132`](https://github.com/WPTK/eyewall/commit/ce1e132), [#214](https://github.com/WPTK/eyewall/pull/214))
+- Highlight the first layer when the layers menu opens, so `space` works before an arrow key, and redraw the Home storm text every second and on pause or step, so its age matches the Storm screen (PR_LINK)
 
 ## [0.9.0] - 2026-11-01
 
