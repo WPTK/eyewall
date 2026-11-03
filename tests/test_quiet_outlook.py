@@ -7,15 +7,27 @@ from dataclasses import replace
 
 import pytest
 
-from eyewall.models.outlook import Outlook, OutlookGis
+from eyewall.models.outlook import Outlook, OutlookGis, OutlookSystem
+from eyewall.net import FetchError
 from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.client import NhcClient
 from eyewall.providers.nhc.ids import Basin
 from eyewall.providers.nhc.text import parse_two
 from eyewall.ui.chrome import footer_items
-from eyewall.ui.words.outlook import outlook_sentences
+from eyewall.ui.words.outlook import current_sentences, outlook_sentences
+from eyewall.ui.words.summary import summary_lines
 from tests.test_main_screen import panel_text
-from tests.ui_support import FIXTURES, ScriptedSource, press, quiet_outlook, running, screen_text, scripted_app, settle
+from tests.ui_support import (
+    FIXTURES,
+    ScriptedSource,
+    press,
+    quiet_outlook,
+    running,
+    screen_text,
+    scripted_app,
+    settle,
+    wait_until,
+)
 
 ALL = ("AL", "EP", "CP")
 NOT_EXPECTED = "Tropical cyclone formation is not expected during the next 7 days."
@@ -29,6 +41,10 @@ def lines(outlook: Outlook, enabled: tuple[str, ...] = ALL) -> list[str]:
     return [w.text for w in outlook_sentences(outlook, enabled)]
 
 
+def square(lat: float, lon: float, half: float = 1.0) -> tuple[tuple[float, float], ...]:
+    return ((lat - half, lon - half), (lat - half, lon + half), (lat + half, lon + half), (lat + half, lon - half))
+
+
 def nothing_anywhere() -> Outlook:
     return Outlook(texts=two("at_20261031"))
 
@@ -38,9 +54,9 @@ def test_each_basin_without_an_area_says_so_in_nhcs_words() -> None:
     said = lines(Outlook(texts=texts))
     assert said == [
         f"Atlantic: {NOT_EXPECTED}",
-        f"East Pacific and Central Pacific: {NOT_EXPECTED}",
+        f"East Pacific: {NOT_EXPECTED}",
         f"Central Pacific: {NOT_EXPECTED}",
-    ]
+    ]  # one text speaks for both Pacific basins and another for the Central one: each is said once
 
 
 def test_one_enabled_basin_keeps_the_summary_as_issued() -> None:
@@ -52,6 +68,26 @@ def test_an_area_in_one_basin_does_not_hide_the_quiet_of_the_others() -> None:
     assert said[0].startswith("NHC is watching 1 area in the Central Pacific: a 40% chance")
     assert f"Atlantic: {NOT_EXPECTED}" in said
     assert not any(s.startswith("Central Pacific:") for s in said)
+
+
+def pacific_quiet(*systems: OutlookSystem) -> Outlook:
+    """The combined East/Central Pacific text with no area, the Atlantic text, and shapes for `systems`."""
+    texts = tuple(replace(t, areas=(), summary=NOT_EXPECTED) for t in two("at_20261031", "ep_20261031"))
+    return Outlook(texts=texts, gis=OutlookGis(None, systems))
+
+
+def test_a_central_pacific_area_leaves_the_east_pacific_quiet_said() -> None:
+    said = lines(pacific_quiet(OutlookSystem("Pacific", "1", 0, "low", 40, "medium", polygons=(square(12.0, -150.0),))))
+    assert said[0].startswith("NHC is watching 1 area in the Central Pacific")
+    assert f"East Pacific: {NOT_EXPECTED}" in said and f"Atlantic: {NOT_EXPECTED}" in said
+    assert not any(s.startswith("Central Pacific:") for s in said)
+
+
+def test_an_east_pacific_area_leaves_the_central_pacific_quiet_said() -> None:
+    said = lines(pacific_quiet(OutlookSystem("Pacific", "1", 0, "low", 40, "medium", polygons=(square(12.0, -120.0),))))
+    assert said[0].startswith("NHC is watching 1 area in the East Pacific")
+    assert f"Central Pacific: {NOT_EXPECTED}" in said
+    assert not any(s.startswith("East Pacific:") for s in said)
 
 
 def test_a_basin_that_is_off_is_not_reported() -> None:
@@ -152,3 +188,75 @@ async def test_enter_is_not_offered_on_a_quiet_home_with_nothing_to_open() -> No
         await press(pilot, "enter")
         await settle(pilot)
         assert type(app.screen).__name__ == "MainScreen"
+
+
+def test_the_plain_summary_does_not_say_not_expected_when_the_outlook_feed_failed() -> None:
+    old = current_sentences(nothing_anywhere(), ("AL",), old=True)
+    assert len(old) == 1 and "may be out of date" in old[0]
+    assert current_sentences(nothing_anywhere(), ("AL",), old=False) == [NOT_EXPECTED]
+
+
+async def test_the_summary_text_follows_the_failed_feed() -> None:
+    app = scripted_app(ScriptedSource(nothing_anywhere()))
+    async with running(app, (120, 40)) as pilot:
+        await settle(pilot)
+        args = (app.store, app.preset, app.now())
+        assert NOT_EXPECTED in " ".join(summary_lines(*args))
+        said = " ".join(summary_lines(*args, failed=frozenset({"outlook"})))
+        assert "may be out of date" in said and "not expected" not in said
+
+
+async def test_a_storm_view_does_not_gain_the_quiet_basins() -> None:
+    from eyewall.ui.widgets.side_info import outlook_text
+    from tests.ui_support import into_the_storm, replay_app
+
+    app = replay_app()
+    async with running(app, (120, 40)) as pilot:
+        await into_the_storm(pilot)
+        app.store.outlook = quiet_outlook()
+        view = app.screen._view()  # type: ignore[attr-defined]
+        said = outlook_text(view)
+        assert said and not any("not expected" in s for s in said)
+
+
+class OutlookFlaky(ScriptedSource):
+    """Serves its outlook until `fail_outlook` is set, then fails that feed alone."""
+
+    fail_outlook = False
+
+    async def outlook(self) -> Outlook:
+        if self.fail_outlook:
+            raise FetchError("scripted://outlook", "outage")
+        return await super().outlook()
+
+
+async def test_a_real_outlook_failure_marks_the_panel_out_of_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("eyewall.poll.REFRESH_MIN_GAP", 0.0)
+    source = OutlookFlaky(nothing_anywhere())
+    app = scripted_app(source)
+    async with running(app, (120, 40)) as pilot:
+        await settle(pilot)
+        assert NOT_EXPECTED in panel_text(app) and "out of date" not in panel_text(app)
+        source.fail_outlook = True
+        await press(pilot, "r")
+        await wait_until(pilot, lambda: app.poller.freshness("outlook").failures > 0, 15)
+        await settle(pilot)
+        assert "may be out of date" in panel_text(app)
+        assert "not expected" not in panel_text(app)
+
+
+async def test_enter_appears_in_the_footer_when_the_first_area_arrives(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("eyewall.poll.REFRESH_MIN_GAP", 0.0)
+    source = ScriptedSource(nothing_anywhere())
+    app = scripted_app(source)
+    async with running(app, (120, 40)) as pilot:
+        await settle(pilot)
+        assert "open" not in [i.label for i in footer_items(app.screen)[0]]
+        source._outlook = quiet_outlook()
+        await press(pilot, "r")
+        await wait_until(pilot, lambda: "open" in [i.label for i in footer_items(app.screen)[0]], 15)
+        assert "open" in screen_text(app).splitlines()[-1]
+        source._outlook = nothing_anywhere()
+        await press(pilot, "r")
+        await wait_until(pilot, lambda: "open" not in [i.label for i in footer_items(app.screen)[0]], 15)
+        assert "open" not in screen_text(app).splitlines()[-1]

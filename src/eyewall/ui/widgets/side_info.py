@@ -13,7 +13,6 @@ from eyewall.ui.words import outlook as outlook_words
 
 SHOW_BUOYS = f"{DO}:buoys"
 SHOW_OUTLOOK = f"{DO}:outlook"
-OUTLOOK_OLD = "The outlook could not be updated, so what follows may be out of date."
 AREAS_NOUN = ("outlook note", "outlook notes")
 START_REPLAY = f"{DO}:app.start_replay"
 
@@ -28,13 +27,9 @@ def outlook_text(view: View) -> list[str]:
     store = view.store
     if store.outlook is None:
         return ["Outlook data unavailable."] if protocol.OUTLOOK in view.failed else []
-    count = outlook_words.area_count(store.outlook, view.basins)
-    if view.states and not count:
+    if view.states and not outlook_words.area_count(store.outlook, view.basins):
         return []
-    if view.outlook_old:  # the last answer may be stale, so "none expected" is not said: only the areas it named
-        areas = outlook_words.outlook_sentences(store.outlook, view.basins, summaries=False) if count else []
-        return [OUTLOOK_OLD, *(w.text for w in areas)]
-    return [w.text for w in outlook_words.outlook_sentences(store.outlook, view.basins)]
+    return outlook_words.current_sentences(store.outlook, view.basins, old=view.outlook_old, summaries=not view.states)
 
 
 def stations_text(view: View) -> str | None:

@@ -88,25 +88,25 @@ def area_count(outlook: Outlook | None, enabled: Sequence[str]) -> int:
 
 
 def _summaries(outlook: Outlook, enabled: Sequence[str], covered: set[str]) -> list[Words]:
-    """NHC's own summary for each enabled basin that has no area, as issued. With more than one basin shown, each
-    leads with its name so `not expected` is never read as an answer for the wrong ocean."""
-    pending: list[tuple[int, str, str]] = []
+    """NHC's own summary for each enabled basin that has no area, as issued, once per basin. One text can speak for two
+    basins (the East and Central Pacific): each is judged on its own, so an area in one leaves the other's quiet said.
+    With more than one basin shown, each line leads with its name, so `not expected` is not read for the wrong ocean."""
+    found: dict[str, tuple[int, str]] = {}
     for index, text in enumerate(outlook.texts):
-        codes = [c for c in text_basins(text) if c in enabled]
-        names = [BASIN_NAMES[c] for c in codes]
-        name = " and ".join(names)
         summary = collapse(text.summary)
-        if codes and summary and not text.areas and not covered & set(names):
-            pending.append((index, name, summary))
-    named = len({name for _, name, _ in pending}) > 1 or bool(covered)
-    out: list[Words] = []
-    seen: set[str] = set()
-    for index, name, summary in pending:
-        line = f"{name}: {summary}" if named else summary
-        if line not in seen:
-            seen.add(line)
-            out.append(Words(line, (f"outlook.texts[{index}].summary",)))
-    return out
+        if not summary or text.areas:
+            continue
+        for code in text_basins(text):
+            name = BASIN_NAMES[code]
+            if code in enabled and name not in covered:
+                found.setdefault(name, (index, summary))
+    named = len(found) > 1 or bool(covered)
+    order = [BASIN_NAMES[c] for c in ("AL", "EP", "CP")]
+    return [
+        Words(f"{name}: {found[name][1]}" if named else found[name][1], (f"outlook.texts[{found[name][0]}].summary",))
+        for name in order
+        if name in found
+    ]
 
 
 def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str], *, summaries: bool = True) -> list[Words]:
@@ -127,3 +127,17 @@ def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str], *, summar
     if summaries:
         out += _summaries(outlook, enabled, {a.basin for a in areas})
     return out or [Words("No outlook has been issued yet.")]
+
+
+OUTLOOK_OLD = "The outlook could not be updated, so what follows may be out of date."
+
+
+def current_sentences(
+    outlook: Outlook | None, enabled: Sequence[str], *, old: bool, summaries: bool = True
+) -> list[str]:
+    """The outlook in sentences. When its feed has failed or stopped, a warning leads and only the areas it named
+    follow: `not expected` is not said on the strength of an answer that may be stale."""
+    if old and outlook is not None:
+        areas = outlook_sentences(outlook, enabled, summaries=False) if area_count(outlook, enabled) else []
+        return [OUTLOOK_OLD, *(w.text for w in areas)]
+    return [w.text for w in outlook_sentences(outlook, enabled, summaries=summaries)]
