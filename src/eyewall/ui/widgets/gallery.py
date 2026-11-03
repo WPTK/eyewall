@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import textwrap
 import webbrowser
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -28,8 +29,10 @@ from textual.widget import Widget
 from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
+from eyewall.clock import format_age
 from eyewall.net import FetchError
-from eyewall.palette import DIM
+from eyewall.palette import DIM, FRESHNESS_CUES
+from eyewall.poll import FreshnessState
 from eyewall.render.canvas import Mode
 from eyewall.render.images import (
     Depth,
@@ -41,6 +44,7 @@ from eyewall.render.images import (
     inline_wanted,
     render_fallback,
 )
+from eyewall.sources import protocol
 from eyewall.ui import nav
 from eyewall.ui.gallery import SATELLITE_PRODUCTS, GalleryItem, build_items
 from eyewall.ui.widgets.strips import blank, centered
@@ -72,6 +76,7 @@ class ImageView(Widget):
         super().__init__(id=id)
         self._lines: list[Strip] = []
         self._is_picture = False
+        self._message = ""
 
     def show(self, frame: FallbackFrame) -> None:
         self._lines = [
@@ -82,11 +87,19 @@ class ImageView(Widget):
         self.refresh()
 
     def say(self, message: str) -> None:
-        self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in message.splitlines() or [""]]
+        self._message = message
+        self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in self._wrapped(message)]
         self._is_picture = False
         self.refresh()
 
+    def _wrapped(self, message: str) -> list[str]:
+        """The message cut into lines that fit; a narrow screen wraps a sentence instead of clipping it."""
+        width = max(self.size.width, 12)
+        return [part for line in message.splitlines() or [""] for part in textwrap.wrap(line, width) or [""]]
+
     def on_resize(self, event: events.Resize) -> None:
+        if not self._is_picture and self._message:
+            self.say(self._message)
         self.post_message(self.Resized())
 
     def render_line(self, y: int) -> Strip:
@@ -164,6 +177,8 @@ class GalleryPanel(Vertical, can_focus=True):
             self.items = items
             if self.current is not None:
                 self.current = by_key.get(self.current.key, self.current)
+            if not items:
+                self._say(self._empty_message())  # the reason can change (waiting, then failed) with no list change
         self._update_hint()
         if self.active:
             self._ensure_shown()
@@ -204,7 +219,15 @@ class GalleryPanel(Vertical, can_focus=True):
     def _empty_message(self) -> str:
         if self.storm_id not in self.eye.store.storms:
             return "This storm is no longer active."
-        return "No pictures yet."
+        feed = self.eye.poller.freshness(protocol.SATELLITE)
+        if feed.state is FreshnessState.ERROR:
+            cue = FRESHNESS_CUES["error"]
+            since = "" if feed.age is None else f" Last good answer {format_age(feed.age)} ago."
+            reason = feed.reason or "the feed could not be read"
+            return f"{cue.word.capitalize()}: Pictures unavailable, {reason}.{since}"
+        if feed.state is FreshnessState.LOADING:
+            return "Waiting for the first list of pictures."
+        return "No pictures are listed for this storm yet."
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
         event.stop()
@@ -439,6 +462,8 @@ class GalleryPanel(Vertical, can_focus=True):
     # ---- actions ----------------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        if action in ("open_url", "copy_url"):
+            return self.current is not None  # with nothing listed there is no address to open or copy
         if action in ("step", "toggle_loop"):
             return self._frames is not None and self._frames.animated  # on a still the key goes on to the app
         return True

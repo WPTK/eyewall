@@ -17,6 +17,7 @@ from eyewall.clock import format_age
 from eyewall.geo import compass_point
 from eyewall.models.obs import Observation, Station, TideSeries, TideStation
 from eyewall.palette import DIM, FRESHNESS_CUES, HEADING, category_color, storm_force
+from eyewall.poll import Freshness, FreshnessState
 from eyewall.state.store import Store
 from eyewall.state.tides import is_silent, latest_residual, observation_age, predicted_at
 from eyewall.ui import stations as st
@@ -31,7 +32,7 @@ KIND_WORD = {BUOY: "Buoy", GAUGE: "Gauge"}
 
 @dataclass(frozen=True, slots=True)
 class Row:
-    """One station in the list. `state` is `ok`, `stale` (silent), `dark` or `waiting`."""
+    """One station in the list. `state` is `ok`, `stale` (silent), `failed` (feed failing), `dark` or `waiting`."""
 
     kind: str
     id: str
@@ -51,6 +52,11 @@ class Row:
 
 def stale_text(g: UiGlyphs, ascii_: bool, sentence: str) -> str:
     cue = FRESHNESS_CUES["stale"]
+    return f"{cue.ascii_glyph if ascii_ else cue.glyph} {cue.word.capitalize()}: {sentence}"
+
+
+def failed_text(ascii_: bool, sentence: str) -> str:
+    cue = FRESHNESS_CUES["error"]
     return f"{cue.ascii_glyph if ascii_ else cue.glyph} {cue.word.capitalize()}: {sentence}"
 
 
@@ -101,7 +107,13 @@ def buoy_row(
 
 
 def gauge_row(
-    store: Store, entry: st.Entry[TideStation], now: datetime, preset: Preset, g: UiGlyphs, ascii_: bool
+    store: Store,
+    entry: st.Entry[TideStation],
+    now: datetime,
+    preset: Preset,
+    g: UiGlyphs,
+    ascii_: bool,
+    feed: Freshness | None = None,
 ) -> Row:
     gauge = entry.station
     series = store.tide_series.get(gauge.id)
@@ -110,6 +122,10 @@ def gauge_row(
             return _row(GAUGE, entry, "dark", "Not reporting. Could not fetch the water level for this gauge.")
         if series is not None:
             return _row(GAUGE, entry, "dark", "Not reporting. NOAA has no recent water level for this gauge.")
+        if feed is not None and feed.state is FreshnessState.ERROR:
+            reason = feed.reason or "the feed could not be read"
+            since = "" if feed.age is None else f" Last good answer {format_age(feed.age)} ago."
+            return _row(GAUGE, entry, "failed", failed_text(ascii_, f"Tide data unavailable, {reason}.{since}"))
         return _row(GAUGE, entry, "waiting", "Waiting for the first water level.")
     age = observation_age(series, now)
     if age is not None and is_silent(series, now):
@@ -126,20 +142,35 @@ def gauge_row(
 
 
 def near_rows(
-    store: Store, storm_id: str, now: datetime, preset: Preset, g: UiGlyphs, tz: tzinfo | None, ascii_: bool
+    store: Store,
+    storm_id: str,
+    now: datetime,
+    preset: Preset,
+    g: UiGlyphs,
+    tz: tzinfo | None,
+    ascii_: bool,
+    tides: Freshness | None = None,
 ) -> list[Row]:
     """The buoys and gauges near a storm, as the store ranks them."""
     out = [buoy_row(store, e, now, preset, g, tz, ascii_) for e in st.from_nearby(store.nearby_buoys(storm_id, now))]
-    out += [gauge_row(store, e, now, preset, g, ascii_) for e in st.from_nearby(store.nearby_tides(storm_id, now))]
+    out += [
+        gauge_row(store, e, now, preset, g, ascii_, tides) for e in st.from_nearby(store.nearby_tides(storm_id, now))
+    ]
     return out
 
 
 def followed_rows(
-    store: Store, now: datetime, preset: Preset, g: UiGlyphs, tz: tzinfo | None, ascii_: bool
+    store: Store,
+    now: datetime,
+    preset: Preset,
+    g: UiGlyphs,
+    tz: tzinfo | None,
+    ascii_: bool,
+    tides: Freshness | None = None,
 ) -> list[Row]:
     """The stations you follow, in the order you followed them (buoys, then gauges)."""
     out = [buoy_row(store, e, now, preset, g, tz, ascii_) for e in st.watchlist_buoys(store)]
-    out += [gauge_row(store, e, now, preset, g, ascii_) for e in st.watchlist_gauges(store)]
+    out += [gauge_row(store, e, now, preset, g, ascii_, tides) for e in st.watchlist_gauges(store)]
     return out
 
 
@@ -173,7 +204,12 @@ def row_text(row: Row, width: int, preset: Preset) -> Text:
         head.append(where, style=DIM)
     body = Text(no_wrap=True, overflow="ellipsis")
     body.append("    ")
-    style = DIM if row.state in ("dark", "waiting") else FRESHNESS_CUES["stale"].style() if row.state == "stale" else ""
+    style = {
+        "dark": DIM,
+        "waiting": DIM,
+        "stale": FRESHNESS_CUES["stale"].style(),
+        "failed": FRESHNESS_CUES["error"].style(),
+    }.get(row.state, "")
     if row.age:
         body.append(row.age, style=DIM)
         body.append(" · ", style=DIM)
