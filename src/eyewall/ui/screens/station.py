@@ -24,6 +24,7 @@ from eyewall.net import FetchError
 from eyewall.palette import DIM, FRESHNESS_CUES, GUST_SERIES, PRESSURE_SERIES, TIDE_GAUGE, WIND_SERIES
 from eyewall.providers.base import ParseError
 from eyewall.render.chart import ChartSeries
+from eyewall.sources import protocol
 from eyewall.state.nearby import NearbyStation
 from eyewall.state.tides import is_silent, observation_age
 from eyewall.state.trends import wave_trend, wind_trend
@@ -118,6 +119,7 @@ class StationScreen(ChromeScreen):
                 self.run_worker(self._load_series(), name="station-series", exit_on_error=False)
             self._ask_supplemental()
         else:
+            eye.poller.extra_gauges.add(self.station_id)
             self.run_worker(self._load_gauge(), name="station-gauge", exit_on_error=False)
         self._draw()
 
@@ -126,10 +128,13 @@ class StationScreen(ChromeScreen):
         others = [
             s
             for s in self.app.screen_stack
-            if s is not self and isinstance(s, StationScreen) and s.is_buoy and s.station_id == self.station_id
+            if s is not self
+            and isinstance(s, StationScreen)
+            and s.is_buoy == self.is_buoy
+            and s.station_id == self.station_id
         ]
         if not others:
-            self.eye.poller.extra_buoys.discard(self.station_id)
+            (self.eye.poller.extra_buoys if self.is_buoy else self.eye.poller.extra_gauges).discard(self.station_id)
 
     async def _load_series(self) -> None:
         self.series_error = await self.eye.fetch_series(self.station_id)
@@ -246,25 +251,18 @@ class StationScreen(ChromeScreen):
     def _gauge_lead(self) -> list[tuple[str, str]]:
         eye = self.eye
         store, now, preset, g = eye.store, eye.now(), eye.preset, eye.glyphs
+        ascii_ = eye.config.map.glyph_set == "ascii"
         gauge = next((t for t in store.tide_stations if t.id.upper() == self.station_id), None)
         station = gauge or TideStation(self.station_id, "", 0.0, 0.0)
         series = store.tide_series.get(self.station_id)
         out: list[tuple[str, str]] = []
         label = f"Gauge {self.station_id}" + (f" ({station.name})" if station.name else "")
-        if series is None or series.latest_level is None:
+        gap = station_view.gauge_gap(store, self.station_id, eye.poller.freshness(protocol.TIDES), ascii_)
+        if gap is not None:
             out.append((label, "bold"))
-            failed = self.station_id in store.tide_errors or series is not None
-            out.append(
-                (
-                    "Not reporting. Could not fetch the water level for this gauge."
-                    if self.station_id in store.tide_errors
-                    else "Not reporting. NOAA has no recent water level for this gauge."
-                    if failed
-                    else "Waiting for the first water level.",
-                    DIM,
-                )
-            )
+            out.append((gap[1], FRESHNESS_CUES["error"].style() if gap[0] == "failed" else DIM))
         else:
+            assert series is not None
             age = observation_age(series, now)
             sentence = words.gauge_sentence(station, series, now, preset).text
             if age is not None and is_silent(series, now):
@@ -470,8 +468,12 @@ class StationScreen(ChromeScreen):
         else:
             tide = store.tide_series.get(self.station_id)
             out.append(f"Readings in the last {self.hours} hours, newest first\n", style="bold")
+            gap = station_view.gauge_gap(store, self.station_id, eye.poller.freshness(protocol.TIDES), False)
             if tide is None:
-                out.append("Waiting for the first water level.", style=DIM)
+                out.append(
+                    gap[1] if gap else "Waiting for the first water level.",
+                    style=FRESHNESS_CUES["error"].style() if gap and gap[0] == "failed" else DIM,
+                )
             else:
                 out.append_text(station_view.tide_readings_table(tide, now, self.hours, preset, tz))
         self.query_one("#station-table", Static).update(out)
@@ -526,7 +528,9 @@ class StationScreen(ChromeScreen):
     def action_show_on_map(self) -> None:
         position = self._position()
         if position is not None:
-            self.app.call_later(self.eye.show_on_map, position[0], position[1], f"{self.crumb()}")
+            self.app.call_later(
+                self.eye.show_on_map, position[0], position[1], f"{self.crumb()}", (self.kind, self.station_id)
+            )
 
 
 __all__ = ["StationScreen"]

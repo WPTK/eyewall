@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from eyewall.models.outlook import Outlook, OutlookSystem
 from eyewall.ui.format import BASIN_NAMES, collapse, text_basins
@@ -53,10 +54,12 @@ def _chances(area: _Area) -> str:
     return "no formation chance is given"
 
 
-def _areas(outlook: Outlook, enabled: Sequence[str]) -> list[_Area]:
-    """The areas from the outlook shapes, or from the outlook text when the shapes did not arrive."""
+def _areas(outlook: Outlook, enabled: Sequence[str], now: datetime) -> list[_Area]:
+    """The areas from the outlook shapes, or from the outlook text when the shapes did not arrive or are past
+    `GIS_DROP_AFTER` (a kept copy must not win over the fresh text)."""
     found: list[_Area] = []
-    for index, system in enumerate(outlook.gis.systems):
+    gis_old = outlook.gis.expired(now)
+    for index, system in enumerate(() if gis_old else outlook.gis.systems):
         basins = _GIS_BASINS.get(system.basin_label.strip().lower(), ())
         if basins and not set(basins) & set(enabled):
             continue
@@ -67,7 +70,7 @@ def _areas(outlook: Outlook, enabled: Sequence[str]) -> list[_Area]:
                 label, system.prob_2day, system.prob_7day, (f"{base}.prob_2day", f"{base}.prob_7day"), _basin_of(system)
             )
         )
-    if found or not outlook.gis.empty:
+    if found or not (outlook.gis.empty or gis_old):
         return found
     for t_index, text in enumerate(outlook.texts):
         basins = text_basins(text)
@@ -82,9 +85,9 @@ def _areas(outlook: Outlook, enabled: Sequence[str]) -> list[_Area]:
     return found
 
 
-def area_count(outlook: Outlook | None, enabled: Sequence[str]) -> int:
+def area_count(outlook: Outlook | None, enabled: Sequence[str], now: datetime) -> int:
     """How many areas NHC is watching in the enabled basins (0 when the outlook has not arrived)."""
-    return 0 if outlook is None else len(_areas(outlook, enabled))
+    return 0 if outlook is None else len(_areas(outlook, enabled, now))
 
 
 def _summaries(outlook: Outlook, enabled: Sequence[str], covered: set[str]) -> list[Words]:
@@ -109,7 +112,9 @@ def _summaries(outlook: Outlook, enabled: Sequence[str], covered: set[str]) -> l
     ]
 
 
-def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str], *, summaries: bool = True) -> list[Words]:
+def outlook_sentences(
+    outlook: Outlook | None, enabled: Sequence[str], now: datetime, *, summaries: bool = True
+) -> list[Words]:
     """`NHC is watching 1 area in the Atlantic: a 70% chance it forms within 7 days, and 30% within 2 days.`
 
     With several areas, a lead sentence and one line each. A basin with none says so in NHC's own summary, after the
@@ -117,7 +122,7 @@ def outlook_sentences(outlook: Outlook | None, enabled: Sequence[str], *, summar
     """
     if outlook is None:
         return [Words("Waiting for the first outlook.")]
-    areas = _areas(outlook, enabled)
+    areas = _areas(outlook, enabled, now)
     out: list[Words] = []
     if len(areas) == 1:
         out = [Words(f"NHC is watching 1 area{_in(areas[0])}: {_chances(areas[0])}.", areas[0].sources)]
@@ -133,11 +138,11 @@ OUTLOOK_OLD = "The outlook could not be updated, so what follows may be out of d
 
 
 def current_sentences(
-    outlook: Outlook | None, enabled: Sequence[str], *, old: bool, summaries: bool = True
+    outlook: Outlook | None, enabled: Sequence[str], now: datetime, *, old: bool, summaries: bool = True
 ) -> list[str]:
     """The outlook in sentences. When its feed has failed or stopped, a warning leads and only the areas it named
     follow: `not expected` is not said on the strength of an answer that may be stale."""
     if old and outlook is not None:
-        areas = outlook_sentences(outlook, enabled, summaries=False) if area_count(outlook, enabled) else []
+        areas = outlook_sentences(outlook, enabled, now, summaries=False) if area_count(outlook, enabled, now) else []
         return [OUTLOOK_OLD, *(w.text for w in areas)]
-    return [w.text for w in outlook_sentences(outlook, enabled, summaries=summaries)]
+    return [w.text for w in outlook_sentences(outlook, enabled, now, summaries=summaries)]

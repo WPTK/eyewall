@@ -114,7 +114,24 @@ KEYS: tuple[Key, ...] = (
         "the tropical weather outlook text: each area and its chances",
         menu="Open NHC's outlook",
     ),
-    K("main", "M", "full_map", "full map", "full-screen map; Esc leaves it"),
+    K(
+        "main",
+        "w",
+        "area",
+        "next area",
+        "centre the map on the next outlook area, in any basin",
+        menu="Centre the map on an outlook area",
+    ),
+    K(
+        "main",
+        "M",
+        "full_map",
+        "full map",
+        "full-screen map; Esc leaves it",
+        footer=True,
+        busy=True,
+        menu="Full-screen map",
+    ),
     K(
         "main",
         "R",
@@ -368,9 +385,13 @@ class EyewallCommands(Provider):
         found: list[tuple[str, Callable[[], Any], str]] = []
         if self._blocked():
             return found
+        main = next((s for s in app.screen_stack if "main" in getattr(s, "NAV_SCOPES", ())), None)
         for entry in KEYS:
             name = entry.action.removeprefix("app.").split("(")[0]
-            if entry.menu and entry.scope in ("app", "main", "replay") and app.check_action(name, ()):
+            owner: Any = app
+            if main is not None and entry.scope == "main" and not entry.action.startswith("app."):
+                owner = main  # the main screen knows what it can do
+            if entry.menu and entry.scope in ("app", "main", "replay") and owner.check_action(name, ()):
                 found.append((entry.menu, self._runner(entry), f"{footer_name(entry)}  {entry.help or ''}"))
         for storm_id in app.store.storms:
             found.append(

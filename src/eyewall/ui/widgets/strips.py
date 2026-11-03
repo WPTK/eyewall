@@ -47,9 +47,9 @@ def rich_style(style: CanvasStyle) -> RichStyle:
     )
 
 
-def reverse_cell(strip: Strip, col: int) -> Strip:
-    """The strip with one cell in reverse video: the focus ring on a mark. Reverse survives `NO_COLOR`."""
+def reverse_cell(strip: Strip, col: int, *, ring: bool = True) -> Strip:
+    """The strip with one cell marked: in reverse video for the focus ring, bold and underlined for the selected
+    storm. Both survive `NO_COLOR`."""
+    mark = RichStyle(reverse=True) if ring else RichStyle(bold=True, underline=True)
     before, cell, after = strip.divide([col, col + 1, strip.cell_length])
-    return Strip(
-        [*before, *(Segment(seg.text, (seg.style or PLAIN) + RichStyle(reverse=True)) for seg in cell), *after]
-    )
+    return Strip([*before, *(Segment(seg.text, (seg.style or PLAIN) + mark) for seg in cell), *after])

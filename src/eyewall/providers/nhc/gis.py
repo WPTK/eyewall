@@ -19,6 +19,7 @@ import io
 import math
 import re
 import struct
+import threading
 import zipfile
 import zlib
 from collections.abc import Iterator, Mapping
@@ -77,6 +78,23 @@ _ZIP_OPEN_ERRORS = (
 MAX_MEMBER_BYTES = 32 * 1024 * 1024
 
 
+# pyshp 3 wraps instance methods in `functools.cache`, a process-wide dict keyed on `self`, so every Reader (and its
+# shapefile bytes) stays reachable forever and `close()` does not release it. Clearing those caches after each layer
+# is the only hook pyshp leaves; the lock keeps one parse from clearing a cache another is mid-way through reading.
+_PYSHP_CACHES = tuple(
+    attr
+    for cls in (shapefile.Reader, shapefile.ShpReader, shapefile.ShxReader, shapefile.DbfReader)
+    for attr in vars(cls).values()
+    if hasattr(attr, "cache_clear")
+)
+_READ_LOCK = threading.Lock()
+
+
+def _release_pyshp_caches() -> None:
+    for cached in _PYSHP_CACHES:
+        cached.cache_clear()
+
+
 def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
     with archive.open(name) as handle:
         data = handle.read(MAX_MEMBER_BYTES + 1)
@@ -124,19 +142,22 @@ def read_features(archive: zipfile.ZipFile, prefix: str) -> list[Feature]:
     if shp is None:
         return []
     features: list[Feature] = []
-    try:
-        reader = shapefile.Reader(
-            shp=io.BytesIO(_read_member(archive, shp)),
-            dbf=io.BytesIO(_read_member(archive, dbf)) if dbf else None,
-            shx=io.BytesIO(_read_member(archive, shx)) if shx else None,
-        )
-        fields = [field[0].upper() for field in reader.fields[1:]] if dbf else []
-        for shape_record in _iter_shape_records(reader, bool(dbf)):
-            shape, record = shape_record
-            attrs = dict(zip(fields, record, strict=False)) if record is not None else {}
-            features.append(Feature(attrs, _parts(shape)))
-    except _READ_ERRORS:
-        return features
+    with _READ_LOCK:
+        try:
+            with shapefile.Reader(
+                shp=io.BytesIO(_read_member(archive, shp)),
+                dbf=io.BytesIO(_read_member(archive, dbf)) if dbf else None,
+                shx=io.BytesIO(_read_member(archive, shx)) if shx else None,
+            ) as reader:
+                fields = [field[0].upper() for field in reader.fields[1:]] if dbf else []
+                for shape_record in _iter_shape_records(reader, bool(dbf)):
+                    shape, record = shape_record
+                    attrs = dict(zip(fields, record, strict=False)) if record is not None else {}
+                    features.append(Feature(attrs, _parts(shape)))
+        except _READ_ERRORS:
+            return features
+        finally:
+            _release_pyshp_caches()
     return features
 
 

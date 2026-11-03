@@ -19,7 +19,8 @@ succeeding or stop happening, or when the source had to answer from its disk cac
 failed poll the delay doubles per consecutive failure up to `backoff_max` and never drops below the normal
 interval. A server that says 429 or 5xx counts as a failure even when the disk cache answered for it, and its
 Retry-After sets a floor on the wait. `refresh()` wakes the loop and makes every feed due, but never sooner than
-`REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. A feed that runs past
+`REFRESH_MIN_GAP` after that feed's last attempt, so holding the key does not hammer NOAA. It does cut through the
+failure backoff, but not a Retry-After. A feed that runs past
 `FEED_DEADLINE` seconds is cut off. A tick polls storms first, then the other due feeds together, so one hung host
 costs only its own deadline.
 
@@ -140,7 +141,9 @@ class _FeedState:
     from_cache: bool = False
     polls: int = 0
     last_attempt: float | None = None
-    not_before: float = 0.0  # a Retry-After or backoff window that the refresh key may not shorten
+    not_before: float = 0.0  # a Retry-After or backoff window that the watchlist and away-mode requests may not shorten
+    limited_until: float = 0.0  # a server's own Retry-After: not even the refresh key may ask before it
+    forced: bool = False  # `requested` came from the refresh key, which may cut through the failure backoff
     requested: float | None = (
         None  # when a refresh asked for this feed's next poll, if it did so during the current one
     )
@@ -214,6 +217,7 @@ class Poller:
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
         self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
+        self.extra_gauges: set[str] = set()  # the same for tide gauges
         self.feed_deadline = FEED_DEADLINE
         self._partial: dict[str, list[Event]] = {}  # by feed: the events it produced before a deadline cut it off
 
@@ -300,7 +304,7 @@ class Poller:
         if feed == protocol.BUOYS:
             return bool(self.store.storms or self.store.config.watchlist.ndbc or self.extra_buoys)
         if feed == protocol.TIDES:
-            return bool(self.store.storms or self.store.config.watchlist.coops)
+            return bool(self.store.storms or self.store.config.watchlist.coops or self.extra_gauges)
         return bool(self.store.storms)
 
     # ---- running ----------------------------------------------------------------------------------------------
@@ -310,20 +314,23 @@ class Poller:
         """Ask for a feed's next poll at `at`, but not inside its Retry-After or backoff window. A poll in flight reads
         `requested` when it ends, so a request made meanwhile is not overwritten by the schedule it computes."""
         state.next_at = state.requested = max(at, state.not_before)
+        state.forced = False
 
     def refresh(self, *, throttled: bool = False) -> None:
         """Make every feed due now and wake the loop. With `throttled` (the refresh key on live data) a feed attempted
-        less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead."""
+        less than `REFRESH_MIN_GAP` ago becomes due when that gap has passed instead. The key skips our own failure
+        backoff (the user asked) but never a server's Retry-After."""
         now = self.clock.monotonic()
         for state in self._feeds.values():
-            floor = state.not_before
+            floor = state.limited_until
             if throttled and state.last_attempt is not None:
                 floor = max(floor, state.last_attempt + REFRESH_MIN_GAP)
-            if throttled and floor > now:
-                state.next_at = min(state.next_at, floor)
+            if floor > now:
+                state.next_at = min(state.next_at, floor) if state.next_at > now else floor
                 state.requested = state.next_at
             else:
                 state.next_at = state.requested = 0.0
+            state.forced = True
         if not self.polling:
             self._wake.set()
 
@@ -343,6 +350,7 @@ class Poller:
         results: list[PollResult] = []
         self.polling = True
         try:
+            self._prune_tides()
             first, *others = protocol.FEEDS  # storms first: its answer decides whether the others apply
             if self._due(first):
                 results.append(await self.poll_feed(first))
@@ -407,7 +415,9 @@ class Poller:
             wait = max(wait, min(retry_after, self.config.backoff_max))
         state.next_at = self.clock.monotonic() + wait
         state.not_before = state.next_at if (state.failures or retry_after) else 0.0
-        if state.requested is not None and not state.not_before:  # asked for again while this poll was running
+        state.limited_until = self.clock.monotonic() + min(retry_after, self.config.backoff_max) if retry_after else 0.0
+        held = state.limited_until if state.forced else state.not_before  # the key cuts through our own backoff only
+        if state.requested is not None and not held:  # asked for again while this poll was running
             state.next_at = min(state.next_at, max(state.requested, self.clock.monotonic()))
         shown: list[Event] = []
         try:
@@ -606,21 +616,36 @@ class Poller:
             raise latest_error
         return events
 
-    async def _poll_tides(self) -> list[Event]:
-        await self._refresh_catalog(
-            "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
-        )
+    def _wanted_gauges(self) -> dict[str, TideStation]:
+        """The gauges to poll: those of an open gauge page first, then the storms' nearest, then the watchlist's, all
+        under one cap."""
         gauges: dict[str, TideStation] = {}
+        known = {g.id.upper(): g for g in self.store.tide_stations}
+        for station_id in sorted(self.extra_gauges):
+            if (gauge := known.get(station_id.upper())) is not None and len(gauges) < MAX_TIDE_GAUGES:
+                gauges[gauge.id] = gauge
         ranked = [[e.station for e in self.store.nearby_tides(sid)] for sid in self.store.storms]
         for station in _by_rank(ranked):
             if len(gauges) >= MAX_TIDE_GAUGES:
                 break
             gauges[station.id] = station
-        known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
             gauge = known.get(station_id.upper())
             if gauge is not None and len(gauges) < MAX_TIDE_GAUGES:
                 gauges.setdefault(gauge.id, gauge)  # the storm's gauges and the watchlist share the same cap
+        return gauges
+
+    def _prune_tides(self, gauges: dict[str, TideStation] | None = None) -> None:
+        """Drop the series nobody refreshes any more, or whose newest level is long past, so they do not read as "No
+        report". An open gauge page keeps its series however old. Runs every tick, not only with the tides feed on."""
+        wanted = self._wanted_gauges() if gauges is None else gauges
+        self.store.prune_tides({g.upper() for g in wanted}, self.source.now(), {g.upper() for g in self.extra_gauges})
+
+    async def _poll_tides(self) -> list[Event]:
+        await self._refresh_catalog(
+            "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
+        )
+        gauges = self._wanted_gauges()
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
         async def one(index: int, station: TideStation) -> None:
@@ -635,6 +660,7 @@ class Poller:
 
         failures: list[Exception] = []
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
+        self._prune_tides(gauges)
         if gauges and (down := _feed_failure(failures, len(gauges))) is not None:
             raise down
         return []

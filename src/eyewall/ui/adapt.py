@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from eyewall.clock import format_age
 from eyewall.geo import LatLon
 from eyewall.models.forecast import ForecastAdvisory
 from eyewall.models.obs import Station, TideStation
-from eyewall.models.outlook import Outlook
+from eyewall.models.outlook import GIS_NOTE_AFTER, Outlook
 from eyewall.models.wind import QuadrantRadii
 from eyewall.render import layers as L
 from eyewall.state.store import Store, StormState
@@ -111,11 +112,14 @@ def storm_scene(state: StormState) -> L.StormScene:
     )
 
 
-def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
+def outlook_areas(outlook: Outlook | None, now: datetime) -> tuple[L.OutlookArea, ...]:
     """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance and its
-    span, so a number on the map is never bare."""
-    if outlook is None:
+    span, so a number on the map is never bare. Shapes past `GIS_NOTE_AFTER` carry their age (`40% in 7 days, 14h00m
+    old`) and shapes past `GIS_DROP_AFTER` are not drawn."""
+    if outlook is None or outlook.gis.expired(now):
         return ()
+    age = outlook.gis.age(now)
+    old = f", {format_age(age.total_seconds())} old" if age is not None and age > GIS_NOTE_AFTER else ""
     areas: list[L.OutlookArea] = []
     for system in outlook.gis.systems:
         if not system.polygons:
@@ -123,8 +127,32 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
         risks = [r for r in (system.risk_2day, system.risk_7day) if r]
         risk = max(risks, key=lambda r: _RISK_RANK.get(r.lower(), 0)) if risks else "low"
         days, chance = (7, system.prob_7day) if system.prob_7day is not None else (2, system.prob_2day)
-        areas.append(L.OutlookArea(system.polygons, risk, None if chance is None else f"{chance}% in {days} days"))
+        label = None if chance is None else f"{chance}% in {days} days{old}"
+        areas.append(L.OutlookArea(system.polygons, risk, label))
     return tuple(areas)
+
+
+def outlook_centres(outlook: Outlook | None) -> tuple[tuple[str, LatLon], ...]:
+    """Where each outlook area with a shape sits, as a plain label and the middle of its bounding box, in the order
+    the outlook lists them. The longitudes of a shape that crosses the antimeridian are taken on one side of it, and the
+    result is wrapped back into -180..180."""
+    if outlook is None:
+        return ()
+    found: list[tuple[str, LatLon]] = []
+    for system in outlook.gis.systems:
+        ring = [p for polygon in system.polygons for p in polygon]
+        if ring:
+            first = ring[0][1]
+            lons = [((p[1] - first + 180.0) % 360.0) - 180.0 for p in ring]
+            lat = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
+            lon = first + (min(lons) + max(lons)) / 2.0
+        elif system.point is not None:
+            lat, lon = system.point
+        else:
+            continue
+        label = f"{system.basin_label} area {system.area_id}".strip()
+        found.append((label, (lat, ((lon + 180.0) % 360.0) - 180.0)))
+    return tuple(found)
 
 
 def _wind_kt_of(store: Store, station_id: str, now: datetime) -> tuple[float | None, bool]:
@@ -183,7 +211,7 @@ def map_scene(store: Store, now: datetime, selected: str | None, *, cursor: LatL
         buoys, tides = watchlist_marks(store, now)
     return L.MapScene(
         storms=storms,
-        outlook=outlook_areas(store.outlook),
+        outlook=outlook_areas(store.outlook, now),
         buoys=buoys,
         tide_gauges=tides,
         cursor=cursor,
