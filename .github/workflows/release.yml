@@ -29,6 +29,7 @@ jobs:
           version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/eyewall/__init__.py)
           tag="${GITHUB_REF_NAME#v}"
           [ "$version" = "$tag" ] || { echo "tag $GITHUB_REF_NAME does not match __version__ $version"; exit 1; }
+          python scripts/check_changelog.py
           python - "$version" <<'PY'
           import pathlib
           import re
