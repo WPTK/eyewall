@@ -8,10 +8,8 @@ lines, braille map dots, marks) are decorative and need 3:1. `dim` text is blend
 
 The command palette and search overlays are left out: a modal dims the screen under it on purpose.
 
-A style below its limit that exists today is listed in `KNOWN` against its issue (`LIGHT_ISSUE` for the whole light
-profile without a background). `test_no_new_low_contrast_style` fails for any other, and `test_a_known_style_still_fails`
-fails when a listed one no longer does, so the entry gets removed
-with the fix (a strict xfail in two halves, since the set of styles is found by rendering, not written down).
+Every style must reach its limit on both profiles. The map, charts and picture gallery paint the app's own background, so
+the terminal's never shows through and the two profiles agree. The only exception is in `EXEMPT`, with its reason.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ import asyncio
 
 import pytest
 
+from eyewall import palette
 from tests.uat.inventory.registry import World
 from tests.uat.inventory.worlds import SCREEN_NAMES, launch
 
@@ -30,25 +29,11 @@ IMAGE_CELLS = set("▀▄█ ")  # half and full blocks: how a picture is drawn 
 RGB = tuple[int, int, int]
 Style = tuple[RGB | None, RGB | None, bool, str]  # foreground, background, dim, kind ("text" or "glyph")
 
-# (foreground, background) -> issue; a background of None is the terminal's own. Explicit backgrounds are the same on
-# both profiles, so one entry covers both.
-KNOWN: dict[tuple[RGB, RGB | None], str] = {
-    ((125, 138, 153), (55, 65, 78)): "#172",  # secondary text in the selected buoy row
-    ((125, 138, 153), (28, 36, 46)): "#172",
-    ((154, 164, 178), (58, 70, 88)): "#172",  # place names on the map
-    ((155, 77, 255), (13, 17, 23)): "#172",  # Storm Surge Warning in the legend
-    ((12, 20, 30), (18, 26, 36)): "#173",  # rules, tracks and dim map layers
-    ((18, 26, 36), (28, 36, 46)): "#173",
-    ((12, 20, 30), (23, 33, 45)): "#173",
-    ((34, 39, 45), (13, 17, 23)): "#173",
-    ((74, 86, 104), (58, 70, 88)): "#173",
-    ((43, 53, 68), None): "#173",
-    ((110, 127, 148), (58, 70, 88)): "#173",
-    ((46, 94, 145), (18, 26, 36)): "#173",
-    ((43, 90, 139), (13, 17, 23)): "#173",
+# (foreground, background) -> why it is not information. Explicit backgrounds are the same on both profiles.
+EXEMPT: dict[tuple[RGB, RGB | None], str] = {
+    # The left edge of a layer checkbox on the highlighted row: the box's state is its X and the row's highlight.
+    ((18, 26, 36), (28, 36, 46)): "checkbox edge",
 }
-# Any style drawn without a background of its own on the light profile: the colours were picked for dark terminals.
-LIGHT_ISSUE: str = "#174"
 
 
 def luminance(rgb: RGB) -> float:
@@ -114,14 +99,6 @@ def styles() -> dict[Style, str]:
     return _STYLES
 
 
-def issue_of(profile: str, style: Style) -> str | None:
-    fg, bg = style[0], style[1]
-    assert fg is not None
-    if profile == "light" and bg is None:
-        return LIGHT_ISSUE
-    return KNOWN.get((fg, bg))
-
-
 def failing(profile: str) -> dict[Style, float]:
     return {s: c for s in styles() if (c := contrast(s, profile)) < limit(s)}
 
@@ -141,17 +118,58 @@ def _colour(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.timeout(300)
 @pytest.mark.parametrize("profile", sorted(PROFILES))
 def test_no_new_low_contrast_style(profile: str) -> None:
-    new = {s: c for s, c in failing(profile).items() if issue_of(profile, s) is None}
+    new = {s: c for s, c in failing(profile).items() if (s[0], s[1]) not in EXEMPT}
     assert not new, "\n".join(describe(profile, new))
 
 
 @pytest.mark.timeout(300)
-def test_a_known_style_still_fails() -> None:
+def test_an_exemption_is_still_needed() -> None:
     low = {(s[0], s[1]) for profile in PROFILES for s in failing(profile)}
-    fixed = [f"{key} ({issue}) now passes: remove it from KNOWN" for key, issue in KNOWN.items() if key not in low]
-    if not any(s[1] is None for s in failing("light")):
-        fixed.append(f"no style without a background fails on light: remove LIGHT_ISSUE ({LIGHT_ISSUE})")
-    assert not fixed, fixed
+    stale = [f"{key} ({why}) now passes: remove it from EXEMPT" for key, why in EXEMPT.items() if key not in low]
+    assert not stale, stale
+
+
+def _contrast_of(fg: str, bg: str | None = None) -> list[float]:
+    """The ratios of every rendered style with this foreground (and background, when given), on both profiles."""
+    want_fg = _hex(fg)
+    return [
+        contrast(s, profile)
+        for s in styles()
+        for profile in PROFILES
+        if s[0] == want_fg and (bg is None or s[1] == _hex(bg))
+    ]
+
+
+def _hex(value: str) -> RGB:
+    return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+
+
+@pytest.mark.timeout(300)
+def test_172_secondary_text_place_names_and_surge_legend() -> None:
+    # Secondary text (selected and other buoy rows), place names on land, and the Storm Surge Warning legend entry.
+    for colour in (palette.DIM, palette.MAP_LABEL, palette.WATCH_WARNING_COLORS[palette.WatchWarning.SURGE_WARNING]):
+        ratios = _contrast_of(colour)
+        assert ratios, f"{colour} is no longer drawn: update this test"
+        assert min(ratios) >= TEXT, (colour, min(ratios))
+    assert ratio(_hex(palette.DIM), (55, 65, 78)) >= TEXT  # the selected buoy row
+    assert ratio(_hex(palette.MAP_LABEL), _hex(palette.LAND)) >= TEXT  # place names over land
+
+
+@pytest.mark.timeout(300)
+def test_173_rules_tracks_and_map_lines_reach_3_to_1() -> None:
+    for colour in (palette.STATE_LINE, palette.BORDER, palette.CHART_GRID):
+        ratios = _contrast_of(colour)
+        assert ratios, f"{colour} is no longer drawn: update this test"
+        assert min(ratios) >= DECORATIVE, (colour, min(ratios))
+    glyphs = [(s, c) for s, c in ((s, contrast(s, "dark")) for s in styles()) if s[3] == "glyph"]
+    assert [s for s, c in glyphs if c < DECORATIVE and (s[0], s[1]) not in EXEMPT] == []
+
+
+@pytest.mark.timeout(300)
+def test_174_nothing_depends_on_the_terminal_background() -> None:
+    bare = [s for s in styles() if s[1] is None]
+    assert not bare, [f"{s[0]} {styles()[s]}" for s in bare]
+    assert {s: contrast(s, "dark") for s in styles()} == {s: contrast(s, "light") for s in styles()}
 
 
 def test_the_ratio_matches_the_wcag_examples() -> None:
