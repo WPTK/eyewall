@@ -52,9 +52,6 @@ PANELS = (
 XFAIL: dict[tuple[str, str, str], str] = {
     ("tides", "*", "says"): "#170",  # gauge rows wait forever and never say why
     ("pictures", "*", "says"): "#166",  # the Pictures screen is blank with no message
-    ("outlook", "empty", "says"): "#171",  # an empty 200 reads as "no outlook"
-    ("outlook", "empty", "header"): "#171",
-    ("outlook", "empty", "feeds"): "#171",
     **{
         (panel.name, mode, "retry"): "#164" for panel in PANELS for mode in ("timeout", "http-500", "bad-json", "empty")
     },
