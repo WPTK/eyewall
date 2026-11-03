@@ -1,8 +1,8 @@
 """The map widget: M3's canvas painted line by line, with layer toggles, zoom, pan and fit.
 
-`MapView` owns a `Viewport` and a `MapScene`. The base map comes from `render_map`, which already picks the detailed
-Natural Earth data below `basemap.DETAIL_SWITCH` degrees per dot and the coarse copy above it; the widget only reports
-which one is showing. The rendered rows are kept until something changes, so scrolling the storm list costs nothing.
+`MapView` owns a `Viewport` and a `MapScene`. The base map comes from `render_map`, which picks the Natural Earth data
+tier for the zoom (`basemap.tier_suffix`); the widget only reports whether it is the detailed one.
+The rendered rows are kept until something changes, so scrolling the storm list costs nothing.
 """
 
 from __future__ import annotations

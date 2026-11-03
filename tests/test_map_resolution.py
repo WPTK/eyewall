@@ -12,7 +12,7 @@ import pytest
 
 from eyewall.mapdata import loader
 from eyewall.palette import COAST
-from eyewall.render.basemap import basemap_canvas, is_detailed
+from eyewall.render.basemap import DETAIL_SWITCH, MID_SWITCH, basemap_canvas, tier_suffix
 from eyewall.render.projection import Viewport
 from eyewall.ui import adapt
 from tests.test_quiet_home import square
@@ -48,20 +48,56 @@ async def test_the_quiet_map_sizes_the_tests_assume_are_the_screens_sizes() -> N
     assert {name: (v.cols, v.rows) for name, v in views.items()} == QUIET_SIZES
 
 
+def tolerance_drawn(build, view: Viewport) -> float:
+    """How far the data tier a view draws may sit from the true line, from the build script's own constants."""
+    return {"": build.FULL_TOLERANCE, "_mid": build.MID_TOLERANCE, "_lo": build.LO_TOLERANCE}[tier_suffix(view)]
+
+
 async def test_the_tier_each_quiet_size_draws_is_a_small_part_of_a_dot(build) -> None:
     for name, view in (await quiet_views()).items():
-        tolerance = build.FULL_TOLERANCE if is_detailed(view) else build.LO_TOLERANCE
+        tolerance = tolerance_drawn(build, view)
         assert view.deg_per_dot <= 0.5, name
         assert tolerance <= 0.1 * view.deg_per_dot, name
 
 
-@pytest.mark.xfail(
-    strict=True, reason="#152: the coarse tier (0.03 deg, about 3.3 km) draws at 80x24, 100x40 and 120x30"
-)
 async def test_every_quiet_size_meets_the_linecast_bar(build) -> None:
     for name, view in (await quiet_views()).items():
-        tolerance = build.FULL_TOLERANCE if is_detailed(view) else build.LO_TOLERANCE
-        assert tolerance <= LINECAST_BAR_DEG, name
+        assert tolerance_drawn(build, view) <= LINECAST_BAR_DEG, name
+
+
+def test_the_linecast_bar_holds_for_every_zoom_up_to_a_quiet_map(build) -> None:
+    for step in range(1, 51):
+        view = Viewport(25.0, -60.0, step / 100.0, 100, 30)  # 0.01 to 0.5 degrees a dot
+        assert tolerance_drawn(build, view) <= LINECAST_BAR_DEG, view.deg_per_dot
+
+
+def test_the_tiers_are_in_order_and_the_bar_tier_reaches_the_coarsest_quiet_map(build) -> None:
+    assert build.FULL_TOLERANCE < build.MID_TOLERANCE <= LINECAST_BAR_DEG < build.LO_TOLERANCE
+    assert DETAIL_SWITCH < MID_SWITCH and MID_SWITCH > adapt.QUIET_MAX_DEG_PER_DOT
+
+
+def test_each_coarser_tier_is_fewer_vertices() -> None:
+    for name in ("coast", "land", "lakes"):
+        counts = [loader.load_layer(name + suffix).vertex_count for suffix in ("", "_mid", "_lo")]
+        assert counts[0] > counts[1] > counts[2], name
+
+
+def test_the_thinned_1km_coast_keeps_every_island_and_the_shore_within_a_dot() -> None:
+    view = Viewport(25.0, -75.0, 0.4, 120, 40)
+    thin = basemap_canvas(view)
+    assert tier_suffix(view) == "_mid"
+    for name, lat, lon in [
+        ("Florida", 27.0, -81.5),
+        ("Cuba", 21.8, -79.0),
+        ("Hispaniola", 19.0, -71.0),
+        ("Bahamas", 24.5, -76.0),
+    ]:
+        x, y = view.dot_at(lat, lon)
+        assert any(
+            thin.dot(x + dx, y + dy) or thin.cell((x + dx) // 2, (y + dy) // 4)[1].bg
+            for dx in range(-6, 7)
+            for dy in range(-6, 7)
+        ), name
 
 
 def test_the_loaders_cut_lines_are_the_build_scripts(build) -> None:
