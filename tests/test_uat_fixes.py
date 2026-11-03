@@ -290,3 +290,57 @@ async def test_alert_log_warning_rows_are_bold_and_marked_so_none_is_fainter_und
         assert "bold" in str(warning.style) and BAD in str(warning.style)  # colour mode keeps the red
         assert warning.plain.startswith("! ") and "bold" not in str(notice.style)
         assert "Watch or warning" in warning.plain  # the kind is in words
+
+
+# ---- the alert log keeps its place across a poll ------------------------------------------------------------------
+
+
+async def _scrolled_log(pilot, app):  # type: ignore[no-untyped-def]
+    app.alert_log = [
+        Event(
+            EventKind.NEW_ADVISORY,
+            f"k{i}",
+            f"advisory {i}",
+            datetime(2025, 8, 21, 0, i, tzinfo=UTC),
+            severity=Severity.INFO,
+        )
+        for i in range(60)
+    ]
+    await press(pilot, "A")
+    table = app.screen.query_one("#alert-table", DataTable)
+    await press(pilot, *["down"] * 30)
+    assert table.cursor_row == 30 and table.scroll_y > 0
+    return table
+
+
+async def test_the_alert_log_keeps_cursor_and_scroll_when_a_poll_changes_nothing() -> None:
+    app = scripted_app()
+    async with running(app, (100, 24)) as pilot:
+        table = await _scrolled_log(pilot, app)
+        before = (table.cursor_coordinate, table.scroll_y)
+        app._for_screens("refresh_data")
+        await settle(pilot)
+        assert (table.cursor_coordinate, table.scroll_y) == before
+
+
+async def test_a_new_alert_does_not_move_the_cursor_off_its_event() -> None:
+    app = scripted_app()
+    async with running(app, (100, 24)) as pilot:
+        table = await _scrolled_log(pilot, app)
+        under = str(table.get_row_at(30)[3])
+        scroll = table.scroll_y
+        app.alert_log = [
+            Event(
+                EventKind.NEW_ADVISORY,
+                "new",
+                "advisory new",
+                datetime(2025, 8, 21, 5, 0, tzinfo=UTC),
+                severity=Severity.INFO,
+            ),
+            *app.alert_log,
+        ]
+        app._for_screens("refresh_data")
+        await settle(pilot)
+        assert table.row_count == 61
+        assert str(table.get_row_at(table.cursor_row)[3]) == under
+        assert table.scroll_y == scroll

@@ -21,9 +21,11 @@ from datetime import datetime, timedelta
 
 from eyewall.models.advisory import AdvisorySet
 from eyewall.models.events import Event, EventKind, Severity, make_key
+from eyewall.models.intensity import current_rapid, episode_start
 from eyewall.models.obs import Observation, ObservationSeries
 from eyewall.models.outlook import Outlook
 from eyewall.models.storm import AdvNum, Classification, Storm
+from eyewall.models.track import BestTrack
 from eyewall.models.watches import WatchWarningArea
 from eyewall.palette import WatchWarning
 from eyewall.state.trends import SILENT_AFTER
@@ -118,6 +120,28 @@ def storm_events(prev: Mapping[str, Storm] | None, curr: Mapping[str, Storm], no
                 )
             )
     return events
+
+
+def rapid_intensification_events(storm: Storm, track: BestTrack | None, now: datetime) -> list[Event]:
+    """One event per rapid intensification episode, keyed by the fix it began at so a later fix never repeats it."""
+    if track is None:
+        return []
+    rapid = current_rapid(track.fixes)
+    began = episode_start(track.fixes)
+    if rapid is None or began is None:
+        return []
+    kind = EventKind.RAPID_INTENSIFICATION
+    return [
+        Event(
+            kind,
+            make_key(kind, storm.id, None, f"{began:%Y%m%d%H}"),
+            f"{storm.name or storm.id}: rapid intensification, winds up {rapid.gain_kt:.0f} kt in 24 h",
+            now,
+            storm.id,
+            subject=f"{began:%Y%m%d%H}",
+            severity=Severity.NOTICE,
+        )
+    ]
 
 
 def _blocks(advisories: AdvisorySet | None) -> dict[str, WatchWarningArea] | None:

@@ -716,6 +716,8 @@ class EyewallApp(App[bool]):
     # ---- replay transport -------------------------------------------------------------------------------------
 
     def check_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        if isinstance(self.screen, TooSmallScreen):
+            return action == nav.QUIT  # nothing else works there, so nothing may open over it
         if action in REPLAY_ACTIONS and self.replay is None:
             return False
         if action == "start_replay":
@@ -723,8 +725,6 @@ class EyewallApp(App[bool]):
         if action == nav.BACK:
             return self._can_go_back()
         if action == nav.QUIT:
-            if isinstance(self.screen, TooSmallScreen):
-                return True  # nothing else works there, so q must
             # The first screen only, and not inside its full-screen map, where Esc is the way out.
             return len(self.screen_stack) == 1 and not self._can_go_back()
         return True
