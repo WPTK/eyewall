@@ -18,7 +18,7 @@ Python is needed.
 | macOS, Intel | `eyewall-macos-x86_64.tar.gz` |
 
 Check the download against `SHA256SUMS` from the same release. On Linux and macOS, unpack the archive
-(`tar -xzf eyewall-linux-x86_64.tar.gz`); it holds one executable file, `eyewall`, with the executable bit set, so there
+(`mkdir eyewall-bin && tar -C eyewall-bin -xzf eyewall-linux-x86_64.tar.gz`); it holds one executable file, `eyewall`, with the executable bit set, so there
 is no `chmod`. The binaries are not signed; Windows SmartScreen may warn on first run ("More info", then "Run anyway"), and on macOS `xattr -d com.apple.quarantine eyewall` clears the quarantine flag. Then try it:
 
 ```
@@ -28,7 +28,7 @@ eyewall                # live data
 
 ## With Python 3.12 or newer
 
-Any one of these puts `eyewall` on your path:
+These need `git` and install the default branch. Any one of them puts `eyewall` on your path:
 
 ```
 uv tool install git+https://github.com/WPTK/eyewall
@@ -38,11 +38,13 @@ python -m pip install git+https://github.com/WPTK/eyewall
 
 ## Supported systems
 
-- **Windows:** Windows 11. CI runs on Windows Server 2022 and 2025 runners, which stand in for older console behaviour;
-  Windows 10 and earlier are not tested.
-- **Linux:** the binaries are built against glibc 2.31 and need that or newer (Debian 11 and Ubuntu 20.04 or later). Alpine and other musl systems are not supported: the binary will not start there. Use the Python route on
-  such a system at your own risk.
-- **macOS:** the binaries are built on GitHub's current Apple silicon runner and its last Intel runner (macOS 15).
+- **Windows:** Windows 11 is the supported target. CI and the binary build run on GitHub's `windows-latest` (Windows
+  Server), which is a proxy for the console, not a Windows 11 test. Older Windows is not supported.
+- **Linux:** the binaries are built on Debian 11 (glibc 2.31) and should work on any glibc 2.31 or newer distribution
+  (Debian 11, Ubuntu 20.04 and later). Alpine and other musl systems are not supported: the binary will not start
+  there.
+- **macOS:** the binaries are built on GitHub's Apple silicon runner and its last Intel runner. No minimum macOS
+  version is stated.
 
 ## Checking an installation
 
