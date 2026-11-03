@@ -6,8 +6,9 @@ No permission or credit is required; it is given here anyway.
 
 The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror at
 commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
-Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
-the `_mid` and `_lo` tiers used by basin and hemisphere views) and stored as 32-bit integers in ten-thousandths of a degree.
+Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.009 for
+the `_mid` tier used by basin views, 0.03 for the `_lo` tier used by a hemisphere) and stored as 32-bit integers in
+ten-thousandths of a degree.
 
 `places.bin` holds point features from the same mirror and commit (`ne_10m_populated_places_simple`), kept inside the
 same area and ordered by scalerank then population.
