@@ -3,14 +3,15 @@
 Every view draws the Natural Earth 1:10 million data in one of three simplifications of it: 0.002 degrees (about 220 m)
 below DETAIL_SWITCH degrees per dot, 0.009 (about 1 km, what linecast draws) up to MID_SWITCH, and 0.03 for a
 hemisphere. Each keeps every island. Borders, and the state and province lines with them, appear with the full tier
-only. Land is a flat background
-tint of the cells inside it; a cell the shore runs through shows its land-side dots instead (a part-cell glyph), so the
-shore follows the data to the dot and not to the cell. The raster for a
-viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
+only. Land is a flat background tint of the cells inside it; a cell the shore runs through shows its land-side dots
+instead (a part-cell glyph), so the shore follows the data to the dot and not to the cell. A tier whose files cannot be
+read is replaced by the next coarser one, with a warning in the log. The raster for a viewport is kept, because a map
+that only gains a cursor or a new advisory should not redraw the coast.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache, lru_cache
@@ -25,7 +26,6 @@ from eyewall.render.projection import Bounds, Viewport
 DETAIL_SWITCH = 0.3
 # The 1 km tier takes over from the full one here, and the 0.03 degree tier from it at MID_SWITCH. Measured, an
 # uncached draw of a basin at 0.28 degrees per dot is 0.4 s on the full tier and 0.2 s on the 1 km one.
-THIN_GAP = 0.7  # dots; see _project
 MID_SWITCH = 0.6  # a quiet-day map is at most 0.5; the 0.03 degree tier is for a hemisphere
 MIN_LAKE_CELLS = 3  # at basin scale a lake narrower than this, in cells, is left out
 
@@ -39,6 +39,8 @@ class BasemapStyle:
 
 
 DEFAULT_STYLE = BasemapStyle()
+TIERS = ("", "_mid", "_lo")  # finest first
+log = logging.getLogger(__name__)
 
 
 def is_detailed(viewport: Viewport) -> bool:
@@ -51,6 +53,22 @@ def tier_suffix(viewport: Viewport) -> str:
     if viewport.deg_per_dot < DETAIL_SWITCH:
         return ""
     return "_mid" if viewport.deg_per_dot < MID_SWITCH else "_lo"
+
+
+@cache
+def usable_tier(suffix: str) -> str:
+    """The tier to draw when this one is wanted: itself, or the next coarser one whose three layers load."""
+    failure: Exception | None = None
+    for candidate in TIERS[TIERS.index(suffix) :]:
+        try:
+            for kind in ("coast", "land", "lakes"):
+                _indexed(kind + candidate)
+        except (ValueError, OSError) as error:
+            log.warning("map data tier %r cannot be read (%s); drawing a coarser one", candidate or "full", error)
+            failure = error
+            continue
+        return candidate
+    raise failure or ValueError("no map data tier")
 
 
 def ensure_matches(canvas: Canvas, viewport: Viewport) -> None:
@@ -87,24 +105,6 @@ def _cut_lines(viewport: Viewport) -> tuple[float, float, float]:
     )
 
 
-def _project(path: MapPath, viewport: Viewport, gap: float) -> list[Dot]:
-    """A path in dot coordinates. With a gap, a vertex less than that many dots from the last one kept is dropped (the
-    first and the last never are), because at the 1 km tier and coarser most neighbouring vertices share a dot and
-    cost a segment each for nothing."""
-    dots = viewport.project_path(path.points)
-    if gap <= 0.0 or len(dots) < 3:
-        return dots
-    limit = gap * gap
-    kept = [dots[0]]
-    x, y = dots[0]
-    for point in dots[1:-1]:
-        if (point[0] - x) ** 2 + (point[1] - y) ** 2 >= limit:
-            kept.append(point)
-            x, y = point
-    kept.append(dots[-1])
-    return kept
-
-
 def _cells_across(ring: Sequence[Dot], canvas: Canvas) -> float:
     """The longer side of a ring's bounding box, in cells."""
     xs, ys = [p[0] for p in ring], [p[1] for p in ring]
@@ -123,23 +123,24 @@ def draw_basemap(
     """Draw land fill, coastline and borders onto a canvas, in that order."""
     ensure_matches(canvas, viewport)
     fine = is_detailed(viewport)
-    suffix = tier_suffix(viewport)
-    gap = THIN_GAP if suffix else 0.0
+    suffix = usable_tier(tier_suffix(viewport))
     # Lakes are rings inside the land, so the even-odd fill leaves them as holes. At basin scale only the lakes a few
     # cells across are kept: the rest would be dark pinpricks and stray dots in the land.
-    lakes = [_project(path, viewport, gap) for path in _visible("lakes" + suffix, viewport)] if land or coast else []
+    lakes = []
+    if land or coast:
+        lakes = [viewport.project_path(path.points) for path in _visible("lakes" + suffix, viewport)]
     if not fine:
         lakes = [ring for ring in lakes if _cells_across(ring, canvas) >= MIN_LAKE_CELLS]
     if land:
         canvas.tint_polygon(
-            [_project(path, viewport, gap) for path in _visible("land" + suffix, viewport)] + lakes,
+            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes,
             style.land,
             style.coast if coast else None,
             cut=_cut_lines(viewport),
         )
     if coast:
         for path in _visible("coast" + suffix, viewport):
-            canvas.polyline(_project(path, viewport, gap), style.coast, Priority.COAST)
+            canvas.polyline(viewport.project_path(path.points), style.coast, Priority.COAST)
         for ring in lakes:
             canvas.polyline([*ring, ring[0]], style.coast, Priority.COAST)
     if borders and fine:  # at basin scale a border is a few dots wide: noise, not information
