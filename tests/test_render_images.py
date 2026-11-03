@@ -435,7 +435,8 @@ async def test_fetch_image_retries_a_503_and_a_dropped_connection_then_succeeds(
     )
     async with new_client() as client:
         assert await fetch_image(client, url, sleep=_no_sleep) == body
-    assert route.call_count == 3 and _SLEPT == [1.0, 2.0]
+    assert route.call_count == 3 and len(_SLEPT) == 2
+    assert 0.0 <= _SLEPT[0] <= 1.0 and 0.0 <= _SLEPT[1] <= 2.0  # full jitter under the exponential cap
 
 
 @respx.mock
