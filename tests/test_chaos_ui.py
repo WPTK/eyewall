@@ -6,8 +6,7 @@ the app must be running, must not have reported a failure, must not be on an err
 that can be seen.
 
 The default run is short enough for every CI job. `EYEWALL_FUZZ=long` (the tag-time run) is about ten times longer.
-Defects the run found are pinned in `test_chaos_known_ui.py` as strict xfails, one per issue: when the fix merges the
-xfail passes, strict mode fails the test, and the mark is deleted with the fix.
+Defects the run found are kept as regression tests in `test_chaos_known_ui.py`.
 """
 
 from __future__ import annotations
@@ -36,8 +35,6 @@ MINIMUM = (60, 16)
 EXTRA_KEYS = {"tab", "shift+tab", "up", "down", "left", "right", "enter", "escape", "space", "pageup", "pagedown"}
 # q and R leave the app on purpose; ctrl+s writes the config file.
 KEYS = sorted(({key for entry in nav.KEYS for key in entry.key_list} | EXTRA_KEYS) - {"q", "R", "ctrl+s"})
-# Issue #182: these two are focused and then hidden. Their ids are skipped by the focus check until the fix merges.
-KNOWN_HIDDEN_FOCUS = {"buoys-list", "station-readings"}
 
 
 def run[T](loop: asyncio.AbstractEventLoop, awaitable: Awaitable[T], app: EyewallApp | None = None) -> T:
@@ -94,8 +91,6 @@ class UserAtTheTerminal(RuleBasedStateMachine):
     def small(self) -> bool:
         return self.size[0] < MINIMUM[0] or self.size[1] < MINIMUM[1]
 
-    # Issue #179: a screen above the main one cannot survive the terminal shrinking and growing again. So the terminal
-    # shrinks below the minimum only from the main screen, and no key or click reaches the app while it is too small.
     @precondition(lambda self: not self.small)
     @rule(key=st.sampled_from(KEYS))
     def press(self, key: str) -> None:
@@ -103,9 +98,6 @@ class UserAtTheTerminal(RuleBasedStateMachine):
 
     @rule(size=st.sampled_from(SIZES))
     def resize(self, size: tuple[int, int]) -> None:
-        shrinking = size[0] < MINIMUM[0] or size[1] < MINIMUM[1]
-        if shrinking and len(self.app.screen_stack) > 2:
-            return
         self.size = size
         run(self.loop, self.pilot.resize_terminal(*size), self.app)
 
@@ -142,7 +134,7 @@ class UserAtTheTerminal(RuleBasedStateMachine):
     @invariant()
     def focus_is_on_something_visible(self) -> None:
         focused = self.app.focused
-        if focused is None or getattr(focused, "id", None) in KNOWN_HIDDEN_FOCUS:
+        if focused is None:
             return
         assert focused.is_attached and shown(focused), f"focus on a hidden {focused!r}"
 
