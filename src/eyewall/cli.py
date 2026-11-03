@@ -7,10 +7,10 @@ import asyncio
 import contextlib
 import importlib.resources
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from eyewall import __version__
+from eyewall import __version__, diagnostics, terminal
 from eyewall.config import BASINS, GLYPH_SETS, Config, LoadResult, apply_overrides, default_path, load_config
 from eyewall.models.events import Event
 
@@ -46,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--summary",
         action="store_true",
         help="print what is happening in plain sentences once, then exit; works with --replay and --demo",
+    )
+    parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="print version, Python, OS, terminal capabilities, file locations and feed reachability, then exit",
     )
     parser.add_argument(
         "--until",
@@ -233,8 +238,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.selftest:
         return _selftest()
+    caps = terminal.detect()  # the one place the terminal's abilities are decided
     loaded = _load(args)
-    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs)
+    # Without an explicit --glyphs, a terminal that cannot draw braille and box characters gets the ASCII set.
+    glyphs = args.glyphs or (None if caps.unicode else "ascii")
+    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=glyphs)
+    if args.diagnose:
+        for line in diagnostics.diagnose_lines(caps, config, _config_path(args)):
+            print(line)
+        return 0
     warnings = loaded.warnings
     for warning in warnings:
         print(f"eyewall: config: {warning}", file=sys.stderr)
@@ -253,4 +265,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 input("eyewall: press Enter to start with these settings ")
         except KeyboardInterrupt:
             return 130
-    return _run_app(args, config, loaded)
+    return _guarded(lambda: _run_app(args, config, loaded), caps)
+
+
+def _guarded(run: Callable[[], int], caps: terminal.Capabilities) -> int:
+    """Run the full-screen app; whatever happens, leave the terminal usable, and log an unexpected crash."""
+    terminal.apply(caps)
+    try:
+        return run()
+    except KeyboardInterrupt:
+        return 130
+    except Exception as exc:
+        terminal.restore()
+        print(diagnostics.crash_message(exc, diagnostics.write_crash_log(exc, caps)), file=sys.stderr)
+        return 1
+    finally:
+        terminal.restore()
