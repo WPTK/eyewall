@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterator, Sequence
+from functools import lru_cache
+from itertools import pairwise
 
 import shapely
 from pyproj import Geod
 from shapely import affinity
-from shapely.geometry import MultiPolygon, Polygon, box
+from shapely.geometry import MultiPolygon, Point, Polygon, box
 
 from eyewall.geo import LatLon, normalize_lon
 
@@ -56,15 +58,14 @@ def _ring(lat: float, lon: float, radii_m: list[float]) -> list[tuple[float, flo
     return [(lon + normalize_lon(x - lon), y) for x, y in zip(lons, lats, strict=True)]
 
 
-def _wrapped_parts(polygon: Polygon, lon: float) -> list[Polygon]:
-    """Split a polygon whose longitudes run around `lon` at the antimeridian, each part moved into [-180, 180]."""
-    parts: list[Polygon] = []
+def _pieces(polygon: Polygon) -> Iterator[tuple[int, Polygon]]:
+    """The parts of a polygon whose longitudes run past +/-180, cut at the antimeridian, each with k, the number of
+    360 degree turns it sits from [-180, 180] (the part itself is still in the unshifted frame)."""
     for k in (-1, 0, 1):
         piece = polygon.intersection(box(360.0 * k - 180.0, -90.0, 360.0 * k + 180.0, 90.0))
-        if k:
-            piece = affinity.translate(piece, xoff=-360.0 * k)
-        parts.extend(g for g in _polygons(piece) if g.area > 0)
-    return parts
+        for part in _polygons(piece):
+            if part.area > 0:
+                yield k, part
 
 
 def _polygons(geometry: shapely.Geometry) -> Iterator[Polygon]:
@@ -75,27 +76,60 @@ def _polygons(geometry: shapely.Geometry) -> Iterator[Polygon]:
             yield from _polygons(part)
 
 
-def radii_shape(center: LatLon, radii_nm: QuadrantRadiiNm) -> Polygon | MultiPolygon | None:
-    """The wind radii polygon around center (lat, lon) for radii in nautical miles in the NE, SE, SW and NW quadrants.
-    None when no quadrant has a radius. Coordinates are (lon, lat) as shapely wants them."""
+def _unwrapped(center: LatLon, radii_nm: QuadrantRadiiNm) -> Polygon | None:
+    """The polygon with longitudes continuous around the center (they may pass 180), or None for no radii."""
     lat = max(-90.0, min(90.0, center[0]))
-    lon = normalize_lon(center[1])
     radii_m = _clean(radii_nm, lat)
     if not any(radii_m):
         return None
-    polygon = Polygon(_ring(lat, lon, radii_m))
-    if not polygon.is_valid:
-        polygon = shapely.make_valid(polygon)
-    parts = _wrapped_parts(polygon, lon)
+    polygon = Polygon(_ring(lat, normalize_lon(center[1]), radii_m))
+    return polygon if polygon.is_valid else shapely.make_valid(polygon)
+
+
+def radii_shape(center: LatLon, radii_nm: QuadrantRadiiNm) -> Polygon | MultiPolygon | None:
+    """The wind radii polygon around center (lat, lon) for radii in nautical miles in the NE, SE, SW and NW quadrants.
+    None when no quadrant has a radius. Coordinates are (lon, lat) as shapely wants them."""
+    polygon = _unwrapped(center, radii_nm)
+    if polygon is None:
+        return None
+    parts = [affinity.translate(part, xoff=-360.0 * k) for k, part in _pieces(polygon)]
     if not parts:
         return None
     return parts[0] if len(parts) == 1 else MultiPolygon(parts)
 
 
-def radii_rings(center: LatLon, radii_nm: QuadrantRadiiNm) -> list[list[LatLon]]:
-    """The outlines of radii_shape as (lat, lon) rings, one per part, each closed. Empty when there is no shape.
-    Rounded to about a meter so the drawing does not depend on the platform's floating point (geod and GEOS output)."""
-    shape = radii_shape(center, radii_nm)
-    if shape is None:
-        return []
-    return [[(round(y, 5), round(x, 5)) for x, y in part.exterior.coords] for part in _polygons(shape)]
+def _is_seam(polygon: Polygon, a: tuple[float, float], b: tuple[float, float], k: int) -> bool:
+    """Whether the edge a-b of a piece lies on the cut at the antimeridian, with the polygon continuing past it. An
+    edge of the outline itself that happens to run along 180 (a storm centered on it) has nothing beyond it."""
+    for edge in (360.0 * k - 180.0, 360.0 * k + 180.0):
+        if a[0] == b[0] == edge:
+            outward = 1e-7 if edge > 360.0 * k else -1e-7
+            return polygon.contains(Point(edge + outward, (a[1] + b[1]) / 2.0))
+    return False
+
+
+@lru_cache(maxsize=64)
+def _lines(center: LatLon, radii_nm: tuple[float | None, ...]) -> tuple[tuple[LatLon, ...], ...]:
+    polygon = _unwrapped(center, radii_nm)
+    if polygon is None:
+        return ()
+    lines: list[tuple[LatLon, ...]] = []
+    for k, part in _pieces(polygon):
+        coords = list(part.exterior.coords)
+        runs: list[list[tuple[float, float]]] = [[coords[0]]]
+        for a, b in pairwise(coords):
+            if _is_seam(polygon, a, b, k):
+                runs.append([b])
+            else:
+                runs[-1].append(b)
+        if len(runs) > 1 and runs[0][0] == runs[-1][-1]:  # the ring began mid-outline: join its two ends
+            runs[0] = runs.pop()[:-1] + runs[0]
+        lines.extend(tuple((round(y, 5), round(x - 360.0 * k, 5)) for x, y in run) for run in runs if len(run) > 1)
+    return tuple(lines)
+
+
+def radii_lines(center: LatLon, radii_nm: QuadrantRadiiNm) -> tuple[tuple[LatLon, ...], ...]:
+    """The outline of radii_shape as (lat, lon) lines to draw: closed when the shape is whole, open pieces when it is
+    cut at the antimeridian, with no line along the cut itself. Empty when there is no shape. Rounded to about a meter
+    so the drawing does not depend on the platform's floating point. Cached: it depends only on its arguments."""
+    return _lines((center[0], center[1]), tuple(radii_nm))

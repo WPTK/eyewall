@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import pairwise
 from typing import NamedTuple
 
 from eyewall.geo import destination, haversine_nm
@@ -220,20 +219,6 @@ class _Label(NamedTuple):
     centered: bool
 
 
-def _seam_free_runs(ring: Sequence[LatLon]) -> list[list[LatLon]]:
-    """Cut a ring's points into runs that skip the edges lying on the antimeridian, where radii_shape split the shape.
-    The viewport joins the two halves again, so a seam drawn there would be a line that is not part of any outline."""
-    runs: list[list[LatLon]] = [[ring[0]]]
-    for a, b in pairwise(ring):
-        if abs(a[1]) == 180.0 and a[1] == b[1]:
-            runs.append([b])
-        else:
-            runs[-1].append(b)
-    if len(runs) > 1 and runs[0][0] == runs[-1][-1]:  # the ring began mid-outline: join its two ends
-        runs[0] = runs.pop()[:-1] + runs[0]
-    return [run for run in runs if len(run) > 1]
-
-
 def _centroid(ring: Sequence[tuple[float, float]]) -> tuple[float, float]:
     """Area centroid of a ring in dot coordinates; the mean of the vertices if the ring has no area."""
     area = cx = cy = 0.0
@@ -321,22 +306,21 @@ def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSt
 def _draw_radii(canvas: Canvas, view: Viewport, storm: StormScene, style: MapStyle) -> None:
     if not storm.radii:
         return
-    from eyewall.radii_shape import radii_rings  # pyproj and shapely take 0.4 s to import: only a map with radii pays
+    from eyewall.radii_shape import radii_lines  # pyproj and shapely take 0.4 s to import: only a map with radii pays
 
     for radii in storm.radii:
         for knots, quadrants in ((34, radii.kt34), (50, radii.kt50), (64, radii.kt64)):
             if quadrants is None:
                 continue
-            for ring in radii_rings((radii.lat, radii.lon), quadrants):
-                for run in _seam_free_runs(ring):
-                    closed = len(run) == len(ring)
-                    canvas.polyline(
-                        view.project_path(run),
-                        category_color(knots),
-                        Priority.RADII,
-                        dash=RING_PATTERNS[knots],
-                        closed=closed,
-                    )
+            for line in radii_lines((radii.lat, radii.lon), quadrants):
+                closed = len(line) > 3 and line[0] == line[-1]
+                canvas.polyline(
+                    view.project_path(line),
+                    category_color(knots),
+                    Priority.RADII,
+                    dash=RING_PATTERNS[knots],
+                    closed=closed,
+                )
 
 
 def _draw_stations(

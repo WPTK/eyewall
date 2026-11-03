@@ -350,13 +350,6 @@ def test_a_ring_across_the_antimeridian_draws_without_a_seam_line():
     assert sum(column) <= 4  # the ring crosses the dateline column twice; a seam would light the whole span between
 
 
-def test_seam_free_runs_drop_only_the_edges_on_the_antimeridian():
-    ring = [(0.0, 170.0), (0.0, 180.0), (5.0, 180.0), (5.0, 170.0), (0.0, 170.0)]
-    assert layers._seam_free_runs(ring) == [[(5.0, 180.0), (5.0, 170.0), (0.0, 170.0), (0.0, 180.0)]]
-    away = [(0.0, 10.0), (0.0, 20.0), (5.0, 20.0), (0.0, 10.0)]
-    assert layers._seam_free_runs(away) == [away]
-
-
 # ------------------------------------------------------------------------------------- outlook, stations, labels
 
 

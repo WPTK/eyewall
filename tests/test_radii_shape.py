@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import pytest
@@ -11,7 +12,7 @@ from hypothesis import strategies as st
 from pyproj import Geod
 from shapely.geometry import MultiPolygon, Polygon
 
-from eyewall.radii_shape import MAX_RADIUS_NM, radii_rings, radii_shape
+from eyewall.radii_shape import MAX_RADIUS_NM, radii_lines, radii_shape
 
 GEOD = Geod(ellps="WGS84")
 NM = 1852.0
@@ -29,7 +30,7 @@ def parts(shape: Polygon | MultiPolygon) -> list[Polygon]:
 def test_every_ring_vertex_sits_at_a_geodesic_radius_between_its_quadrants():
     center = (25.0, -70.0)
     radii = (200.0, 160.0, 120.0, 180.0)
-    distances = [distance_nm(center, point) for point in radii_rings(center, radii)[0]]
+    distances = [distance_nm(center, point) for point in radii_lines(center, radii)[0]]
     assert min(distances) == pytest.approx(120.0, abs=0.01)
     assert max(distances) == pytest.approx(200.0, abs=0.01)
     for radius in radii:
@@ -56,7 +57,7 @@ def test_a_quadrant_of_zero_or_none_leaves_a_wedge():
 def test_no_radius_in_any_quadrant_is_no_shape():
     assert radii_shape((25.0, -70.0), (0.0, 0.0, 0.0, 0.0)) is None
     assert radii_shape((25.0, -70.0), (None, None, None, None)) is None
-    assert radii_rings((25.0, -70.0), (0.0, None, 0.0, None)) == []
+    assert radii_lines((25.0, -70.0), (0.0, None, 0.0, None)) == ()
 
 
 def test_bad_radii_count_as_none():
@@ -114,6 +115,37 @@ def test_any_center_and_radii_give_a_valid_finite_in_range_shape(lat, lon, radii
     for part in parts(shape):
         assert part.exterior.is_simple
         assert not part.interiors or all(r.is_ccw is not None for r in part.interiors)
-    for ring in radii_rings((lat, lon), radii):
-        assert ring[0] == ring[-1]
-        assert all(-90.0 <= la <= 90.0 and -180.0 <= lo <= 180.0 for la, lo in ring)
+    for line in radii_lines((lat, lon), radii):
+        assert len(line) > 1
+        assert all(-90.0 <= la <= 90.0 and -180.0 <= lo <= 180.0 for la, lo in line)
+
+
+def edges(lines):
+    return {frozenset(pair) for line in lines for pair in itertools.pairwise(line)}
+
+
+@pytest.mark.parametrize("lon", [180.0, -180.0])
+def test_a_storm_centered_on_the_dateline_keeps_its_radial_edges(lon):
+    lines = radii_lines((20.0, lon), (100.0, None, None, None))
+    assert len(lines) == 1 and lines[0][0] == lines[0][-1]  # a quarter disc east of 180: one closed outline
+    on_meridian = sorted({p for p in lines[0] if p[1] == -180.0})
+    assert on_meridian[0] == (20.0, -180.0)
+    assert on_meridian[-1][0] == pytest.approx(20.0 + 100.0 / 60.0, abs=0.02)
+    drawn = edges(lines)
+    for a, b in itertools.pairwise(on_meridian):  # the radial edge up the meridian is drawn, whole
+        assert frozenset((a, b)) in drawn
+    assert (20.0, -180.0) in {p for edge in drawn for p in edge}
+    assert any(p[1] > -180.0 for p in lines[0])
+
+
+def test_a_ring_cut_by_the_antimeridian_has_no_line_along_the_cut():
+    lines = radii_lines((20.0, 179.5), (200.0, 200.0, 200.0, 200.0))
+    assert len(lines) == 1 or all(line[0] != line[-1] for line in lines)
+    for line in lines:
+        for a, b in itertools.pairwise(line):
+            assert not (abs(a[1]) == abs(b[1]) == 180.0 and a[1] == b[1])
+
+
+def test_the_lines_are_cached_and_equal_across_calls():
+    first = radii_lines((25.0, -70.0), (100.0, 80.0, 60.0, 90.0))
+    assert radii_lines((25.0, -70.0), [100.0, 80.0, 60.0, 90.0]) is first
