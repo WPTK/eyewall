@@ -60,9 +60,9 @@ CONE_EDGE = "#e6edf5"
 MAP_LABEL = "#c9d3de"
 BUOY = "#8fd3ff"
 TIDE_GAUGE = "#5eead4"
-STALE = "#566273"
+STALE = "#a9b6c6"
 CURSOR = "#ffffff"
-FIELD_EDGE = "#5b8fc4"  # the edge of an unfocused input or list; Textual's own is a shade off the field
+FIELD_EDGE = "#8fb5df"  # the edge of an unfocused input or list; Textual's own is a shade off the field
 
 # Chart furniture and series.
 CHART_AXIS = "#8b98a9"
@@ -158,7 +158,7 @@ WATCH_WARNING_CUES: dict[WatchWarning, Cue] = {
     WatchWarning.HURRICANE_WATCH: Cue("#ff8fcf", "Hurricane Watch", "Hurr watch", pattern=DASHED),
     WatchWarning.HURRICANE_WARNING: Cue("#ff4d4d", "Hurricane Warning", "Hurr warning"),
     WatchWarning.SURGE_WATCH: Cue("#c8a8ff", "Storm Surge Watch", "Surge watch", pattern=SPARSE),
-    WatchWarning.SURGE_WARNING: Cue("#a458ff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
+    WatchWarning.SURGE_WARNING: Cue("#ac63ff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
 }
 WATCH_WARNING_COLORS: dict[WatchWarning, str] = {kind: cue.color for kind, cue in WATCH_WARNING_CUES.items()}
 
