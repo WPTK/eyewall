@@ -7,6 +7,7 @@ import respx
 
 from eyewall import __version__
 from eyewall.net import (
+    MAX_RETRY_AFTER,
     HttpError,
     NetworkError,
     RateLimited,
@@ -14,10 +15,14 @@ from eyewall.net import (
     fetch_bytes,
     new_client,
     retry_after_seconds,
+    retry_delay,
     user_agent,
 )
 
 URL = "https://example.test/data.txt"
+
+
+FULL = lambda: 1.0  # noqa: E731  the top of the jitter range, so the delay is the plain backoff
 
 
 class Sleeps:
@@ -98,7 +103,7 @@ async def test_5xx_backs_off_exponentially_then_raises():
     sleeps = Sleeps()
     async with new_client() as client:
         with pytest.raises(HttpError) as raised:
-            await fetch_bytes(client, URL, retries=2, sleep=sleeps)
+            await fetch_bytes(client, URL, retries=2, sleep=sleeps, rng=FULL)
     assert raised.value.status == 503
     assert route.call_count == 3
     assert sleeps.delays == [1.0, 2.0]
@@ -119,7 +124,7 @@ async def test_transport_errors_become_network_errors():
     sleeps = Sleeps()
     async with new_client() as client:
         with pytest.raises(NetworkError):
-            await fetch_bytes(client, URL, retries=1, sleep=sleeps)
+            await fetch_bytes(client, URL, retries=1, sleep=sleeps, rng=FULL)
     assert route.call_count == 2
     assert sleeps.delays == [1.0]
 
@@ -174,7 +179,7 @@ async def test_a_body_within_the_limit_is_returned_whole_and_errors_still_retry(
     transport = httpx.MockTransport(lambda request: next(answers))
     sleeps = Sleeps()
     async with new_client(transport=transport) as client:
-        result = await fetch_bytes(client, URL, max_bytes=100, sleep=sleeps)
+        result = await fetch_bytes(client, URL, max_bytes=100, sleep=sleeps, rng=FULL)
     assert result.body == b"x" * 100
     assert sleeps.delays == [1.0]
 
@@ -188,7 +193,7 @@ async def test_a_broken_content_encoding_is_a_network_error_not_a_raw_httpx_erro
     sleeps = Sleeps()
     async with new_client(transport=transport) as client:
         with pytest.raises(NetworkError):
-            await fetch_bytes(client, URL, sleep=sleeps)
+            await fetch_bytes(client, URL, sleep=sleeps, rng=FULL)
     assert sleeps.delays == [1.0, 2.0]  # retried like any other unreadable answer
 
 
@@ -233,3 +238,28 @@ async def test_fetch_sleeps_for_an_http_date_retry_after():
     async with new_client() as client:
         await fetch_bytes(client, URL, sleep=sleeps)
     assert 5.0 <= sleeps.delays[0] <= 10.0
+
+
+def test_retry_delay_is_uniform_between_zero_and_the_exponential_backoff():
+    assert retry_delay(None, 3, 2.0, rng=lambda: 0.0) == 0.0
+    assert retry_delay(None, 3, 2.0, rng=lambda: 0.5) == 8.0
+    assert retry_delay(None, 3, 2.0, rng=lambda: 1.0) == 16.0
+    for attempt in range(5):
+        assert 0.0 <= retry_delay(None, attempt) <= 2**attempt
+
+
+def test_retry_after_beats_the_jitter_and_stays_capped():
+    assert retry_delay(7.0, 4, rng=lambda: 0.0) == 7.0
+    assert retry_delay(7.0, 0, rng=lambda: 0.99) == 7.0
+    assert retry_delay(900.0, 0, rng=lambda: 0.0) == MAX_RETRY_AFTER
+
+
+@respx.mock
+async def test_fetch_jitters_transport_error_retries_with_the_injected_source():
+    respx.get(URL).mock(
+        side_effect=[httpx.ConnectError("x"), httpx.ConnectError("x"), httpx.Response(200, content=b"ok")]
+    )
+    sleeps = Sleeps()
+    async with new_client() as client:
+        await fetch_bytes(client, URL, sleep=sleeps, rng=lambda: 0.25)
+    assert sleeps.delays == [0.25, 0.5]

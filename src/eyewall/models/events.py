@@ -13,6 +13,7 @@ class EventKind(StrEnum):
     NEW_INVEST = "new_invest"
     NEW_ADVISORY = "new_advisory"
     CLASSIFICATION = "classification"
+    RAPID_INTENSIFICATION = "rapid_intensification"
     WATCH_WARNING_ISSUED = "ww_issued"
     WATCH_WARNING_CHANGED = "ww_changed"
     WATCH_WARNING_DISCONTINUED = "ww_discontinued"

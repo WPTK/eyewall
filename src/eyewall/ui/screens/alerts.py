@@ -31,6 +31,7 @@ class AlertLogScreen(ChromeScreen):
 
     HEADERS = ("Time (Z)", "Event", "Storm", "Message")
     _built_width: int | None = None
+    _built_keys: list[str] = []
 
     def on_mount(self) -> None:
         self.refresh_data()
@@ -70,16 +71,39 @@ class AlertLogScreen(ChromeScreen):
         """What the other columns leave: a cell of padding either side of each, and one column for the scrollbar."""
         return max(20, self.size.width - sum(self._fixed_widths(rows)) - 2 * len(self.HEADERS) - 1)
 
+    def _row_keys(self) -> list[str]:
+        """One key per row, in table order. Event keys can repeat, so the repeat gets its place in the log appended."""
+        seen: set[str] = set()
+        keys: list[str] = []
+        for event in self._newest_first():
+            key = event.key if event.key not in seen else f"{event.key}#{len(keys)}"
+            seen.add(key)
+            keys.append(key)
+        return keys
+
     def refresh_data(self) -> None:
-        """Rebuild the table. The message column takes the width the other columns leave, and long messages wrap."""
+        """Bring the table up to date. The message column takes the width the other columns leave, and long messages
+        wrap. A poll that changes nothing leaves the table alone; when rows or the width change it is rebuilt and the
+        cursor stays on the same event with the scroll where it was."""
         table = self.query_one("#alert-table", DataTable)
         rows = self._rows()
-        self._built_width = self._message_width(rows)
-        table.clear(columns=True)
-        for header, width in zip(self.HEADERS, (*self._fixed_widths(rows), self._built_width), strict=True):
-            table.add_column(header, width=width)
-        for time, title, storm, message in rows:
-            table.add_row(time, title, storm, Text(message), height=None)
+        keys = self._row_keys()
+        width = self._message_width(rows)
         empty = self.query_one("#alert-empty", Static)
         empty.update("No alerts yet this session.")
         empty.display = not self.eye.alert_log
+        if width == self._built_width and keys == self._built_keys:
+            return
+        old_keys, row, scroll = self._built_keys, table.cursor_row, table.scroll_y
+        kept = old_keys[row] if row < len(old_keys) else None
+        self._built_width, self._built_keys = width, keys
+        table.clear(columns=True)
+        for header, column_width in zip(self.HEADERS, (*self._fixed_widths(rows), width), strict=True):
+            table.add_column(header, width=column_width)
+        for key, (time, title, storm, message) in zip(keys, rows, strict=True):
+            table.add_row(time, title, storm, Text(message), height=None, key=key)
+        if kept in keys:
+            table.move_cursor(row=keys.index(kept), animate=False)
+        elif keys:
+            table.move_cursor(row=min(row, len(keys) - 1), animate=False)
+        table.call_after_refresh(table.scroll_to, y=scroll, animate=False, immediate=True)
