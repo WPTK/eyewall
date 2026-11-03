@@ -143,6 +143,7 @@ class _FeedState:
     last_attempt: float | None = None
     not_before: float = 0.0  # a Retry-After or backoff window that the watchlist and away-mode requests may not shorten
     limited_until: float = 0.0  # a server's own Retry-After: not even the refresh key may ask before it
+    forced: bool = False  # `requested` came from the refresh key, which may cut through the failure backoff
     requested: float | None = (
         None  # when a refresh asked for this feed's next poll, if it did so during the current one
     )
@@ -312,6 +313,7 @@ class Poller:
         """Ask for a feed's next poll at `at`, but not inside its Retry-After or backoff window. A poll in flight reads
         `requested` when it ends, so a request made meanwhile is not overwritten by the schedule it computes."""
         state.next_at = state.requested = max(at, state.not_before)
+        state.forced = False
 
     def refresh(self, *, throttled: bool = False) -> None:
         """Make every feed due now and wake the loop. With `throttled` (the refresh key on live data) a feed attempted
@@ -322,11 +324,12 @@ class Poller:
             floor = state.limited_until
             if throttled and state.last_attempt is not None:
                 floor = max(floor, state.last_attempt + REFRESH_MIN_GAP)
-            if throttled and floor > now:
-                state.next_at = min(state.next_at, floor)
+            if floor > now:
+                state.next_at = min(state.next_at, floor) if state.next_at > now else floor
                 state.requested = state.next_at
             else:
                 state.next_at = state.requested = 0.0
+            state.forced = True
         if not self.polling:
             self._wake.set()
 
@@ -410,8 +413,9 @@ class Poller:
             wait = max(wait, min(retry_after, self.config.backoff_max))
         state.next_at = self.clock.monotonic() + wait
         state.not_before = state.next_at if (state.failures or retry_after) else 0.0
-        state.limited_until = state.next_at if retry_after else 0.0
-        if state.requested is not None and not state.not_before:  # asked for again while this poll was running
+        state.limited_until = self.clock.monotonic() + min(retry_after, self.config.backoff_max) if retry_after else 0.0
+        held = state.limited_until if state.forced else state.not_before  # the key cuts through our own backoff only
+        if state.requested is not None and not held:  # asked for again while this poll was running
             state.next_at = min(state.next_at, max(state.requested, self.clock.monotonic()))
         shown: list[Event] = []
         try:

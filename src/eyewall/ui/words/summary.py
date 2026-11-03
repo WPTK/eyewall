@@ -117,7 +117,13 @@ def summary_lines(
     blocks.append(outlook_words.current_sentences(store.outlook, enabled, old=protocol.OUTLOOK in failed))
     # A feed that failed names itself even when no line above had a place to say so (a catalog that never loaded
     # leaves no station to report on), so its silence cannot read as "nothing reported".
-    if unavailable := [UNAVAILABLE[feed] for feed in protocol.FEEDS if feed in failed and feed in UNAVAILABLE]:
+    said = [line for block in blocks for line in block]
+    unavailable = [
+        UNAVAILABLE[f]
+        for f in protocol.FEEDS
+        if f in failed and f in UNAVAILABLE and not any(line.endswith(UNAVAILABLE[f]) for line in said)
+    ]
+    if unavailable:
         blocks.append(unavailable)
     out: list[str] = []
     for block in blocks:

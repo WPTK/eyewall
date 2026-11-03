@@ -170,6 +170,8 @@ def _summary(args: argparse.Namespace, config: Config) -> int:
         reconfigure(errors="replace")
     for line in lines:
         print(line)
+    if failed:
+        print(f"eyewall: unavailable: {', '.join(sorted(failed))}", file=sys.stderr)
     return 1 if failed else 0  # any feed that failed: the lines above name it, and a script must not read "quiet"
 
 
