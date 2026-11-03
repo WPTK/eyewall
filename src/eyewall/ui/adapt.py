@@ -127,6 +127,29 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
     return tuple(areas)
 
 
+def outlook_centres(outlook: Outlook | None) -> tuple[tuple[str, LatLon], ...]:
+    """Where each outlook area with a shape sits, as a plain label and the middle of its bounding box, in the order
+    the outlook lists them. The longitudes of a shape that crosses the antimeridian are taken on one side of it, and the
+    result is wrapped back into -180..180."""
+    if outlook is None:
+        return ()
+    found: list[tuple[str, LatLon]] = []
+    for system in outlook.gis.systems:
+        ring = [p for polygon in system.polygons for p in polygon]
+        if ring:
+            first = ring[0][1]
+            lons = [((p[1] - first + 180.0) % 360.0) - 180.0 for p in ring]
+            lat = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
+            lon = first + (min(lons) + max(lons)) / 2.0
+        elif system.point is not None:
+            lat, lon = system.point
+        else:
+            continue
+        label = f"{system.basin_label} area {system.area_id}".strip()
+        found.append((label, (lat, ((lon + 180.0) % 360.0) - 180.0)))
+    return tuple(found)
+
+
 def _wind_kt_of(store: Store, station_id: str, now: datetime) -> tuple[float | None, bool]:
     """The newest wind at a station in knots, and whether the reading is too old to trust."""
     obs = newest_observation(store, station_id)

@@ -42,7 +42,7 @@ async def test_main_footer_is_one_row_and_lists_the_map_keys(size: tuple[int, in
         await into_the_storm(pilot)
         assert type(app.focused).__name__ == "MainMap"
         one_row(app, size[0])
-        assert labels(app) == ["zoom", "fit", "center", "layers", "open", "buoys", "NHC text"]
+        assert labels(app) == ["zoom", "fit", "center", "layers", "open", "buoys", "NHC text", "full map"]
 
 
 async def test_footer_follows_the_focus_without_waiting_for_the_clock() -> None:

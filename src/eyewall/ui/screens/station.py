@@ -524,7 +524,9 @@ class StationScreen(ChromeScreen):
     def action_show_on_map(self) -> None:
         position = self._position()
         if position is not None:
-            self.app.call_later(self.eye.show_on_map, position[0], position[1], f"{self.crumb()}")
+            self.app.call_later(
+                self.eye.show_on_map, position[0], position[1], f"{self.crumb()}", (self.kind, self.station_id)
+            )
 
 
 __all__ = ["StationScreen"]
