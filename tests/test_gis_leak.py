@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import tracemalloc
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import shapefile
@@ -27,7 +28,10 @@ def _parse_all(rounds: int) -> None:
 
 def _live_readers() -> int:
     gc.collect()
-    return sum(isinstance(obj, shapefile.Reader | shapefile.ShpReader) for obj in gc.get_objects())
+    return sum(
+        isinstance(obj, shapefile.Reader | shapefile.ShpReader | shapefile.ShxReader | shapefile.DbfReader)
+        for obj in gc.get_objects()
+    )
 
 
 def test_parsed_zips_leave_no_pyshp_reader_alive() -> None:
@@ -50,3 +54,19 @@ def test_heap_is_flat_across_many_parses() -> None:
         tracemalloc.stop()
     # Unfixed, 90 parses retain well over 10 MB; the fixed path holds the one blob list and nothing else.
     assert growth < 1_000_000
+
+
+def test_pyshp_caches_are_found() -> None:
+    # If a pyshp release changes how it caches, the scan comes back short and the leak silently returns.
+    assert shapefile.ShpReader._headers_cached_gen in gis._PYSHP_CACHES
+    assert shapefile.ShxReader._read_shxRecords in gis._PYSHP_CACHES
+    assert len(gis._PYSHP_CACHES) >= 6
+
+
+def test_parallel_parses_match_serial_parses() -> None:
+    blobs = [((FIXTURES / name).read_bytes(), parse) for name, parse in PARSERS]
+    serial = [parse(data) for data, parse in blobs]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = [pool.submit(parse, data) for _ in range(10) for data, parse in blobs]
+        results = [future.result() for future in futures]
+    assert results == serial * 10
