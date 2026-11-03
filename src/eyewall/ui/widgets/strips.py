@@ -10,10 +10,13 @@ from rich.segment import Segment
 from rich.style import Style as RichStyle
 from textual.strip import Strip
 
+from eyewall.palette import BACKGROUND
 from eyewall.render.canvas import Canvas
 from eyewall.render.canvas import Style as CanvasStyle
 
-PLAIN = RichStyle()
+# These widgets draw on the app's own background, never the terminal's, so every colour keeps its contrast on a light
+# terminal as well as a dark one.
+PLAIN = RichStyle(bgcolor=BACKGROUND)
 
 
 def blank(width: int) -> Strip:
@@ -37,7 +40,7 @@ def rich_style(style: CanvasStyle) -> RichStyle:
     """A canvas style as a rich one. Bold, underline and reverse survive `NO_COLOR`, so they carry cues color cannot."""
     return RichStyle(
         color=style.fg,
-        bgcolor=style.bg,
+        bgcolor=style.bg or BACKGROUND,
         bold=style.bold or None,
         underline=style.underline or None,
         reverse=style.reverse or None,

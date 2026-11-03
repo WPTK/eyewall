@@ -11,7 +11,7 @@ Screen {
     scrollbar-background: $surface;
     scrollbar-background-hover: $surface;
     scrollbar-background-active: $surface;
-    scrollbar-color: $primary 50%;
+    scrollbar-color: $primary;
     scrollbar-color-hover: $primary 75%;
     scrollbar-color-active: $accent;
     scrollbar-corner-color: $surface;
@@ -74,7 +74,7 @@ MapView {
     display: none;
     height: 100%;
     padding: 0 1;
-    border-left: solid $primary 50%;
+    border-left: solid $primary 80%;
 }
 
 #strip {
@@ -239,8 +239,9 @@ Tabs:focus .-active {
     text-style: bold underline;
 }
 
+Tabs .underline--bar,
 Tabs:focus .underline--bar {
-    background: $foreground 10%;
+    background: $foreground 40%;
 }
 
 /* Unchecked layers stay readable: the box is muted, not the same dark as the dialog. */

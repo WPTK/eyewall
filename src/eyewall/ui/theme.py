@@ -8,6 +8,7 @@ from eyewall.palette import (
     ACCENT,
     BACKGROUND,
     BAD,
+    FIELD_EDGE,
     FOREGROUND,
     GOOD,
     HEADING,
@@ -32,4 +33,5 @@ EYEWALL_THEME = Theme(
     warning=WARN,
     error=BAD,
     dark=True,
+    variables={"border-blurred": FIELD_EDGE},
 )

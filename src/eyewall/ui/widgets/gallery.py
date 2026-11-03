@@ -30,7 +30,7 @@ from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
 from eyewall.net import FetchError
-from eyewall.palette import DIM, FRESHNESS_CUES
+from eyewall.palette import BACKGROUND, DIM, FRESHNESS_CUES
 from eyewall.poll import FreshnessState
 from eyewall.render.canvas import Mode
 from eyewall.render.images import (
@@ -79,7 +79,7 @@ class ImageView(Widget):
 
     def show(self, frame: FallbackFrame) -> None:
         self._lines = [
-            Strip([Segment(text, RichStyle(color=s.fg, bgcolor=s.bg)) for text, s in row], frame.width)
+            Strip([Segment(text, RichStyle(color=s.fg, bgcolor=s.bg or BACKGROUND)) for text, s in row], frame.width)
             for row in frame.rows
         ]
         self._is_picture = True
@@ -87,7 +87,9 @@ class ImageView(Widget):
 
     def say(self, message: str) -> None:
         self._message = message
-        self._lines = [Strip([Segment(line, RichStyle(color=DIM))]) for line in self._wrapped(message)]
+        self._lines = [
+            Strip([Segment(line, RichStyle(color=DIM, bgcolor=BACKGROUND))]) for line in self._wrapped(message)
+        ]
         self._is_picture = False
         self.refresh()
 
