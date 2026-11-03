@@ -88,7 +88,6 @@ def test_apply_sets_textual_colour_system_only_when_it_knows(monkeypatch: pytest
     terminal.apply(caps({"TERM": "dumb"}))
     assert constants.COLOR_SYSTEM is None
     assert os.environ["NO_COLOR"] == "1"
-    monkeypatch.delenv("NO_COLOR")
 
 
 def test_restore_sequence_undoes_mouse_alt_screen_and_cursor() -> None:
