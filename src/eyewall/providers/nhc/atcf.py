@@ -23,6 +23,7 @@ import re
 import zlib
 from datetime import UTC, datetime
 
+from eyewall.geo import wrap_lon
 from eyewall.models.track import BDeckFile, BestTrack, BestTrackFix
 from eyewall.models.wind import QuadrantRadii, WindRadii
 from eyewall.providers.base import ParseError
@@ -117,6 +118,10 @@ def parse_bdeck(data: bytes | str) -> BestTrack:
         if len(fields) < 11 or when is None or lat is None or lon is None or not fields[1].isdigit():
             skipped += 1
             continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 360.0):  # a damaged digit, not a place
+            skipped += 1
+            continue
+        lon = wrap_lon(lon)
         if fields[4].upper() != "BEST":
             skipped += 1
             continue

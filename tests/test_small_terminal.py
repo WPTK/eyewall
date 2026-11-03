@@ -42,3 +42,20 @@ async def test_the_main_screen_returns_when_enlarged_and_again_after_shrinking()
         await pilot.resize_terminal(60, 16)
         await settle(pilot)
         assert isinstance(app.screen, MainScreen)
+
+
+@pytest.mark.parametrize("key", ["question_mark", "A", "D"])
+async def test_a_screen_opened_while_too_small_cannot_crash_the_enlarge(key) -> None:  # type: ignore[no-untyped-def]
+    app = replay_app()
+    async with running(app, (120, 40)) as pilot:
+        await settle(pilot)
+        await pilot.resize_terminal(59, 15)
+        await settle(pilot)
+        assert isinstance(app.screen, TooSmallScreen)
+        await pilot.press(key)
+        await settle(pilot)
+        assert [type(s) for s in app.screen_stack].count(TooSmallScreen) == 1
+        for _ in range(2):  # a second enlarge must not trip over the first
+            await pilot.resize_terminal(120, 40)
+            await settle(pilot)
+            assert isinstance(app.screen, MainScreen)
