@@ -30,6 +30,7 @@ EVENT_TITLES: dict[EventKind, str] = {
     EventKind.NEW_INVEST: "New invest",
     EventKind.NEW_ADVISORY: "New advisory",
     EventKind.CLASSIFICATION: "Classification",
+    EventKind.RAPID_INTENSIFICATION: "Rapid intensification",
     EventKind.WATCH_WARNING_ISSUED: "Watch or warning issued",
     EventKind.WATCH_WARNING_CHANGED: "Watch or warning changed",
     EventKind.WATCH_WARNING_DISCONTINUED: "Watch or warning ended",

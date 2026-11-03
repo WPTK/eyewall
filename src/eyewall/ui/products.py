@@ -14,6 +14,7 @@ from rich.text import Text
 
 from eyewall.clock import format_when, format_zulu
 from eyewall.models.forecast import ForecastAdvisory, ForecastFix
+from eyewall.models.intensity import current_rapid
 from eyewall.models.wind import QuadrantRadii
 from eyewall.palette import (
     DIM,
@@ -69,6 +70,8 @@ def summary(state: StormState, now: datetime, preset: Preset, tz: tzinfo | None)
     _line(out, "Updated", format_when(storm.last_update, tz, day=True) if storm.last_update else MISSING)
     _line(out, "Position", f"{fmt_lat(storm.lat)} {fmt_lon(storm.lon)}")
     _line(out, "Max wind", preset.fmt_wind(storm.intensity_kt), style=f"bold {category_color(storm.intensity_kt)}")
+    if state.track is not None and current_rapid(state.track.fixes) is not None:
+        _line(out, "", "RI: rapid intensification", style="bold")
     _line(out, "Pressure", preset.fmt_pressure(storm.pressure_mb))
     _line(out, "Movement", movement_text(storm, preset))
     tcm = state.advisories.forecast
