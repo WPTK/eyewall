@@ -223,7 +223,9 @@ class MainScreen(ChromeScreen):
         ids = [s.storm.id for s in self.states]
         if eye.selected not in ids:
             eye.selected = ids[0] if ids else None
-        self.map_view.set_scene(adapt.map_scene(eye.store, eye.now(), eye.selected), self._fit_points())
+        self.map_view.set_scene(
+            adapt.map_scene(eye.store, eye.now(), eye.selected), self._fit_points(), quiet_focus=self._quiet_focus()
+        )
         many = len(ids) > 1  # the list shows a selected row only then, so the map shows a selected mark only then
         self.map_view.selectable = frozenset(ids) if many else frozenset()  # only listed storms select on a click
         self.map_view.set_selected(Mark("storm", eye.selected) if many and eye.selected else None)
@@ -236,6 +238,14 @@ class MainScreen(ChromeScreen):
         self.query_one("#lead", Static).update(lead_text(view))
         self.query_one("#side", SidePanel).repaint()
         self.query_one("#strip", SidePanel).repaint()
+
+    def _quiet_focus(self) -> tuple[float, float] | None:
+        """Where the quiet-day map centers when it cannot show its basin whole; None with a storm selected."""
+        eye = self.eye
+        state = eye.store.storms.get(eye.selected or "")
+        if state is not None and adapt.storm_scene(state).near_extent():
+            return None
+        return adapt.quiet_focus(eye.basin_view, eye.store)
 
     def _fit_points(self) -> list[tuple[float, float]]:
         eye = self.eye

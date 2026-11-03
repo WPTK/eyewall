@@ -28,6 +28,10 @@ BASIN_BOUNDS: dict[str, tuple[LatLon, LatLon]] = {
     "EP": ((4.0, -140.0), (32.0, -84.0)),
     "CP": ((4.0, -180.0), (30.0, -130.0)),
 }
+# Where a quiet-day map looks first when the whole basin would be coarser than QUIET_MAX_DEG_PER_DOT: the busy part
+# of each basin (the Atlantic's is the Caribbean, Gulf and the Southeast coast out to Bermuda).
+BASIN_FOCUS: dict[str, LatLon] = {"AL": (22.0, -68.0), "EP": (16.0, -108.0), "CP": (15.0, -155.0)}
+QUIET_MAX_DEG_PER_DOT = 0.5  # the coarsest scale the quiet-day map is allowed
 MAX_MAP_STATIONS = 12
 _RISK_RANK = {"low": 1, "medium": 2, "high": 3}
 
@@ -45,6 +49,23 @@ def quiet_points(basins: tuple[str, ...]) -> list[LatLon]:
     another or switched it off), always. An outlook area outside it is not chased across the hemisphere: the panel
     says where it is and what its chances are."""
     return list(BASIN_BOUNDS.get(basins[0] if basins else "AL", BASIN_BOUNDS["AL"]))
+
+
+def quiet_focus(basins: tuple[str, ...], store: Store | None = None) -> LatLon:
+    """Where the quiet-day map is centered when the basin is too wide to show whole at QUIET_MAX_DEG_PER_DOT: the
+    middle of the active storms and outlook areas inside the basin, or the basin's busy spot when there are none."""
+    code = basins[0] if basins else "AL"
+    south_west, north_east = BASIN_BOUNDS.get(code, BASIN_BOUNDS["AL"])
+    found: list[LatLon] = []
+    if store is not None:
+        for state in store.storms.values():
+            if state.storm.lat is not None and state.storm.lon is not None:
+                found.append((state.storm.lat, state.storm.lon))
+        found += [centre for _, centre in outlook_centres(store.outlook)]
+    inside = [p for p in found if south_west[0] <= p[0] <= north_east[0] and south_west[1] <= p[1] <= north_east[1]]
+    if not inside:
+        return BASIN_FOCUS.get(code, BASIN_FOCUS["AL"])
+    return (sum(p[0] for p in inside) / len(inside), sum(p[1] for p in inside) / len(inside))
 
 
 def _quadrants(radii: QuadrantRadii | None) -> L.QuadrantRadii | None:

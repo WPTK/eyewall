@@ -81,6 +81,14 @@ def bounds_of(points: Iterable[LatLon]) -> Bounds:
     return Bounds(south, lons[(widest + 1) % len(lons)], north, 360.0 - gaps[widest])
 
 
+def _slid(center: float, low: float, high: float, span: float) -> float:
+    """The center nearest `center` for a window of this span that stays between low and high; the middle when it
+    cannot (a window wider than the range)."""
+    if span >= high - low:
+        return (low + high) / 2.0
+    return min(max(center, low + span / 2.0), high - span / 2.0)
+
+
 @dataclass(frozen=True)
 class Viewport:
     """What part of the world a canvas shows.
@@ -207,9 +215,21 @@ class Viewport:
 
     @classmethod
     def fit(
-        cls, bounds: Bounds, cols: int, rows: int, *, dots_x: int = 2, dots_y: int = 4, margin: float = 0.05
+        cls,
+        bounds: Bounds,
+        cols: int,
+        rows: int,
+        *,
+        dots_x: int = 2,
+        dots_y: int = 4,
+        margin: float = 0.05,
+        max_deg_per_dot: float | None = None,
+        focus: LatLon | None = None,
     ) -> Viewport:
         """The view that shows bounds entirely, centered, with a margin (a fraction of each side) all round.
+
+        With `max_deg_per_dot`, a box that would need a coarser scale is not shown whole: the view keeps that scale
+        and shows the part of the box around `focus` (the box's center when none), slid to stay inside the box.
 
         A box narrower than MIN_FIT_SPAN_DEG on a side is treated as that wide, so a point or a tiny box still
         gets a window of a couple of degrees rather than a blank patch of sea.
@@ -219,11 +239,37 @@ class Viewport:
         usable = 1.0 - 2.0 * max(0.0, min(0.45, margin))
         by_lat = max(bounds.north - bounds.south, MIN_FIT_SPAN_DEG) / (rows * dots_y * usable)
         by_lon = max(bounds.lon_span, MIN_FIT_SPAN_DEG) * scale / (cols * dots_x * usable)
-        return cls(lat, lon, max(by_lat, by_lon, MIN_DEG_PER_DOT), cols, rows, dots_x, dots_y)
+        deg_per_dot = max(by_lat, by_lon, MIN_DEG_PER_DOT)
+        if max_deg_per_dot is not None and deg_per_dot > max_deg_per_dot:
+            deg_per_dot = max(max_deg_per_dot, MIN_DEG_PER_DOT)
+            lat, lon = focus if focus is not None else (lat, lon)
+            lat = _slid(lat, bounds.south, bounds.north, deg_per_dot * rows * dots_y * usable)
+            scale = round(math.cos(math.radians(max(-MAX_CENTER_LAT, min(MAX_CENTER_LAT, lat)))), 9)
+            lon_span = deg_per_dot * cols * dots_x * usable / max(scale, 1e-9)
+            lon = normalize_lon(bounds.west + _slid((lon - bounds.west) % 360.0, 0.0, bounds.lon_span, lon_span))
+        return cls(lat, lon, deg_per_dot, cols, rows, dots_x, dots_y)
 
     @classmethod
     def fit_points(
-        cls, points: Sequence[LatLon], cols: int, rows: int, *, dots_x: int = 2, dots_y: int = 4, margin: float = 0.05
+        cls,
+        points: Sequence[LatLon],
+        cols: int,
+        rows: int,
+        *,
+        dots_x: int = 2,
+        dots_y: int = 4,
+        margin: float = 0.05,
+        max_deg_per_dot: float | None = None,
+        focus: LatLon | None = None,
     ) -> Viewport:
         """fit() around a set of positions."""
-        return cls.fit(bounds_of(points), cols, rows, dots_x=dots_x, dots_y=dots_y, margin=margin)
+        return cls.fit(
+            bounds_of(points),
+            cols,
+            rows,
+            dots_x=dots_x,
+            dots_y=dots_y,
+            margin=margin,
+            max_deg_per_dot=max_deg_per_dot,
+            focus=focus,
+        )
