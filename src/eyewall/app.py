@@ -17,6 +17,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
+from typing import Any
 
 from textual import events
 from textual.app import App
@@ -241,8 +242,17 @@ class EyewallApp(App[bool]):
 
     def on_resize(self, event: events.Resize) -> None:
         if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
+            self.clear_notifications()  # a toast drawn over the size message would hide the size
             self.push_screen(TooSmallScreen())
         self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every bar follows a resize
+
+    def notify(self, message: str, **kwargs: Any) -> None:
+        """Toasts are not shown while the terminal is too small: they would be drawn over the size message. A toast
+        dropped there is gone, not queued: the news is on the screens (the alert log, the cards) when the terminal
+        grows back."""
+        if self.screen_stack and isinstance(self.screen_stack[-1], TooSmallScreen):
+            return
+        super().notify(message, **kwargs)
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
