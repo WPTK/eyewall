@@ -9,6 +9,7 @@ case that changes. Which listing a station came from becomes its `products`; mer
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
@@ -25,9 +26,10 @@ def _number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def parse_tide_stations(text: str | bytes, product: str = WATER_LEVEL) -> Parsed[TideStation]:
@@ -38,7 +40,7 @@ def parse_tide_stations(text: str | bytes, product: str = WATER_LEVEL) -> Parsed
     """
     try:
         payload = json.loads(text)
-    except ValueError:
+    except (ValueError, RecursionError):  # RecursionError: deeply nested brackets
         return Parsed(message="invalid station JSON")
     entries = payload.get("stations") if isinstance(payload, dict) else None
     if not isinstance(entries, list):

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import zlib
 from datetime import datetime
 
 from eyewall.models.obs import Observation, ObservationSeries
@@ -32,7 +33,7 @@ def decompress(data: bytes) -> str:
         try:
             with gzip.GzipFile(fileobj=io.BytesIO(data)) as handle:
                 data = handle.read(MAX_UNCOMPRESSED_BYTES + 1)
-        except (OSError, EOFError) as exc:
+        except (OSError, EOFError, zlib.error) as exc:  # a flipped byte inside the deflate stream is zlib.error
             raise ValueError(f"historical file is not valid gzip ({exc})") from exc
         if len(data) > MAX_UNCOMPRESSED_BYTES:
             raise ValueError("historical file is larger than expected")

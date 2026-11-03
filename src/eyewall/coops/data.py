@@ -13,6 +13,7 @@ Observation series are newest first like the NDBC ones; predictions run oldest f
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -84,9 +85,10 @@ def _number(value: Any) -> float | None:
     if isinstance(value, str) and not value.strip():
         return None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None  # the words NaN and Infinity are valid to Python's json
 
 
 def _time(value: Any) -> datetime | None:
@@ -106,7 +108,10 @@ def _records[T](
 ) -> Parsed[T]:
     try:
         payload = json.loads(text)
-    except ValueError as exc:  # an HTML page or a cut-off body is not an answer: raise, so no caller stores it as one
+    except (
+        ValueError,
+        RecursionError,
+    ) as exc:  # an HTML page or a cut-off body is not an answer: raise, so no caller stores it as one
         raise ParseError("invalid CO-OPS JSON") from exc
     if not isinstance(payload, dict):
         raise ParseError("unexpected CO-OPS payload")

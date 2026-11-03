@@ -119,5 +119,5 @@ def parse_time(row: Row) -> datetime | None:
             year += 1900 if year >= 70 else 2000
         minute = int(row["mm"]) if "mm" in row else 0
         return datetime(year, int(row["MM"]), int(row["DD"]), int(row["hh"]), minute, tzinfo=UTC)
-    except (KeyError, ValueError):
+    except (KeyError, ValueError, OverflowError):  # OverflowError: an hour too big for a C int
         return None
