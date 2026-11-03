@@ -255,8 +255,9 @@ def test_a_flipped_byte_inside_a_gzip_stream_is_a_series_with_a_message():
 
 def test_an_int_too_big_for_a_float_reads_as_missing():
     huge = "1" + "0" * 400
-    assert coops_data.parse_water_level('{"data":[{"t":"2026-09-10 12:00","v":%s}]}' % huge).items[0].level_ft is None
-    assert parse_tide_stations('{"stations":[{"id":"1","lat":%s,"lng":-70}]}' % huge).skipped == 1
+    water = coops_data.parse_water_level(f'{{"data":[{{"t":"2026-09-10 12:00","v":{huge}}}]}}')
+    assert water.items[0].level_ft is None
+    assert parse_tide_stations(f'{{"stations":[{{"id":"1","lat":{huge},"lng":-70}}]}}').skipped == 1
 
 
 @pytest.mark.parametrize("word", ["NaN", "Infinity", "-Infinity", "1e999"])
