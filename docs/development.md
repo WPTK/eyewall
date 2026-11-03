@@ -42,6 +42,11 @@ is nearly certain about, so a report means a real leftover.
   whose memory passes 2 GB is killed with exit status 70 and no summary (a watcher thread in `tests/conftest.py`;
   `resource.setrlimit` does not exist on Windows). The full suite peaks under 700 MB and its slowest test takes about 11 s. `EYEWALL_TEST_RSS_MB=0` turns the memory
   watch off and `--timeout=0` the time limit.
+- `tests/test_chaos_ui.py` is a hypothesis state machine (keys, resizes, clicks, feed swaps) over the headless app. The
+  default run is short; `EYEWALL_FUZZ=long` runs about ten times more, unseeded, for tag time. Known defects it found
+  are strict xfails in `tests/test_chaos_known_ui.py` and `tests/test_chaos_faults.py`; delete the mark in the fix's PR.
+- `python scripts/soak.py --hours 6 [--source replay|wire]` runs the headless app on a fake clock and reports growth in
+  handles, sockets, threads, temp files and heap. It is not part of CI.
 - HTTP is mocked with `respx`. Time comes from `eyewall.clock.VirtualClock`, never from `sleep`.
 - Tests marked `live` call the real NOAA services and run only with `EYEWALL_LIVE=1`:
 
