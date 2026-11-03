@@ -91,7 +91,7 @@ class OutlookGis:
         """How long ago the shapes were issued, never negative; None when the zip carried no time."""
         return None if self.issued is None else max(timedelta(0), now - self.issued)
 
-    def expired(self, now: datetime | None) -> bool:
+    def expired(self, now: datetime) -> bool:
         """True when the shapes are too old to draw or to speak for the outlook."""
         age = None if now is None else self.age(now)
         return age is not None and age > GIS_DROP_AFTER

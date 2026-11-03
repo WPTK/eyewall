@@ -30,7 +30,7 @@ def outlook_text(view: View) -> list[str]:
     if view.states and not outlook_words.area_count(store.outlook, view.basins, view.now):
         return []
     return outlook_words.current_sentences(
-        store.outlook, view.basins, old=view.outlook_old, summaries=not view.states, now=view.now
+        store.outlook, view.basins, view.now, old=view.outlook_old, summaries=not view.states
     )
 
 

@@ -54,7 +54,7 @@ def _chances(area: _Area) -> str:
     return "no formation chance is given"
 
 
-def _areas(outlook: Outlook, enabled: Sequence[str], now: datetime | None = None) -> list[_Area]:
+def _areas(outlook: Outlook, enabled: Sequence[str], now: datetime) -> list[_Area]:
     """The areas from the outlook shapes, or from the outlook text when the shapes did not arrive or are past
     `GIS_DROP_AFTER` (a kept copy must not win over the fresh text)."""
     found: list[_Area] = []
@@ -85,7 +85,7 @@ def _areas(outlook: Outlook, enabled: Sequence[str], now: datetime | None = None
     return found
 
 
-def area_count(outlook: Outlook | None, enabled: Sequence[str], now: datetime | None = None) -> int:
+def area_count(outlook: Outlook | None, enabled: Sequence[str], now: datetime) -> int:
     """How many areas NHC is watching in the enabled basins (0 when the outlook has not arrived)."""
     return 0 if outlook is None else len(_areas(outlook, enabled, now))
 
@@ -113,7 +113,7 @@ def _summaries(outlook: Outlook, enabled: Sequence[str], covered: set[str]) -> l
 
 
 def outlook_sentences(
-    outlook: Outlook | None, enabled: Sequence[str], *, summaries: bool = True, now: datetime | None = None
+    outlook: Outlook | None, enabled: Sequence[str], now: datetime, *, summaries: bool = True
 ) -> list[Words]:
     """`NHC is watching 1 area in the Atlantic: a 70% chance it forms within 7 days, and 30% within 2 days.`
 
@@ -138,13 +138,11 @@ OUTLOOK_OLD = "The outlook could not be updated, so what follows may be out of d
 
 
 def current_sentences(
-    outlook: Outlook | None, enabled: Sequence[str], *, old: bool, summaries: bool = True, now: datetime | None = None
+    outlook: Outlook | None, enabled: Sequence[str], now: datetime, *, old: bool, summaries: bool = True
 ) -> list[str]:
     """The outlook in sentences. When its feed has failed or stopped, a warning leads and only the areas it named
     follow: `not expected` is not said on the strength of an answer that may be stale."""
     if old and outlook is not None:
-        areas = (
-            outlook_sentences(outlook, enabled, summaries=False, now=now) if area_count(outlook, enabled, now) else []
-        )
+        areas = outlook_sentences(outlook, enabled, now, summaries=False) if area_count(outlook, enabled, now) else []
         return [OUTLOOK_OLD, *(w.text for w in areas)]
-    return [w.text for w in outlook_sentences(outlook, enabled, summaries=summaries, now=now)]
+    return [w.text for w in outlook_sentences(outlook, enabled, now, summaries=summaries)]

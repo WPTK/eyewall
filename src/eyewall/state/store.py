@@ -206,11 +206,15 @@ class Store:
         self.tide_series[series.station_id] = series
         self.tide_errors.pop(series.station_id, None)
 
-    def prune_tides(self, keep: set[str], now: datetime) -> None:
-        """Drop the series of gauges nobody polls any more, and any whose newest level is past `DROP_AFTER`."""
+    def prune_tides(self, keep: set[str], now: datetime, open_pages: set[str] | frozenset[str] = frozenset()) -> None:
+        """Drop the series (and errors) of gauges nobody polls any more, and any series whose newest level is past
+        `DROP_AFTER`. A gauge in `open_pages` is exempt from the age rule: its page shows how long it was silent."""
         for station_id, series in list(self.tide_series.items()):
-            if station_id.upper() not in keep or tides.is_expired(series, now):
+            key = station_id.upper()
+            if key not in keep or (key not in open_pages and tides.is_expired(series, now)):
                 del self.tide_series[station_id]
+        for station_id in [s for s in self.tide_errors if s.upper() not in keep]:
+            del self.tide_errors[station_id]
 
     def apply_tide_error(self, station_id: str, message: str) -> None:
         self.tide_errors[station_id] = message

@@ -112,13 +112,13 @@ def storm_scene(state: StormState) -> L.StormScene:
     )
 
 
-def outlook_areas(outlook: Outlook | None, now: datetime | None = None) -> tuple[L.OutlookArea, ...]:
+def outlook_areas(outlook: Outlook | None, now: datetime) -> tuple[L.OutlookArea, ...]:
     """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance and its
     span, so a number on the map is never bare. Shapes past `GIS_NOTE_AFTER` carry their age (`40% in 7 days, 14h00m
     old`) and shapes past `GIS_DROP_AFTER` are not drawn."""
     if outlook is None or outlook.gis.expired(now):
         return ()
-    age = None if now is None else outlook.gis.age(now)
+    age = outlook.gis.age(now)
     old = f", {format_age(age.total_seconds())} old" if age is not None and age > GIS_NOTE_AFTER else ""
     areas: list[L.OutlookArea] = []
     for system in outlook.gis.systems:
