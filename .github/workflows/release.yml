@@ -175,7 +175,7 @@ jobs:
             exe=./eyewall
           fi
           chmod +x "$exe"
-          [ "$("$exe" --version | tr -d '')" = "eyewall ${TAG#v}" ] || { echo "--version does not say ${TAG#v}: a stale asset?"; exit 1; }
+          [ "$("$exe" --version | tr -d '\r')" = "eyewall ${TAG#v}" ] || { echo "--version does not say ${TAG#v}: a stale asset?"; exit 1; }
           "$exe" --selftest
           "$exe" --replay demo --headless --until +1h
 
