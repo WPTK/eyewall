@@ -27,9 +27,20 @@ DATA_SOUTH = -10.0
 DATA_NORTH = 65.0
 DATA_EAST = -5.0  # the Atlantic side; the Pacific side is cut at 95 E
 
-# The full tier is Natural Earth 1:10 million simplified to 0.002 degrees; the `_lo` tier is the same data simplified to
-# 0.03 degrees, for whole-basin views.
-LAYERS = ("coast", "land", "lakes", "borders", "coast_lo", "land_lo", "lakes_lo")
+# The full tier is Natural Earth 1:10 million simplified to 0.002 degrees; the `_mid` tier is the same data simplified
+# to 0.009 degrees (about 1 km) for basin views, and the `_lo` tier to 0.03 degrees for a hemisphere.
+LAYERS = (
+    "coast",
+    "land",
+    "lakes",
+    "borders",
+    "coast_mid",
+    "land_mid",
+    "lakes_mid",
+    "coast_lo",
+    "land_lo",
+    "lakes_lo",
+)
 
 _HEADER = struct.Struct("<4sBBHII")
 _PATH_HEADER = struct.Struct("<BI")

@@ -5,10 +5,12 @@ them to the tropical-cyclone basins' bounding box plus a margin, simplifies with
 as int32 ten-thousandths of a degree (about 11 m). The output is deterministic: the same inputs always give the same
 bytes.
 
-Two detail tiers come from the same 10 m sources. The full tier ("coast", "land", "lakes") is simplified to 0.002
-degrees (about 220 m) and is what every zoomed-in view draws. The `_lo` tier is simplified to 0.03 degrees and exists
-only so a whole-basin view, where one terminal dot spans about a degree, does not project a million vertices. Both keep
-every island: simplification never reduces a ring below three points.
+Three detail tiers come from the same 10 m sources. The full tier ("coast", "land", "lakes") is simplified to 0.002
+degrees (about 220 m) and is what every zoomed-in view draws. The `_mid` tier is simplified to 0.009 degrees (about 1
+km, the linecast bar) for views of 0.3 to 0.6 degrees a dot, such as a quiet-day basin map, at half the vertices. The
+`_lo` tier is simplified to 0.03 degrees and exists only so a hemisphere view, where one terminal dot spans about a
+degree, does not project a million vertices. All keep every island: simplification never reduces a ring below three
+points.
 
 Long lines are cut into pieces of at most MAX_LINE_POINTS points, and filled land is cut along a 5 degree grid, so a
 viewport only touches the pieces it can see. The cuts in land fill are invisible (neighbouring pieces meet exactly);
@@ -102,6 +104,7 @@ class LayerSpec:
 
 
 FULL_TOLERANCE = 0.002  # about 220 m; linecast simplifies to about 1 km
+MID_TOLERANCE = 0.009  # about 1 km, the linecast bar: what views from 0.1 to 0.5 degrees a dot draw
 LO_TOLERANCE = 0.03  # a third of a dot in a whole-basin view
 
 _COAST = (("ne_10m_coastline", 0), ("ne_10m_minor_islands_coastline", 0))
@@ -119,6 +122,9 @@ LAYERS = (
         0.003,
         "10 m country boundaries and state or province lines",
     ),
+    LayerSpec("coast_mid", _COAST, False, MID_TOLERANCE, "1 km coastline for basin views"),
+    LayerSpec("land_mid", _LAND, True, MID_TOLERANCE, "1 km land polygons for basin views"),
+    LayerSpec("lakes_mid", _LAKES, True, MID_TOLERANCE, "1 km lakes for basin views", tile=False),
     LayerSpec("coast_lo", _COAST, False, LO_TOLERANCE, "coarse coastline for whole-basin views"),
     LayerSpec("land_lo", _LAND, True, LO_TOLERANCE, "coarse land polygons for whole-basin views"),
     LayerSpec("lakes_lo", _LAKES, True, LO_TOLERANCE, "coarse lakes for whole-basin views", tile=False),
@@ -478,8 +484,9 @@ No permission or credit is required; it is given here anyway.
 
 The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror at
 commit `{MIRROR_REF}` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
-Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
-the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
+Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.009 for
+the `_mid` tier used by basin views, 0.03 for the `_lo` tier used by a hemisphere) and stored as 32-bit integers in
+ten-thousandths of a degree.
 
 `places.bin` holds point features from the same mirror and commit (`ne_10m_populated_places_simple`), kept inside the
 same area and ordered by scalerank then population.

@@ -158,6 +158,14 @@ def test_borders_hold_countries_and_states():
     assert not near(countries, 31.0, -87.5, 0.1)
 
 
+@pytest.mark.parametrize("stem", ["coast", "coast_mid", "land_mid", "lakes_mid", "coast_lo"])
+def test_a_cut_short_layer_file_is_rejected(stem):
+    good = (DATA_DIR / f"{stem}.bin").read_bytes()
+    for cut in (len(good) - 3, 20):
+        with pytest.raises(ValueError, match="truncated"):
+            loader.parse(good[:cut])
+
+
 def test_unknown_layer_and_bad_data_are_rejected():
     with pytest.raises(ValueError, match="unknown map layer"):
         loader.load_layer("nope")
@@ -169,10 +177,6 @@ def test_unknown_layer_and_bad_data_are_rejected():
         loader.parse(b"EWMD")
     with pytest.raises(ValueError, match="unit scale"):
         loader.parse(struct.pack("<4sBBHII", b"EWMD", 2, 0, 0, 0, 0))
-    good = (DATA_DIR / "coast_lo.bin").read_bytes()
-    for cut in (len(good) - 3, 20):
-        with pytest.raises(ValueError, match="truncated"):
-            loader.parse(good[:cut])
 
 
 def test_the_attribution_page_matches_the_data(build):

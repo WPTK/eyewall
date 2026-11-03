@@ -6,8 +6,9 @@ No permission or credit is required; it is given here anyway.
 
 The data was read from the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror at
 commit `f1890d9f152c896d250a77557a5751a93d494776` (tag v5.1.2), at the 1:10 million scale. They are clipped to longitude 95 E eastward across the
-Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.03 for
-the `_lo` tier used by whole-basin views) and stored as 32-bit integers in ten-thousandths of a degree.
+Pacific to 5 W and latitude 10 S to 65 N, simplified with Douglas-Peucker (0.002 degrees for the full tier, 0.009 for
+the `_mid` tier used by basin views, 0.03 for the `_lo` tier used by a hemisphere) and stored as 32-bit integers in
+ten-thousandths of a degree.
 
 `places.bin` holds point features from the same mirror and commit (`ne_10m_populated_places_simple`), kept inside the
 same area and ordered by scalerank then population.
@@ -18,12 +19,15 @@ same area and ordered by scalerank then population.
 | `land.bin` | 10 m land polygons | `ne_10m_land` | 1,207,461 |
 | `lakes.bin` | 10 m lakes | `ne_10m_lakes` | 409,947 |
 | `borders.bin` | 10 m country boundaries and state or province lines | `ne_10m_admin_0_boundary_lines_land, ne_10m_admin_1_states_provinces_lines` | 795,885 |
+| `coast_mid.bin` | 1 km coastline for basin views | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 610,868 |
+| `land_mid.bin` | 1 km land polygons for basin views | `ne_10m_land` | 598,925 |
+| `lakes_mid.bin` | 1 km lakes for basin views | `ne_10m_lakes` | 202,667 |
 | `coast_lo.bin` | coarse coastline for whole-basin views | `ne_10m_coastline, ne_10m_minor_islands_coastline` | 305,705 |
 | `land_lo.bin` | coarse land polygons for whole-basin views | `ne_10m_land` | 293,949 |
 | `lakes_lo.bin` | coarse lakes for whole-basin views | `ne_10m_lakes` | 87,507 |
 | `places.bin` | populated places for map labels (scalerank 8 or better) | `ne_10m_populated_places_simple` | 69,138 |
 
-Total: 4,390,130 bytes. The format is described at the top of `scripts/build_mapdata.py`.
+Total: 5,802,590 bytes. The format is described at the top of `scripts/build_mapdata.py`.
 
 ## Rebuilding
 

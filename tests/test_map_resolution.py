@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +13,9 @@ import pytest
 
 from eyewall.mapdata import loader
 from eyewall.palette import COAST
-from eyewall.render.basemap import basemap_canvas, is_detailed
+from eyewall.render import basemap
+from eyewall.render.basemap import DETAIL_SWITCH, MID_SWITCH, basemap_canvas, tier_suffix
+from eyewall.render.canvas import Canvas
 from eyewall.render.projection import Viewport
 from eyewall.ui import adapt
 from tests.test_quiet_home import square
@@ -48,20 +51,157 @@ async def test_the_quiet_map_sizes_the_tests_assume_are_the_screens_sizes() -> N
     assert {name: (v.cols, v.rows) for name, v in views.items()} == QUIET_SIZES
 
 
+def tolerance_drawn(build, view: Viewport) -> float:
+    """How far the data tier a view draws may sit from the true line, from the build script's own constants."""
+    return {"": build.FULL_TOLERANCE, "_mid": build.MID_TOLERANCE, "_lo": build.LO_TOLERANCE}[tier_suffix(view)]
+
+
 async def test_the_tier_each_quiet_size_draws_is_a_small_part_of_a_dot(build) -> None:
     for name, view in (await quiet_views()).items():
-        tolerance = build.FULL_TOLERANCE if is_detailed(view) else build.LO_TOLERANCE
+        tolerance = tolerance_drawn(build, view)
         assert view.deg_per_dot <= 0.5, name
         assert tolerance <= 0.1 * view.deg_per_dot, name
 
 
-@pytest.mark.xfail(
-    strict=True, reason="#152: the coarse tier (0.03 deg, about 3.3 km) draws at 80x24, 100x40 and 120x30"
-)
 async def test_every_quiet_size_meets_the_linecast_bar(build) -> None:
     for name, view in (await quiet_views()).items():
-        tolerance = build.FULL_TOLERANCE if is_detailed(view) else build.LO_TOLERANCE
-        assert tolerance <= LINECAST_BAR_DEG, name
+        assert tolerance_drawn(build, view) <= LINECAST_BAR_DEG, name
+
+
+def test_the_linecast_bar_holds_for_every_zoom_up_to_a_quiet_map(build) -> None:
+    for step in range(1, 51):
+        view = Viewport(25.0, -60.0, step / 100.0, 100, 30)  # 0.01 to 0.5 degrees a dot
+        assert tolerance_drawn(build, view) <= LINECAST_BAR_DEG, view.deg_per_dot
+
+
+def test_the_tiers_are_in_order_and_the_bar_tier_reaches_the_coarsest_quiet_map(build) -> None:
+    assert build.FULL_TOLERANCE < build.MID_TOLERANCE <= LINECAST_BAR_DEG < build.LO_TOLERANCE
+    assert DETAIL_SWITCH < MID_SWITCH and MID_SWITCH > adapt.QUIET_MAX_DEG_PER_DOT
+
+
+def test_each_coarser_tier_is_fewer_vertices() -> None:
+    for name in ("coast", "land", "lakes"):
+        counts = [loader.load_layer(name + suffix).vertex_count for suffix in ("", "_mid", "_lo")]
+        assert counts[0] > counts[1] > counts[2], name
+
+
+def drawn(view: Viewport, suffix: str, monkeypatch) -> Canvas:
+    """The base map of a view with the data tier forced, from the real committed files."""
+    monkeypatch.setattr(basemap, "tier_suffix", lambda _view: suffix)
+    canvas = Canvas(view.cols, view.rows)
+    basemap.draw_basemap(canvas, view)
+    return canvas
+
+
+def differing_cells(a: Canvas, b: Canvas, cols: range | None = None) -> tuple[int, int]:
+    cols = cols or range(a.cols)
+    pairs = [(a.cell(col, row), b.cell(col, row)) for col in cols for row in range(a.rows)]
+    return sum(x != y for x, y in pairs), len(pairs)
+
+
+@pytest.mark.parametrize("name", list(QUIET_SIZES))
+async def test_the_1km_map_is_the_full_map_to_within_a_few_cells_at_every_quiet_size(name, monkeypatch) -> None:
+    view = (await quiet_views())[name]
+    mid, full = drawn(view, "_mid", monkeypatch), drawn(view, "", monkeypatch)
+    differing, total = differing_cells(mid, full)
+    assert differing <= 0.03 * total, (name, differing, total)  # measured 0.4 to 1.0 percent of the cells
+
+
+@pytest.mark.parametrize("lon", [-75.0, -80.0])
+@pytest.mark.parametrize("deg_per_dot", [0.1, 0.25, 0.5])
+def test_a_5_degree_tile_seam_is_no_rougher_than_the_rest_of_the_1km_map(lon, deg_per_dot, monkeypatch) -> None:
+    # Land is cut on a 5 degree grid and each tile simplified on its own; -75 and -80 are grid lines.
+    view = Viewport(30.0, lon, deg_per_dot, 100, 30)
+    mid, full = drawn(view, "_mid", monkeypatch), drawn(view, "", monkeypatch)
+    seam_col = view.cols // 2
+    seam = range(seam_col - 2, seam_col + 3)
+    differing, total = differing_cells(mid, full, seam)
+    overall, cells = differing_cells(mid, full)
+    assert differing / total <= max(0.05, 3 * overall / cells), (differing, total, overall, cells)
+
+
+def points_of(name: str, stride: int) -> list[tuple[float, float]]:
+    return [point for path in loader.load_layer(name).paths for point in path.points[::stride]]
+
+
+def segment_index(name: str) -> dict[tuple[int, int], list]:
+    """The segments of a layer in a grid of 0.1 degree buckets, each filed in every bucket it passes through."""
+    buckets: dict[tuple[int, int], list] = {}
+    layer = loader.load_layer(name)
+    for path in layer.paths:
+        points = list(path.points)
+        if layer.rings:
+            points.append(points[0])
+        for a, b in pairwise(points):
+            lat0, lat1 = sorted((a[0], b[0]))
+            lon0, lon1 = sorted((a[1], b[1]))
+            for i in range(int(lat0 * 10) - 1, int(lat1 * 10) + 2):
+                for j in range(int(lon0 * 10) - 1, int(lon1 * 10) + 2):
+                    buckets.setdefault((i, j), []).append((a, b))
+    return buckets
+
+
+@pytest.mark.parametrize("stem", ["coast", "land", "lakes"])
+def test_the_committed_1km_files_stay_within_the_bar_of_the_full_ones(stem, build) -> None:
+    """Every vertex of the full layer lies within MID_TOLERANCE (plus a stored unit of rounding) of the 1 km layer."""
+    index = segment_index(stem + "_mid")
+    limit = (build.MID_TOLERANCE + 2.0 / build.UNITS) ** 2
+    worst = 0.0
+    for lat, lon in points_of(stem, 9):
+        near = index.get((int(lat * 10), int(lon * 10)), [])
+        best = min((build._segment_distance_squared((lat, lon), a, b) for a, b in near), default=float("inf"))
+        worst = max(worst, best)
+        assert best <= limit, (stem, lat, lon, best**0.5)
+    assert worst > 0.0  # the files really are simplified
+
+
+def test_a_tier_that_will_not_load_falls_back_to_the_next_coarser_one(monkeypatch, caplog) -> None:
+    real = basemap.load_layer
+
+    def broken(name: str):
+        if name.endswith("_mid"):
+            raise ValueError("truncated")
+        return real(name)
+
+    monkeypatch.setattr(basemap, "load_layer", broken)
+    basemap._indexed.cache_clear()
+    basemap.usable_tier.cache_clear()
+    try:
+        view = Viewport(25.0, -75.0, 0.4, 80, 24)
+        assert tier_suffix(view) == "_mid"
+        with caplog.at_level("WARNING", logger=basemap.log.name):
+            canvas = Canvas(view.cols, view.rows)
+            basemap.draw_basemap(canvas, view)  # no exception
+        assert any("cannot be read" in record.message for record in caplog.records)
+        assert basemap.usable_tier("_mid") == "_lo"
+        assert basemap.usable_tier("") == ""  # the full tier is untouched
+        assert any(canvas.cell(col, row)[1].bg for col in range(canvas.cols) for row in range(canvas.rows))
+    finally:
+        basemap._indexed.cache_clear()
+        basemap.usable_tier.cache_clear()
+
+
+def test_with_no_tier_readable_the_error_is_raised(monkeypatch) -> None:
+    def broken(name: str):
+        raise ValueError("truncated")
+
+    monkeypatch.setattr(basemap, "load_layer", broken)
+    basemap._indexed.cache_clear()
+    basemap.usable_tier.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="truncated"):
+            basemap.usable_tier("")
+    finally:
+        basemap._indexed.cache_clear()
+        basemap.usable_tier.cache_clear()
+
+
+def test_the_committed_map_data_is_what_the_build_script_makes(build) -> None:
+    """Runs `build_mapdata.py --check` when the Natural Earth sources are cached (`python scripts/build_mapdata.py`
+    downloads them into cache/); a clone without them skips it."""
+    if not (build.DEFAULT_CACHE / f"{build.PLACES_SOURCE}.geojson").exists():
+        pytest.skip("the Natural Earth sources are not cached")
+    assert build.main(["--check"]) == 0
 
 
 def test_the_loaders_cut_lines_are_the_build_scripts(build) -> None:

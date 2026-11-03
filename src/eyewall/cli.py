@@ -89,7 +89,20 @@ def _load(args: argparse.Namespace) -> LoadResult:
 
 
 MAPDATA_FILES = tuple(
-    f"{name}.bin" for name in ("coast", "coast_lo", "land", "land_lo", "lakes", "lakes_lo", "borders", "places")
+    f"{name}.bin"
+    for name in (
+        "coast",
+        "coast_mid",
+        "coast_lo",
+        "land",
+        "land_mid",
+        "land_lo",
+        "lakes",
+        "lakes_mid",
+        "lakes_lo",
+        "borders",
+        "places",
+    )
 )
 
 

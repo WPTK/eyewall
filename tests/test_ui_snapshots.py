@@ -53,6 +53,11 @@ def test_quiet_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-un
     assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app))
 
 
+def test_quiet_main_screen_large_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    # The quiet-day map at 200x50 draws the shore at its full detail (#152).
+    assert snap_compare(scripted_app(), terminal_size=(200, 50), run_before=_ready(scripted_app))
+
+
 def test_nhc_text_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(
         replay_app(), terminal_size=(140, 45), run_before=_ready(replay_app, ("enter", "t"), storm=True)
