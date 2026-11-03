@@ -149,6 +149,8 @@ class Canvas:
         self._char: list[str | None] = [None] * count
         self._bold = [False] * count
         self._bg: list[str | None] = [None] * count
+        self._edge = [0] * count  # the land-side dots of a shore cell, as a dot mask
+        self._edge_fg: list[str | None] = [None] * count
         self._clip = (0, 0, self.width, self.height)
         self._bit_table = _BRAILLE_BITS if mode is Mode.BRAILLE else _BLOCK_BITS
         self._glyph_table = {Mode.BRAILLE: _BRAILLE_GLYPHS, Mode.HALF: _HALF_GLYPHS, Mode.ASCII: _ASCII_GLYPHS}[mode]
@@ -168,6 +170,8 @@ class Canvas:
         other._char = self._char[:]
         other._bold = self._bold[:]
         other._bg = self._bg[:]
+        other._edge = self._edge[:]
+        other._edge_fg = self._edge_fg[:]
         return other
 
     @contextmanager
@@ -403,11 +407,12 @@ class Canvas:
                             fg[i] = color
                             prios[i] = prio
 
-    def tint_polygon(self, rings: Iterable[Sequence[Dot]], color: str) -> None:
-        """Give the background of every cell that is at least half inside the rings (even-odd, so a ring inside
-        another one is a hole) a color. Coverage is counted in dots, so the edge of the tint follows the shore as
-        closely as whole cells can. Dots, text and markers drawn on a tinted cell keep it, so the area reads as one
-        flat fill."""
+    def tint_polygon(self, rings: Iterable[Sequence[Dot]], color: str, edge: str | None = None) -> None:
+        """Give the background of every cell inside the rings (even-odd, so a ring inside another one is a hole) a
+        color. A cell the rings only partly cover is not tinted whole: with `edge` it shows the covered dots in that
+        color instead (unless something of higher priority than a coastline was drawn there), so the shore follows
+        the ring to the dot rather than to the cell. Without `edge`, a cell at least half covered is tinted, as dots
+        and text drawn on a tinted cell keep it and the area reads as one flat fill."""
         dots_x, dots_y, cols = self.dots_x, self.dots_y, self.cols
         crossings: list[list[float]] = [[] for _ in range(self.height)]
         for ring in rings:
@@ -425,16 +430,24 @@ class Canvas:
                 for y in range(first, last):
                     crossings[y].append(xa + (y + 0.5 - ya) * slope)
         covered = [0] * (cols * self.rows)
+        bit_table = self._bit_table
         for y, xs in enumerate(crossings):
             xs.sort()
             base = (y // dots_y) * cols
+            bit_row = (y % dots_y) * dots_x
             for k in range(0, len(xs) - 1, 2):
                 for x in range(max(0, math.ceil(xs[k] - 0.5)), min(self.width, math.ceil(xs[k + 1] - 0.5))):
-                    covered[base + x // dots_x] += 1
+                    covered[base + x // dots_x] |= bit_table[bit_row + x % dots_x]
+        full = (1 << (dots_x * dots_y)) - 1
         half = dots_x * dots_y / 2.0
-        for i, count in enumerate(covered):
-            if count >= half:
+        if self.mode is Mode.ASCII:
+            edge = None  # ' . : cannot draw the shape of a part-covered cell
+        for i, mask in enumerate(covered):
+            if mask == full or (edge is None and mask.bit_count() >= half):
                 self._bg[i] = color
+            elif mask and edge is not None and self.mode is not Mode.ASCII:
+                self._edge[i] = mask
+                self._edge_fg[i] = edge
 
     # ------------------------------------------------------------------------------------------------ text, markers
 
@@ -491,9 +504,11 @@ class Canvas:
         """The character and style a cell is drawn with."""
         i = row * self.cols + col
         ch = self._char[i]
+        bg = self._bg[i]
+        if ch is None and self._edge[i] and self._prio[i] <= Priority.COAST:
+            return (self._glyph_table[self._edge[i]], Style(self._edge_fg[i], bg))
         if ch is None:
             ch = self._glyph_table[self._bits[i]]
-        bg = self._bg[i]
         if ch == " ":
             return (ch, _BLANK if bg is None else Style(None, bg))
         return (ch, Style(self._fg[i], bg, self._bold[i]))

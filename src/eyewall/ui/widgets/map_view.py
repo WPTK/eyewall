@@ -40,7 +40,7 @@ from eyewall.render.hits import EMPTY_HITS, Hits, Mark
 from eyewall.render.layers import DEFAULT_MAP_STYLE, EMPTY_SCENE, MapOptions, MapScene, render_map_hits
 from eyewall.render.projection import Viewport
 from eyewall.ui import nav
-from eyewall.ui.adapt import basin_points
+from eyewall.ui.adapt import QUIET_MAX_DEG_PER_DOT, basin_points
 from eyewall.ui.widgets.strips import blank, canvas_strips, reverse_cell
 from eyewall.units import DEFAULT_PRESET, PRESETS
 
@@ -130,7 +130,8 @@ class MapView(Widget, can_focus=True):
         self.cursor: LatLon | None = None
         self.auto_fit = True
         self._fit_points: list[LatLon] = fit_default or basin_points(())
-        self._fit_key: tuple[LatLon, ...] = ()
+        self._fit_key: tuple[LatLon | None, ...] = ()
+        self._quiet_focus: LatLon | None = None
         self._viewport: Viewport | None = None
         self._strips: list[Strip] | None = None
         self._hits: Hits = EMPTY_HITS
@@ -151,14 +152,16 @@ class MapView(Widget, can_focus=True):
         """True when this zoom draws the full 10 m coastline rather than the coarse whole-basin copy."""
         return self._viewport is not None and is_detailed(self._viewport)
 
-    def set_scene(self, scene: MapScene, fit: list[LatLon] | None = None) -> None:
-        """Replace what is drawn. The view re-fits when `fit` changed, unless the user has zoomed or panned."""
+    def set_scene(self, scene: MapScene, fit: list[LatLon] | None = None, *, quiet_focus: LatLon | None = None) -> None:
+        """Replace what is drawn. The view re-fits when `fit` changed, unless the user has zoomed or panned. With
+        `quiet_focus` the fit is the quiet-day one: never coarser than QUIET_MAX_DEG_PER_DOT, around that spot."""
         self.scene = scene
         if fit:
-            key = tuple(fit)
+            key = (*fit, quiet_focus)
             if key != self._fit_key:
                 self._fit_key = key
                 self._fit_points = list(fit)
+                self._quiet_focus = quiet_focus
                 if self.auto_fit:
                     self._viewport = None
         self._invalidate()
@@ -184,8 +187,15 @@ class MapView(Widget, can_focus=True):
             return None
         view = self._viewport
         if view is None:
+            quiet = self._quiet_focus is not None
             self._viewport = Viewport.fit_points(
-                self._fit_points, width, height, dots_x=self.mode.dots_x, dots_y=self.mode.dots_y
+                self._fit_points,
+                width,
+                height,
+                dots_x=self.mode.dots_x,
+                dots_y=self.mode.dots_y,
+                max_deg_per_dot=QUIET_MAX_DEG_PER_DOT if quiet else None,
+                focus=self._quiet_focus,
             )
         elif (view.cols, view.rows) != (width, height):
             self._viewport = view.resized(width, height)

@@ -180,3 +180,54 @@ def test_a_basin_view_draws_no_borders_and_no_small_lakes():
     assert canvas.cell(x // 2, y // 4)[1].bg == "#111111"
     far = Viewport(30.0, -90.0, 0.05, 120, 40)  # zoomed in, the borders are back
     assert "#444444" in colors(basemap_canvas(far, style=style))
+
+
+# ---- #152: the data resolution holds at every terminal size; #155: a shore cell follows the shore to the dot -----------
+
+QUIET_BOX = [(5.0, -98.0), (44.0, -14.0)]
+QUIET_FOCUS = (22.0, -68.0)
+# Map widget sizes (cols, rows) the quiet screen gets at 80x24, 100x40, 120x30 and 200x50.
+QUIET_SIZES = [(80, 15), (66, 36), (86, 26), (150, 46)]
+# How far a vertex may sit from the true Natural Earth line, per tier (the tolerances in scripts/build_mapdata.py).
+FULL_TOLERANCE_DEG = 0.002
+LO_TOLERANCE_DEG = 0.03
+
+
+@pytest.mark.parametrize(("cols", "rows"), QUIET_SIZES)
+def test_the_quiet_map_data_error_stays_a_small_part_of_a_dot(cols, rows):
+    view = Viewport.fit_points(QUIET_BOX, cols, rows, max_deg_per_dot=0.5, focus=QUIET_FOCUS)
+    tolerance = FULL_TOLERANCE_DEG if is_detailed(view) else LO_TOLERANCE_DEG
+    assert view.deg_per_dot <= 0.5
+    assert tolerance <= 0.1 * view.deg_per_dot  # the coarse copy is still within a tenth of a dot of the true shore
+
+
+def test_a_shore_cell_shows_the_dots_on_the_land_side_not_a_whole_tinted_cell():
+    # A straight north-south shore half way through a cell: land to the right of x = 1 dot.
+    shore = [(1.0, -1.0), (1.0, 9.0), (9.0, 9.0), (9.0, -1.0)]
+    canvas = Canvas(3, 2)
+    canvas.tint_polygon([shore], "#land", "#edge")
+    glyph, style = canvas.cell(0, 0)
+    assert glyph == "⢸"  # the right-hand column of dots only
+    assert (style.fg, style.bg) == ("#edge", None)
+    assert canvas.cell(1, 0)[1].bg == "#land"  # a cell wholly inside is the flat tint
+
+
+def test_a_shore_cell_keeps_a_track_drawn_over_it():
+    canvas = Canvas(2, 1)
+    canvas.tint_polygon([[(1.0, -1.0), (1.0, 5.0), (9.0, 5.0), (9.0, -1.0)]], "#land", "#edge")
+    canvas.line(0, 0, 1, 3, "#track", 70)
+    glyph, style = canvas.cell(0, 0)
+    assert style.fg == "#track"
+    assert glyph != "⢸"
+
+
+def test_the_coastline_off_leaves_no_edge_dots():
+    view = Viewport(25.0, -80.0, 0.05, 40, 20)
+    canvas = basemap_canvas(view, coast=False)
+    assert "#9fb3c8" not in colors(canvas)
+
+
+@pytest.mark.parametrize(("name", "cols", "rows"), [("120x30", 86, 26), ("200x50", 150, 46)])
+def test_the_quiet_coastline_golden(name, cols, rows):
+    view = Viewport.fit_points(QUIET_BOX, cols, rows, max_deg_per_dot=0.5, focus=QUIET_FOCUS)
+    assert_golden(f"quiet_atlantic_{name}.txt", basemap_canvas(view).to_text())

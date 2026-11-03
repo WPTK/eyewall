@@ -3,7 +3,8 @@
 Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except basin-scale views (0.3
 degrees per dot or coarser), where a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
 Borders, and the state and province lines with them, appear with the detailed data only. Land is a flat background
-tint of the cells inside it, so the coast stays a crisp line and no fill dots speckle the map. The raster for a
+tint of the cells inside it; a cell the shore runs through shows its land-side dots instead (a part-cell glyph), so the
+shore follows the data to the dot and not to the cell. The raster for a
 viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
 """
 
@@ -93,7 +94,9 @@ def draw_basemap(
         lakes = [ring for ring in lakes if _cells_across(ring, canvas) >= MIN_LAKE_CELLS]
     if land:
         canvas.tint_polygon(
-            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes, style.land
+            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes,
+            style.land,
+            style.coast if coast else None,
         )
     if coast:
         for path in _visible("coast" + suffix, viewport):

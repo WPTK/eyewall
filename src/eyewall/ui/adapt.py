@@ -28,6 +28,10 @@ BASIN_BOUNDS: dict[str, tuple[LatLon, LatLon]] = {
     "EP": ((4.0, -140.0), (32.0, -84.0)),
     "CP": ((4.0, -180.0), (30.0, -130.0)),
 }
+# Where a quiet-day map looks first when the whole basin would be coarser than QUIET_MAX_DEG_PER_DOT: the busy part
+# of each basin (the Atlantic's is the Caribbean, Gulf and the Southeast coast out to Bermuda).
+BASIN_FOCUS: dict[str, LatLon] = {"AL": (22.0, -68.0), "EP": (16.0, -108.0), "CP": (15.0, -155.0)}
+QUIET_MAX_DEG_PER_DOT = 0.5  # the coarsest scale the quiet-day map is allowed
 MAX_MAP_STATIONS = 12
 _RISK_RANK = {"low": 1, "medium": 2, "high": 3}
 
@@ -45,6 +49,11 @@ def quiet_points(basins: tuple[str, ...]) -> list[LatLon]:
     another or switched it off), always. An outlook area outside it is not chased across the hemisphere: the panel
     says where it is and what its chances are."""
     return list(BASIN_BOUNDS.get(basins[0] if basins else "AL", BASIN_BOUNDS["AL"]))
+
+
+def quiet_focus(basins: tuple[str, ...]) -> LatLon:
+    """Where the quiet-day map is centered when the basin is too wide to show whole at QUIET_MAX_DEG_PER_DOT."""
+    return BASIN_FOCUS.get(basins[0] if basins else "AL", BASIN_FOCUS["AL"])
 
 
 def _quadrants(radii: QuadrantRadii | None) -> L.QuadrantRadii | None:

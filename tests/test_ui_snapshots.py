@@ -14,13 +14,14 @@ from eyewall.ui.chrome import Health
 from tests.ui_support import into_the_storm, replay_app, scripted_app, settle
 
 
-def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # type: ignore[no-untyped-def]
+def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False, quiet_toasts: bool = False):  # type: ignore[no-untyped-def]
     async def run_before(pilot: Pilot[None]) -> None:
         await pilot.pause()
         await asyncio.wait_for(pilot.app.first_poll.wait(), 30)  # type: ignore[attr-defined]
         await settle(pilot)
         if storm:
             await into_the_storm(pilot)
+        if storm or quiet_toasts:
             pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
         # Feed ages and the replay clock follow the wall clock; pin the top bar's slot so the picture is repeatable.
         pilot.app.health = lambda: Health("●", "data ok", "ok", "3m", "")  # type: ignore[attr-defined, method-assign]
@@ -42,7 +43,7 @@ def test_main_screen_small_snapshot(snap_compare) -> None:  # type: ignore[no-un
 
 
 def test_main_screen_large_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
-    assert snap_compare(replay_app(), terminal_size=(200, 50), run_before=_ready(replay_app))
+    assert snap_compare(replay_app(), terminal_size=(200, 50), run_before=_ready(replay_app, quiet_toasts=True))
 
 
 def test_storm_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
