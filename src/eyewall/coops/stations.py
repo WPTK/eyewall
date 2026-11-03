@@ -27,7 +27,7 @@ def _number(value: Any) -> float | None:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: an int too big for a float
         return None
     return number if math.isfinite(number) else None
 

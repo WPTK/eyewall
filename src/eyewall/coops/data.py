@@ -86,7 +86,7 @@ def _number(value: Any) -> float | None:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: an int too big for a float
         return None
     return number if math.isfinite(number) else None  # the words NaN and Infinity are valid to Python's json
 
@@ -108,10 +108,8 @@ def _records[T](
 ) -> Parsed[T]:
     try:
         payload = json.loads(text)
-    except (
-        ValueError,
-        RecursionError,
-    ) as exc:  # an HTML page or a cut-off body is not an answer: raise, so no caller stores it as one
+    except (ValueError, RecursionError) as exc:  # RecursionError: deeply nested brackets
+        # an HTML page or a cut-off body is not an answer: raise, so no caller stores it as one
         raise ParseError("invalid CO-OPS JSON") from exc
     if not isinstance(payload, dict):
         raise ParseError("unexpected CO-OPS payload")

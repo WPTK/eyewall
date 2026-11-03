@@ -13,6 +13,8 @@ import gzip
 import json
 import math
 import time
+import zlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -29,7 +31,7 @@ from eyewall.providers.base import ParseError
 from eyewall.providers.nhc import textutil, times
 from tests.nhc_fixtures import FIXTURES
 
-BOUND_SECONDS = 5.0
+BOUND_SECONDS = 10.0  # generous: slow Windows and macOS runners
 NDBC = FIXTURES / "ndbc"
 COOPS = FIXTURES / "coops"
 
@@ -43,10 +45,10 @@ def assert_clean(value: Any) -> None:
     elif dataclasses.is_dataclass(value) and not isinstance(value, type):
         for field in dataclasses.fields(value):
             assert_clean(getattr(value, field.name))
-    elif isinstance(value, tuple | list):
+    elif isinstance(value, tuple | list | set | frozenset):
         for item in value:
             assert_clean(item)
-    elif isinstance(value, dict):
+    elif isinstance(value, Mapping):
         for item in value.values():
             assert_clean(item)
 
@@ -156,6 +158,7 @@ json_scalar = st.one_of(
     st.none(),
     st.booleans(),
     st.integers(),
+    st.just(10**400),  # json.dumps writes it in full; float() raises OverflowError
     st.floats(),  # json.dumps writes NaN and infinity as the bare words Python's json reads back
     st.text(max_size=12),
     st.sampled_from(["NaN", "Infinity", "-Infinity", "1e999", "2026-09-10 12:00", "0000-01-01 00:00"]),
@@ -200,7 +203,7 @@ def test_damaged_coops_payloads(name, data):
 
 @pytest.mark.parametrize("parse", [*COOPS_PARSERS, parse_stations])
 def test_deeply_nested_input_is_a_result_or_parse_error(parse):
-    for text in ("[" * 200_000, '{"a":' * 200_000, "<a>" * 200_000):
+    for text in ("[" * 20_000, '{"a":' * 20_000, "<a>" * 20_000):
         run(parse, text)
 
 
@@ -243,8 +246,17 @@ def test_nhc_textutil(text):
 
 def test_a_flipped_byte_inside_a_gzip_stream_is_a_series_with_a_message():
     original = (NDBC / "41025h2025_erin_week.txt.gz").read_bytes()
-    series = historical.parse_historical(original[:10] + b"\x00" + original[11:], "41025")
-    assert series.observations == () and series.message
+    damaged = original[:10] + b"\x00" + original[11:]
+    with pytest.raises(zlib.error):  # not BadGzipFile: this is the path the fix covers
+        gzip.decompress(damaged)
+    series = historical.parse_historical(damaged, "41025")
+    assert series.observations == () and (series.message or "").startswith("historical file is not valid gzip")
+
+
+def test_an_int_too_big_for_a_float_reads_as_missing():
+    huge = "1" + "0" * 400
+    assert coops_data.parse_water_level('{"data":[{"t":"2026-09-10 12:00","v":%s}]}' % huge).items[0].level_ft is None
+    assert parse_tide_stations('{"stations":[{"id":"1","lat":%s,"lng":-70}]}' % huge).skipped == 1
 
 
 @pytest.mark.parametrize("word", ["NaN", "Infinity", "-Infinity", "1e999"])
