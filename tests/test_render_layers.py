@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 import eyewall
-from eyewall.geo import destination, haversine_nm
+from eyewall.geo import destination
 from eyewall.palette import (
     CATEGORY_COLORS,
     NEUTRAL,
@@ -341,13 +341,20 @@ def test_missing_or_empty_radii_draw_nothing():
         assert dot_count(canvas) == 0
 
 
-def test_the_outline_stays_on_its_radii_and_closes():
-    outline = layers._radii_outline(*CENTER, (200.0, 160.0, 120.0, 180.0))
-    assert len(outline) == 4 * (layers._RING_STEPS + 1)
-    for index, radius in enumerate((200.0, 160.0, 120.0, 180.0)):
-        for point in outline[index * 13 : (index + 1) * 13]:
-            assert haversine_nm(CENTER, point) == pytest.approx(radius, abs=0.05)
-    assert all(round(v, 5) == v for point in outline for v in point)
+def test_a_ring_across_the_antimeridian_draws_without_a_seam_line():
+    view = Viewport(25.0, 180.0, 0.03, 100, 40)
+    storm = StormScene(radii=(WindRadii(25.0, 179.5, kt34=(200.0, 200.0, 200.0, 200.0)),))
+    canvas = render_map(view, MapScene(storms=(storm,)), options=OPEN_SEA)
+    x, _ = view.dot_at(25.0, 180.0)
+    column = [canvas.dot(x, y) for y in range(160)]
+    assert sum(column) <= 4  # the ring crosses the dateline column twice; a seam would light the whole span between
+
+
+def test_seam_free_runs_drop_only_the_edges_on_the_antimeridian():
+    ring = [(0.0, 170.0), (0.0, 180.0), (5.0, 180.0), (5.0, 170.0), (0.0, 170.0)]
+    assert layers._seam_free_runs(ring) == [[(5.0, 180.0), (5.0, 170.0), (0.0, 170.0), (0.0, 180.0)]]
+    away = [(0.0, 10.0), (0.0, 20.0), (5.0, 20.0), (0.0, 10.0)]
+    assert layers._seam_free_runs(away) == [away]
 
 
 # ------------------------------------------------------------------------------------- outlook, stations, labels

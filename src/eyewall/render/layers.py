@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import NamedTuple
 
 from eyewall.geo import destination, haversine_nm
@@ -201,7 +202,6 @@ EMPTY_SCENE = MapScene()
 
 # ----------------------------------------------------------------------------------------------------------- drawing
 
-_RING_STEPS = 12  # points per quadrant of a wind radii outline, one every 7.5 degrees of bearing
 _RISK_SHADES = {"low": Shade.HATCH_LIGHT, "medium": Shade.HATCH_MEDIUM, "high": Shade.HATCH_HEAVY}
 _WARNING_ORDER = (
     WatchWarning.TROPICAL_STORM_WATCH,
@@ -220,16 +220,18 @@ class _Label(NamedTuple):
     centered: bool
 
 
-def _radii_outline(lat: float, lon: float, quadrants: QuadrantRadii) -> list[LatLon]:
-    """A closed outline made of one quarter-circle arc per quadrant. Where neighbouring quadrants differ, the outline
-    steps along the radial line between them, as the NHC wind radii polygons do. Coordinates are rounded to a
-    meter so the result does not depend on the platform's trigonometry."""
-    points: list[LatLon] = []
-    for q, radius in enumerate(quadrants):
-        for step in range(_RING_STEPS + 1):
-            dest = destination((lat, lon), q * 90.0 + step * 90.0 / _RING_STEPS, max(0.0, radius))
-            points.append((round(dest[0], 5), round(dest[1], 5)))
-    return points
+def _seam_free_runs(ring: Sequence[LatLon]) -> list[list[LatLon]]:
+    """Cut a ring's points into runs that skip the edges lying on the antimeridian, where radii_shape split the shape.
+    The viewport joins the two halves again, so a seam drawn there would be a line that is not part of any outline."""
+    runs: list[list[LatLon]] = [[ring[0]]]
+    for a, b in pairwise(ring):
+        if abs(a[1]) == 180.0 and a[1] == b[1]:
+            runs.append([b])
+        else:
+            runs[-1].append(b)
+    if len(runs) > 1 and runs[0][0] == runs[-1][-1]:  # the ring began mid-outline: join its two ends
+        runs[0] = runs.pop()[:-1] + runs[0]
+    return [run for run in runs if len(run) > 1]
 
 
 def _centroid(ring: Sequence[tuple[float, float]]) -> tuple[float, float]:
@@ -317,12 +319,24 @@ def _draw_tracks(canvas: Canvas, view: Viewport, storm: StormScene, style: MapSt
 
 
 def _draw_radii(canvas: Canvas, view: Viewport, storm: StormScene, style: MapStyle) -> None:
+    if not storm.radii:
+        return
+    from eyewall.radii_shape import radii_rings  # pyproj and shapely take 0.4 s to import: only a map with radii pays
+
     for radii in storm.radii:
         for knots, quadrants in ((34, radii.kt34), (50, radii.kt50), (64, radii.kt64)):
-            if quadrants is None or not any(quadrants):
+            if quadrants is None:
                 continue
-            outline = view.project_path(_radii_outline(radii.lat, radii.lon, quadrants))
-            canvas.polyline(outline, category_color(knots), Priority.RADII, dash=RING_PATTERNS[knots], closed=True)
+            for ring in radii_rings((radii.lat, radii.lon), quadrants):
+                for run in _seam_free_runs(ring):
+                    closed = len(run) == len(ring)
+                    canvas.polyline(
+                        view.project_path(run),
+                        category_color(knots),
+                        Priority.RADII,
+                        dash=RING_PATTERNS[knots],
+                        closed=closed,
+                    )
 
 
 def _draw_stations(
