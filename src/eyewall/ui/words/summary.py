@@ -114,7 +114,7 @@ def summary_lines(
             _gauge_line(store, e.station, now, preset, failed) for e in store.nearby_tides(storm_id, now)[:MAX_GAUGES]
         ]
         blocks.append(block + buoys + gauges)
-    blocks.append(outlook_words.current_sentences(store.outlook, enabled, old=protocol.OUTLOOK in failed))
+    blocks.append(outlook_words.current_sentences(store.outlook, enabled, now, old=protocol.OUTLOOK in failed))
     # A feed that failed names itself even when no line above had a place to say so (a catalog that never loaded
     # leaves no station to report on), so its silence cannot read as "nothing reported".
     said = [line for block in blocks for line in block]

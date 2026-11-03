@@ -4,6 +4,7 @@ failed. Text-level: the words, the panel and the keys, no snapshots."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 
@@ -32,13 +33,15 @@ from tests.ui_support import (
 ALL = ("AL", "EP", "CP")
 NOT_EXPECTED = "Tropical cyclone formation is not expected during the next 7 days."
 
+NOW = datetime(2026, 10, 31, 12, 0, tzinfo=UTC)
+
 
 def two(*names: str) -> tuple:  # type: ignore[type-arg]
     return tuple(parse_two((FIXTURES / "nhc" / "two" / f"{n}.txt").read_text(encoding="utf-8")) for n in names)
 
 
 def lines(outlook: Outlook, enabled: tuple[str, ...] = ALL) -> list[str]:
-    return [w.text for w in outlook_sentences(outlook, enabled)]
+    return [w.text for w in outlook_sentences(outlook, enabled, NOW)]
 
 
 def square(lat: float, lon: float, half: float = 1.0) -> tuple[tuple[float, float], ...]:
@@ -97,7 +100,7 @@ def test_a_basin_that_is_off_is_not_reported() -> None:
 
 def test_nothing_is_said_for_an_outlook_that_never_arrived() -> None:
     assert lines(Outlook(gis=OutlookGis(None))) == ["No outlook has been issued yet."]
-    assert [w.text for w in outlook_sentences(None, ALL)] == ["Waiting for the first outlook."]
+    assert [w.text for w in outlook_sentences(None, ALL, NOW)] == ["Waiting for the first outlook."]
 
 
 async def test_a_blank_200_is_a_failure_not_an_empty_outlook(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,9 +194,9 @@ async def test_enter_is_not_offered_on_a_quiet_home_with_nothing_to_open() -> No
 
 
 def test_the_plain_summary_does_not_say_not_expected_when_the_outlook_feed_failed() -> None:
-    old = current_sentences(nothing_anywhere(), ("AL",), old=True)
+    old = current_sentences(nothing_anywhere(), ("AL",), NOW, old=True)
     assert len(old) == 1 and "may be out of date" in old[0]
-    assert current_sentences(nothing_anywhere(), ("AL",), old=False) == [NOT_EXPECTED]
+    assert current_sentences(nothing_anywhere(), ("AL",), NOW, old=False) == [NOT_EXPECTED]
 
 
 async def test_the_summary_text_follows_the_failed_feed() -> None:
