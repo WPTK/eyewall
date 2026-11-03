@@ -98,12 +98,19 @@ def test_gain_is_bounded_by_the_wind_range_and_never_raises(pairs):
     winds = [f.vmax_kt for f in fixes if f.vmax_kt is not None]
     for step in intensification(fixes):
         assert min(winds) - max(winds) <= step.gain_kt <= max(winds) - min(winds)
-    assert (current_rapid(fixes) is None) or episode_start(fixes) is not None or True
+    assert (current_rapid(fixes) is not None) == (episode_start(fixes) is not None)
 
 
-@given(st.lists(st.integers(0, 190), min_size=2, max_size=20), st.integers(1, 6))
-def test_a_steady_six_hourly_series_is_rapid_exactly_when_the_gain_over_four_fixes_is_thirty(winds, _unused):
+@given(st.lists(st.integers(0, 190), min_size=2, max_size=20))
+def test_a_steady_six_hourly_series_is_rapid_exactly_when_the_gain_over_four_fixes_is_thirty(winds):
     fixes = series(*[(6 * i, w) for i, w in enumerate(winds)])
     got = {s.end: s.is_rapid for s in intensification(fixes)}
     for i in range(4, len(winds)):
         assert got[START + timedelta(hours=6 * i)] == (winds[i] - winds[i - 4] >= RI_GAIN_KT)
+
+
+def test_a_newest_fix_without_wind_is_not_currently_rapid():
+    fixes = series((0, 45), (12, 60), (24, 75), (30, None))
+    assert current_rapid(fixes[:3]) is not None
+    assert current_rapid(fixes) is None
+    assert episode_start(fixes) is None

@@ -43,6 +43,11 @@ def _winds(fixes: Sequence[BestTrackFix]) -> list[tuple[datetime, int]]:
     return sorted(by_time.items())
 
 
+def _newest_has_wind(fixes: Sequence[BestTrackFix], winds: list[tuple[datetime, int]]) -> bool:
+    """False when the newest fix in the file has no wind: an older fix's gain is then not the current one."""
+    return max(f.time for f in fixes) == winds[-1][0]
+
+
 def _gain(winds: list[tuple[datetime, int]], index: int) -> float | None:
     end, now = winds[index]
     target = end - RI_WINDOW
@@ -74,7 +79,7 @@ def intensification(fixes: Sequence[BestTrackFix]) -> list[Intensification]:
 def current_rapid(fixes: Sequence[BestTrackFix]) -> Intensification | None:
     """The newest fix's gain when it is rapid, else None."""
     winds = _winds(fixes)
-    if not winds:
+    if not winds or not _newest_has_wind(fixes, winds):
         return None
     gain = _gain(winds, len(winds) - 1)
     if gain is None or gain < RI_GAIN_KT:
@@ -88,7 +93,7 @@ def episode_start(fixes: Sequence[BestTrackFix]) -> datetime | None:
     None when the newest fix is not rapid. Stable while the episode lasts, so it can key an event.
     """
     steps = intensification(fixes)
-    if not steps or not steps[-1].is_rapid or steps[-1].end != _winds(fixes)[-1][0]:
+    if not steps or not steps[-1].is_rapid or current_rapid(fixes) is None:
         return None
     start = steps[-1].end
     for step in reversed(steps):
