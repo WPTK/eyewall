@@ -18,6 +18,13 @@ from eyewall.units import Preset
 
 MAX_BUOYS = 5
 MAX_GAUGES = 3
+UNAVAILABLE = {
+    protocol.OUTLOOK: "Outlook data unavailable.",
+    protocol.ALERTS: "Weather alert data unavailable.",
+    protocol.BUOYS: "Buoy data unavailable.",
+    protocol.TIDES: "Water level data unavailable.",
+    protocol.SATELLITE: "Satellite data unavailable.",
+}  # storms is not here: its failure replaces the whole summary
 
 
 def _storm_block(state: StormState, preset: Preset, now: datetime, tz: tzinfo | None) -> list[Words]:
@@ -108,6 +115,16 @@ def summary_lines(
         ]
         blocks.append(block + buoys + gauges)
     blocks.append(outlook_words.current_sentences(store.outlook, enabled, now, old=protocol.OUTLOOK in failed))
+    # A feed that failed names itself even when no line above had a place to say so (a catalog that never loaded
+    # leaves no station to report on), so its silence cannot read as "nothing reported".
+    said = [line for block in blocks for line in block]
+    unavailable = [
+        UNAVAILABLE[f]
+        for f in protocol.FEEDS
+        if f in failed and f in UNAVAILABLE and not any(line.endswith(UNAVAILABLE[f]) for line in said)
+    ]
+    if unavailable:
+        blocks.append(unavailable)
     out: list[str] = []
     for block in blocks:
         if out:

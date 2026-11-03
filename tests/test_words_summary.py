@@ -174,3 +174,54 @@ def test_a_live_summary_without_the_storms_feed_exits_one(monkeypatch, capsys):
     monkeypatch.setattr(headless, "run_live", fake)
     assert cli.main(["--no-config", "--summary"]) == 1
     assert capsys.readouterr().out.splitlines() == ["Storm data unavailable."]
+
+
+async def test_a_failed_optional_feed_is_named_even_when_no_station_line_could_say_so():
+    result = await erin()
+    lines = summary_lines(result.store, PRESETS["us"], result.ended, EDT, frozenset({"tides", "alerts", "satellite"}))
+    assert "Water level data unavailable." in lines
+    assert "Weather alert data unavailable." in lines
+    assert "Satellite data unavailable." in lines
+    assert "Buoy data unavailable." not in lines
+
+
+@pytest.mark.parametrize("feed", ["tides", "buoys", "alerts", "satellite", "outlook"])
+def test_a_live_summary_where_one_feed_failed_names_it_and_exits_one(monkeypatch, capsys, feed):
+    async def fake(config, state_dir, until, *, emit=None):
+        return HeadlessResult(store=Store(config), ended=T0, feeds_ok=5, feeds_failed=1, failed_feeds={feed})
+
+    monkeypatch.setattr(headless, "run_live", fake)
+    assert cli.main(["--no-config", "--summary"]) == 1
+    assert "data unavailable." in capsys.readouterr().out
+
+
+async def test_a_failed_feed_with_a_station_line_says_so_exactly_once():
+    result = await erin()
+    store = result.store
+    store.series, store.tide_series, store.latest = {}, {}, {}
+    lines = summary_lines(store, PRESETS["us"], result.ended, EDT, frozenset({"buoys"}))
+    assert "Buoy data unavailable." not in lines  # the station lines said it; no generic repeat
+    assert any(line.endswith("Buoy data unavailable.") for line in lines)
+
+
+async def test_two_failed_feeds_are_both_named_and_the_rest_still_prints():
+    result = await erin()
+    lines = summary_lines(result.store, PRESETS["us"], result.ended, EDT, frozenset({"alerts", "satellite"}))
+    assert "Weather alert data unavailable." in lines and "Satellite data unavailable." in lines
+    assert "Outlook data unavailable." not in lines
+    assert any("Erin" in line for line in lines)
+
+
+def test_a_partial_failure_prints_on_stdout_and_names_the_feeds_on_stderr(monkeypatch, capsys):
+    async def fake(config, state_dir, until, *, emit=None):
+        return HeadlessResult(
+            store=Store(config), ended=T0, feeds_ok=4, feeds_failed=2, failed_feeds={"tides", "alerts"}
+        )
+
+    monkeypatch.setattr(headless, "run_live", fake)
+    assert cli.main(["--no-config", "--summary", "--basin", "AL"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out.splitlines()[0] == "No tropical storms in the Atlantic right now."
+    assert "Water level data unavailable." in captured.out
+    assert "Satellite data unavailable." not in captured.out
+    assert captured.err == "eyewall: unavailable: alerts, tides\n"
