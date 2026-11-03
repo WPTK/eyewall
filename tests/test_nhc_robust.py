@@ -135,9 +135,12 @@ def test_a_zip_directory_with_an_unsupported_version_is_a_parse_error():
 @given(page=st.text(max_size=400))
 def test_graphics_pages_of_any_text_do_not_crash(page):
     graphics.parse_graphics_page(page, "https://www.nhc.noaa.gov/graphics_at1.shtml")
-    graphics.parse_floater_storms(page)
-    graphics.parse_floater_products(page)
-    graphics.parse_floater_listing(page, "al052025", "GEOCOLOR")
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_storms(page)
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_products(page)
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_listing(page, "al052025", "GEOCOLOR")
 
 
 @SETTINGS

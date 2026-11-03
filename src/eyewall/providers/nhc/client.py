@@ -150,6 +150,10 @@ class NhcClient:
         fetched = await self._fetch(
             url, params=params, etag=etag, last_modified=last_modified, allow_404=allow_404, max_bytes=max_bytes
         )
+        if fetched.not_modified and etag is None and last_modified is None:
+            # Nobody asked, so no copy of ours is what "unchanged" refers to: a proxy answered on its own. That is not
+            # an empty answer, it is no answer.
+            raise HttpError(url, fetched.status)
         if fetched.not_modified or fetched.missing:
             return Response(None, fetched)
         return Response(parse(fetched.body), fetched)
@@ -282,7 +286,9 @@ class NhcClient:
 
     async def storms(self) -> CurrentStorms:
         response = await self.fetch_current_storms()
-        return response.value or CurrentStorms()
+        if response.value is None:  # no body is a failed fetch; only an `activeStorms: []` document is a quiet day
+            raise HttpError(response.fetched.url, response.fetched.status)
+        return response.value
 
     async def _product[P: _Identified](
         self, storm: Storm, kind: ProductKind, ref: ProductRef | None, parse: Callable[[str], P], *, fallback: bool
