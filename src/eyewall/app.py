@@ -782,6 +782,19 @@ class EyewallApp(App[bool]):
             await self.poller.tick()
 
 
+def run_checked(app: App[Any]) -> Any:
+    """Run `app` and raise what crashed it. Textual handles an exception from a handler, widget or worker itself: it
+    prints its own traceback, sets the return code to 1 and lets `run()` return, so the caller's crash log never sees
+    it. Raising here sends that exception to the same place as one that leaves `run()`."""
+    result = app.run()
+    crashed = getattr(app, "_exception", None)
+    if crashed is not None:
+        raise crashed
+    if app.return_code:
+        raise RuntimeError(f"the app exited with code {app.return_code}")
+    return result
+
+
 def run_app(
     config: Config,
     source: DataSource,
@@ -795,28 +808,32 @@ def run_app(
     inline = (
         load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
     )
-    wants_replay = EyewallApp(
-        config,
-        source,
-        inline=inline,
-        state_dir=state_dir,
-        closer=closer,
-        config_path=config_path,
-        file_config=file_config,
-        config_file_broken=config_file_broken,
-    ).run()
+    wants_replay = run_checked(
+        EyewallApp(
+            config,
+            source,
+            inline=inline,
+            state_dir=state_dir,
+            closer=closer,
+            config_path=config_path,
+            file_config=file_config,
+            config_file_broken=config_file_broken,
+        )
+    )
     if wants_replay:  # `R` on a quiet day: the live app has closed its feeds, now the recording gets the terminal
         try:
             demo = ReplaySource(resolve_bundle(DEMO))
         except BundleError as exc:
             print(f"eyewall: {exc}", file=sys.stderr)
             return
-        EyewallApp(
-            config,
-            demo,
-            inline=inline,
-            state_dir=None,  # a replay never reads or writes the real seen set
-            config_path=config_path,
-            file_config=file_config,
-            config_file_broken=config_file_broken,
-        ).run()
+        run_checked(
+            EyewallApp(
+                config,
+                demo,
+                inline=inline,
+                state_dir=None,  # a replay never reads or writes the real seen set
+                config_path=config_path,
+                file_config=file_config,
+                config_file_broken=config_file_broken,
+            )
+        )
