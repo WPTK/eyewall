@@ -60,9 +60,12 @@ class BuoysScreen(ChromeScreen):
         ascii_ = eye.config.map.glyph_set == "ascii"
         mode = station_view.SORTS[self.sort_index]
         failed = eye.poller.freshness(protocol.BUOYS).state.value == "error"
+        tides = eye.poller.freshness(protocol.TIDES)
         if self.tab == NEAR:
             storm = store.storms.get(self.storm_id or "")
-            rows = station_view.near_rows(store, self.storm_id or "", now, preset, g, tz, ascii_) if storm else []
+            rows = (
+                station_view.near_rows(store, self.storm_id or "", now, preset, g, tz, ascii_, tides) if storm else []
+            )
             buoys = sum(1 for r in rows if r.kind == station_view.BUOY)
             gauges = len(rows) - buoys
             name = storm.storm.name.title() if storm is not None and storm.storm.name else "the storm"
@@ -77,7 +80,7 @@ class BuoysScreen(ChromeScreen):
                 head = f"No buoys or tide gauges are near {name}."
             empty = ""
         else:
-            rows = station_view.followed_rows(store, now, preset, g, tz, ascii_)
+            rows = station_view.followed_rows(store, now, preset, g, tz, ascii_, tides)
             if rows:
                 head = f"You follow {_plural(len(rows), 'station')}."
                 empty = ""
@@ -95,7 +98,7 @@ class BuoysScreen(ChromeScreen):
         empty_note = self.query_one("#buoys-empty", Static)
         empty_note.display = bool(empty)
         empty_note.update(Text(empty, style=DIM))
-        self._label_tabs(len(station_view.followed_rows(store, now, preset, g, tz, ascii_)))
+        self._label_tabs(len(station_view.followed_rows(store, now, preset, g, tz, ascii_, tides)))
         self.refresh_bindings()
 
     def _label_tabs(self, followed: int) -> None:
