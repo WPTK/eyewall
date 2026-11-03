@@ -93,23 +93,44 @@ The footer shows the keys that work on the current screen and always ends with `
 
 ## Install
 
-Standalone binaries for Windows, Linux (x86_64 and arm64) and macOS (Apple silicon and Intel) are on the
-[releases page](https://github.com/WPTK/eyewall/releases). They need no Python and are not signed, so Windows and macOS
-may warn on first run; `docs/install.md` covers that and the checksums.
+Pick one route. Each block below is complete: paste it into a terminal and then run `eyewall --demo`.
 
-With Python 3.12 or newer you can install from the repository:
+**Standalone binary** (no Python needed). Download the file for your platform from the
+[releases page](https://github.com/WPTK/eyewall/releases). Binaries are not signed, so Windows and macOS may warn on
+first run; `docs/install.md` covers that and the checksums.
 
 ```
+# Windows (PowerShell): eyewall-windows-x86_64.exe
+.\eyewall-windows-x86_64.exe --demo
+
+# Linux (x86_64 shown; arm64 is eyewall-linux-arm64.tar.gz)
+mkdir eyewall-bin && tar -C eyewall-bin -xzf eyewall-linux-x86_64.tar.gz && ./eyewall-bin/eyewall --demo
+
+# macOS (Apple silicon shown; Intel is eyewall-macos-x86_64.tar.gz)
+mkdir eyewall-bin && tar -C eyewall-bin -xzf eyewall-macos-arm64.tar.gz
+xattr -d com.apple.quarantine eyewall-bin/eyewall      # clears the "unidentified developer" block
+./eyewall-bin/eyewall --demo
+```
+
+**With Python 3.12 or newer and `git`**, from the repository (these install the default branch), in any of these ways:
+
+```
+uv tool install git+https://github.com/WPTK/eyewall
 pipx install git+https://github.com/WPTK/eyewall
+python -m pip install git+https://github.com/WPTK/eyewall
 ```
 
-Or from a clone:
+Or from a clone, for development:
 
 ```
 python -m venv .venv
 .venv/bin/python -m pip install -e .        # Windows: .venv\Scripts\python
 .venv/bin/python -m eyewall --demo
 ```
+
+**Supported systems.** Windows 11 is the supported Windows; CI and the binary build run on GitHub's `windows-latest`
+(Windows Server). The Linux binaries are built on Debian 11 (glibc 2.31) and should work on any glibc 2.31 or newer
+distribution; Alpine and other musl systems are not supported. macOS has no minimum version stated.
 
 `eyewall --selftest` checks an installation: it replays an hour of the bundled storm and prints `selftest ok`.
 
@@ -125,7 +146,7 @@ eyewall --demo
 ```
 
 Most of the year nothing is active, so `--demo` replays a recording of Hurricane Erin (August 2025) and is the quickest
-way to look around. Press `Enter` on the storm, then `t`, `b` and `g` to visit the other screens. Run `eyewall` with no
+way to look around. Press `Enter` on the storm, then `t` and `b` to visit the NHC text and the buoys. In `--demo` the Pictures screen (`g`) is empty. Run `eyewall` with no
 flags for live data. If no storm is active it says so, and `R` starts the same Erin replay.
 
 ## Command line
