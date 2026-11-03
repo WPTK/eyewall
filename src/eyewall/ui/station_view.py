@@ -106,6 +106,24 @@ def buoy_row(
     return _row(BUOY, entry, state, sentence)
 
 
+def gauge_gap(store: Store, gauge_id: str, feed: Freshness | None, ascii_: bool) -> tuple[str, str] | None:
+    """Why a gauge has no water level: (row state, sentence), or None when it has one.
+
+    `waiting` only while the tide feed is still on its first try; a feed that failed says so with the reason, and one
+    that answered without this gauge says NOAA has no recent level for it.
+    """
+    series = store.tide_series.get(gauge_id)
+    if series is not None and series.latest_level is not None:
+        return None
+    if gauge_id in store.tide_errors:
+        return "dark", "Not reporting. Could not fetch the water level for this gauge."
+    if series is None and feed is not None and feed.state is FreshnessState.ERROR:
+        return "failed", failed_text(ascii_, f"Tide data unavailable, {feed.reason or 'the feed could not be read'}.")
+    if series is None and (feed is None or feed.state is FreshnessState.LOADING):
+        return "waiting", "Waiting for the first water level."
+    return "dark", "Not reporting. NOAA has no recent water level for this gauge."
+
+
 def gauge_row(
     store: Store,
     entry: st.Entry[TideStation],
@@ -117,16 +135,10 @@ def gauge_row(
 ) -> Row:
     gauge = entry.station
     series = store.tide_series.get(gauge.id)
-    if series is None or series.latest_level is None:
-        if gauge.id in store.tide_errors:
-            return _row(GAUGE, entry, "dark", "Not reporting. Could not fetch the water level for this gauge.")
-        if series is not None:
-            return _row(GAUGE, entry, "dark", "Not reporting. NOAA has no recent water level for this gauge.")
-        if feed is not None and feed.state is FreshnessState.ERROR:
-            reason = feed.reason or "the feed could not be read"
-            since = "" if feed.age is None else f" Last good answer {format_age(feed.age)} ago."
-            return _row(GAUGE, entry, "failed", failed_text(ascii_, f"Tide data unavailable, {reason}.{since}"))
-        return _row(GAUGE, entry, "waiting", "Waiting for the first water level.")
+    gap = gauge_gap(store, gauge.id, feed, ascii_)
+    if gap is not None:
+        return _row(GAUGE, entry, gap[0], gap[1])
+    assert series is not None
     age = observation_age(series, now)
     if age is not None and is_silent(series, now):
         return _row(GAUGE, entry, "stale", stale_text(g, ascii_, f"No report for {format_age(age.total_seconds())}."))

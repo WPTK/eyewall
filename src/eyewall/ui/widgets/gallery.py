@@ -29,7 +29,6 @@ from textual.widget import Widget
 from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
-from eyewall.clock import format_age
 from eyewall.net import FetchError
 from eyewall.palette import DIM, FRESHNESS_CUES
 from eyewall.poll import FreshnessState
@@ -198,7 +197,10 @@ class GalleryPanel(Vertical, can_focus=True):
                 listing.highlighted = index
         finally:
             self._populating = False
+        had_focus = self.has_focus or self.has_focus_within
         self._show_list(len(items) > 1)
+        if had_focus:
+            self.focus_list()
         if not items:
             self._drop_picture()
             self._say(self._empty_message())
@@ -219,13 +221,13 @@ class GalleryPanel(Vertical, can_focus=True):
     def _empty_message(self) -> str:
         if self.storm_id not in self.eye.store.storms:
             return "This storm is no longer active."
-        feed = self.eye.poller.freshness(protocol.SATELLITE)
-        if feed.state is FreshnessState.ERROR:
+        feeds = [self.eye.poller.freshness(f) for f in (protocol.STORMS, protocol.SATELLITE)]
+        failed = next((f for f in feeds if f.state is FreshnessState.ERROR), None)
+        if failed is not None:
             cue = FRESHNESS_CUES["error"]
-            since = "" if feed.age is None else f" Last good answer {format_age(feed.age)} ago."
-            reason = feed.reason or "the feed could not be read"
-            return f"{cue.word.capitalize()}: Pictures unavailable, {reason}.{since}"
-        if feed.state is FreshnessState.LOADING:
+            reason = failed.reason or "the feed could not be read"
+            return f"{cue.word.capitalize()}: Pictures unavailable, {reason}."
+        if any(f.state is FreshnessState.LOADING for f in feeds):
             return "Waiting for the first list of pictures."
         return "No pictures are listed for this storm yet."
 
