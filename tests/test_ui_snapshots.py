@@ -21,7 +21,7 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
         await settle(pilot)
         if storm:
             await into_the_storm(pilot)
-            pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
+        pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
         # Feed ages and the replay clock follow the wall clock; pin the top bar's slot so the picture is repeatable.
         pilot.app.health = lambda: Health("●", "data ok", "ok", "3m", "")  # type: ignore[attr-defined, method-assign]
         pilot.app.top_bar_extras = lambda: [("pinned", None)]  # type: ignore[attr-defined, method-assign]

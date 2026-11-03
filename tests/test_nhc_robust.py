@@ -7,7 +7,7 @@ import gzip
 import json
 
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from eyewall.providers.base import ParseError
@@ -17,7 +17,7 @@ from eyewall.providers.nhc.tcm import parse_tcm
 from eyewall.providers.nhc.text import parse_pws, parse_tcd, parse_tcp, parse_two
 from tests.nhc_fixtures import gis_bytes, nhc_bytes, nhc_text
 
-SETTINGS = settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+SETTINGS = settings()  # examples and deadline come from the profile in conftest.py
 
 TEXT_CASES = [
     (parse_tcm, "tcm/erin_030.txt"),

@@ -113,3 +113,28 @@ async def test_the_panel_has_quiet_headings_and_leads_with_the_seven_day_chance(
         side = app.screen.query_one("#side")
         heads = [line for line in side.lines if line.text.plain.startswith(("Areas", "See it", "Your"))]
         assert len(heads) == 3 and all(line.text.style == "dim" for line in heads)
+
+
+async def test_the_quiet_map_is_half_a_degree_a_dot_or_finer_at_every_size() -> None:
+    for size in [(80, 24), (100, 40), (120, 30), (200, 50)]:
+        app = scripted_app(ScriptedSource(quiet_outlook()))
+        async with running(app, size):
+            view = app.screen.map_view.viewport
+            assert view is not None and view.deg_per_dot <= 0.5, size
+            assert view.bounds().contains(25.0, -80.0) and view.bounds().contains(18.0, -66.0), size
+
+
+def test_a_fit_that_needs_no_cap_is_unchanged_by_one() -> None:
+    plain = Viewport.fit_points(adapt.quiet_points(ALL), 200, 50)
+    capped = Viewport.fit_points(adapt.quiet_points(ALL), 200, 50, max_deg_per_dot=0.5, focus=(22.0, -68.0))
+    assert plain == capped
+
+
+def test_a_capped_fit_slides_to_stay_inside_the_box_and_follows_the_focus() -> None:
+    box = list(adapt.BASIN_BOUNDS["AL"])
+    east = Viewport.fit_points(box, 40, 36, max_deg_per_dot=0.5, focus=(22.0, -20.0))
+    west = Viewport.fit_points(box, 40, 36, max_deg_per_dot=0.5, focus=(22.0, -90.0))
+    assert east.deg_per_dot == west.deg_per_dot == 0.5
+    assert east.bounds().west > west.bounds().west
+    assert east.bounds().contains(25.0, -16.0) and not east.bounds().contains(25.0, -80.0)  # up to the box's edge
+    assert west.bounds().contains(25.0, -96.0) and not west.bounds().contains(25.0, -40.0)

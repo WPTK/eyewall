@@ -3,7 +3,8 @@
 Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except basin-scale views (0.3
 degrees per dot or coarser), where a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
 Borders, and the state and province lines with them, appear with the detailed data only. Land is a flat background
-tint of the cells inside it, so the coast stays a crisp line and no fill dots speckle the map. The raster for a
+tint of the cells inside it; a cell the shore runs through shows its land-side dots instead (a part-cell glyph), so the
+shore follows the data to the dot and not to the cell. The raster for a
 viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
 """
 
@@ -13,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache, lru_cache
 
-from eyewall.mapdata.loader import KIND_STATE, MapLayer, MapPath, load_layer
+from eyewall.mapdata.loader import DATA_EAST, DATA_NORTH, DATA_SOUTH, KIND_STATE, MapLayer, MapPath, load_layer
 from eyewall.palette import BORDER, COAST, LAND, STATE_LINE
 from eyewall.render.canvas import Canvas, Dot, Mode, Priority
 from eyewall.render.projection import Bounds, Viewport
@@ -65,6 +66,15 @@ def _visible(name: str, viewport: Viewport) -> list[MapPath]:
     return [path for bounds, path in _indexed(name)[1] if view.intersects(bounds)]
 
 
+def _cut_lines(viewport: Viewport) -> tuple[float, float, float]:
+    """Where the vendored data stops, in dots: the northern and southern cuts and the Atlantic-side cut."""
+    return (
+        viewport.to_dot(DATA_NORTH, 0.0)[1],
+        viewport.to_dot(DATA_SOUTH, 0.0)[1],
+        viewport.to_dot(0.0, DATA_EAST)[0],
+    )
+
+
 def _cells_across(ring: Sequence[Dot], canvas: Canvas) -> float:
     """The longer side of a ring's bounding box, in cells."""
     xs, ys = [p[0] for p in ring], [p[1] for p in ring]
@@ -93,7 +103,10 @@ def draw_basemap(
         lakes = [ring for ring in lakes if _cells_across(ring, canvas) >= MIN_LAKE_CELLS]
     if land:
         canvas.tint_polygon(
-            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes, style.land
+            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes,
+            style.land,
+            style.coast if coast else None,
+            cut=_cut_lines(viewport),
         )
     if coast:
         for path in _visible("coast" + suffix, viewport):
