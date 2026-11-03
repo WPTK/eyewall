@@ -367,3 +367,43 @@ async def test_graphics_failure_is_raised(nhc):
     respx.get(erin.forecast_graphics.url).respond(500)
     with pytest.raises(HttpError):
         await nhc.graphics(erin)
+
+
+# ---- a response with no usable content is a failure, not an empty answer (#192, #171) ------------------------------
+
+
+@respx.mock
+async def test_an_unsolicited_304_for_the_storm_list_is_a_failed_fetch_not_no_storms(nhc):
+    respx.get(ids.CURRENT_STORMS_URL).respond(304)
+    with pytest.raises(HttpError):
+        await nhc.storms()
+
+
+@respx.mock
+async def test_a_304_that_answers_our_own_validator_is_still_unchanged(nhc):
+    respx.get(ids.CURRENT_STORMS_URL).respond(304)
+    assert (await nhc.fetch_current_storms(etag='"abc"')).not_modified
+
+
+@respx.mock
+async def test_an_unsolicited_304_is_a_failed_fetch_for_every_feed(nhc):
+    respx.get(url__startswith=ids.alerts_url()).respond(304)
+    respx.get(ids.floater_url()).respond(304)
+    with pytest.raises(HttpError):
+        await nhc.fetch_alerts()
+    with pytest.raises(HttpError):
+        await nhc.fetch_floater_storms()
+
+
+@respx.mock
+@pytest.mark.parametrize("body", [b"", b'{"truncated": ', b"   \n"])
+async def test_a_satellite_listing_with_no_links_is_a_parse_error_not_nothing_posted(nhc, body):
+    respx.get(ids.floater_url()).respond(200, content=body)
+    respx.get(ids.floater_url("al052025")).respond(200, content=body)
+    respx.get(ids.floater_url("al052025", "GEOCOLOR")).respond(200, content=body)
+    with pytest.raises(ParseError):
+        await nhc.fetch_floater_storms()
+    with pytest.raises(ParseError):
+        await nhc.fetch_floater_products("al052025")
+    with pytest.raises(ParseError):
+        await nhc.fetch_floater_product("al052025", "GEOCOLOR")

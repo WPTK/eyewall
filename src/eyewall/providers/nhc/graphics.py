@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from urllib.parse import unquote, urljoin, urlsplit
 
 from eyewall.models.graphics import FloaterProduct, GraphicKind, GraphicLink
+from eyewall.providers.base import ParseError
 from eyewall.providers.nhc.ids import floater_url, parse_adv_num, parse_storm_id
 from eyewall.urls import is_noaa_url
 
@@ -115,7 +116,10 @@ def parse_graphics_page(html: str | bytes, base_url: str) -> tuple[GraphicLink, 
 
 def _hrefs(html: str | bytes) -> list[str]:
     text = html.decode("utf-8", errors="replace") if isinstance(html, bytes) else html
-    return [match["href"] for match in _LISTING_HREF.finditer(text)]
+    hrefs = [match["href"] for match in _LISTING_HREF.finditer(text)]
+    if not hrefs:  # even an empty directory links its parent and its sort headers; no link at all is not a listing
+        raise ParseError("not a directory listing: it has no links")
+    return hrefs
 
 
 def parse_floater_storms(html: str | bytes) -> tuple[str, ...]:

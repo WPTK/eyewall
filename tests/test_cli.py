@@ -160,6 +160,18 @@ def test_selftest_reports_a_missing_recording(monkeypatch, capsys):
     assert "selftest failed" in capsys.readouterr().err
 
 
+def test_package_data_is_all_present():
+    from eyewall.cli import missing_package_data
+
+    assert missing_package_data() == []
+
+
+def test_selftest_names_a_missing_data_file(monkeypatch, capsys):
+    monkeypatch.setattr("eyewall.cli.MAPDATA_FILES", ("coast.bin", "nonesuch.bin"))
+    assert main(["--selftest"]) == 1
+    assert "mapdata/nonesuch.bin" in capsys.readouterr().err
+
+
 def test_until_without_headless_is_refused_not_ignored(capsys):
     with pytest.raises(SystemExit) as raised:
         main(["--demo", "--until", "+1h"])
