@@ -34,6 +34,7 @@ _RULE_FOR_KIND: dict[EventKind, str | None] = {
     EventKind.NEW_ADVISORY: "new_advisory",
     EventKind.NEW_DISCUSSION: "new_advisory",
     EventKind.CLASSIFICATION: "classification",
+    EventKind.RAPID_INTENSIFICATION: "classification",
     EventKind.WATCH_WARNING_ISSUED: "watches_warnings",
     EventKind.WATCH_WARNING_CHANGED: "watches_warnings",
     EventKind.WATCH_WARNING_DISCONTINUED: "watches_warnings",
