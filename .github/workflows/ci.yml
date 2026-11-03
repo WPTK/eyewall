@@ -45,3 +45,64 @@ jobs:
       - run: python -m mypy src
       - run: python -m pytest -n auto --dist worksteal
       - run: python -m eyewall --version
+
+  # Packaging: build the wheel and sdist, check the metadata, install the wheel into an empty venv (nothing from the
+  # checkout on the path) and run the installed program. --selftest also asserts the package data is present.
+  package:
+    name: Package (${{ matrix.os }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    continue-on-error: ${{ matrix.python == '3.14' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        python: ["3.12", "3.13"]
+        include:
+          - os: ubuntu-latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - name: Install the wheel into a clean venv
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          if [ -d "$RUNNER_TEMP/wheel-venv/Scripts" ]; then bin="$RUNNER_TEMP/wheel-venv/Scripts"; else bin="$RUNNER_TEMP/wheel-venv/bin"; fi
+          echo "$bin" > "$RUNNER_TEMP/wheel-bin"
+          "$bin/python" -m pip install --quiet dist/*.whl
+      - name: Run the installed program, from outside the checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          bin=$(cat wheel-bin)
+          "$bin/eyewall" --version
+          "$bin/eyewall" --help > /dev/null
+          "$bin/eyewall" --demo --summary --until +1h
+          "$bin/eyewall" --selftest
+      - name: The replay bundle and map data come from the installed package, not the checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$(cat wheel-bin)/python" -I - <<'PY'
+          import importlib.resources as r
+          from pathlib import Path
+
+          import eyewall
+          from eyewall.cli import missing_package_data
+          from eyewall.sources.bundle import demo_bundle_path
+
+          pkg = Path(str(r.files("eyewall"))).resolve()
+          assert "site-packages" in pkg.parts, f"not an installed copy: {pkg}"
+          demo = demo_bundle_path().resolve()
+          assert demo.is_relative_to(pkg), f"demo bundle {demo} is not inside {pkg}"
+          assert missing_package_data() == [], missing_package_data()
+          print("package data ok in", pkg, eyewall.__version__)
+          PY
