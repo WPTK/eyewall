@@ -428,10 +428,13 @@ class EyewallApp(App[bool]):
             root.map_view.center_on((lat, lon))
             if mark is not None:
                 kind, station_id = ("buoy" if mark[0] == "ndbc" else "gauge"), mark[1].lower()
-                root.map_view.focused_mark = next(
+                found = next(
                     (m for m, _ in root.map_view.hits.drawn if m.kind == kind and m.id.lower() == station_id), None
                 )
-                root.map_view._show()
+                root.map_view.focus_mark(found)
+                if found is None:
+                    self.notify(f"{label} is not drawn: turn its layer on with l.", timeout=4, markup=False)
+                    return
             self.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
 
     def open_graphics(self, storm_id: str | None) -> None:

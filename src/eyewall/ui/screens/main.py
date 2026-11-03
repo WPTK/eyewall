@@ -15,7 +15,6 @@ With nothing active the same places hold the outlook areas, your stations and th
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -163,10 +162,6 @@ class MainMap(MapView):
     NAV_SCOPES = ("main_map", "map")
     BINDINGS = nav.bindings("main_map")
 
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.select_first = True  # a click on a storm card's mark selects it; the next click opens it
-
 
 class MainScreen(ChromeScreen):
     CRUMB = "Home"
@@ -178,7 +173,7 @@ class MainScreen(ChromeScreen):
         self._full_map = False
         self.tier = Tier.SMALL
         self.states: tuple[StormState, ...] = ()
-        self._area = -1  # the outlook area `w` last centred the map on
+        self._area = ""  # the outlook area `w` last centred the map on
 
     @property
     def quiet(self) -> bool:
@@ -230,7 +225,7 @@ class MainScreen(ChromeScreen):
             eye.selected = ids[0] if ids else None
         self.map_view.set_scene(adapt.map_scene(eye.store, eye.now(), eye.selected), self._fit_points())
         many = len(ids) > 1  # the list shows a selected row only then, so the map shows a selected mark only then
-        self.map_view.select_first = many
+        self.map_view.selectable = frozenset(ids) if many else frozenset()  # only listed storms select on a click
         self.map_view.set_selected(Mark("storm", eye.selected) if many and eye.selected else None)
         self._paint()
 
@@ -278,8 +273,10 @@ class MainScreen(ChromeScreen):
         areas = self._areas()
         if not areas:
             return
-        self._area = (self._area + 1) % len(areas)
-        label, point = areas[self._area]
+        labels = [label for label, _ in areas]
+        index = (labels.index(self._area) + 1) % len(areas) if self._area in labels else 0
+        label, point = areas[index]
+        self._area = label
         self.map_view.center_on(point)
         self.eye.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
 

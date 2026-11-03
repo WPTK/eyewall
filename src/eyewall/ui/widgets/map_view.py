@@ -135,8 +135,8 @@ class MapView(Widget, can_focus=True):
         self._strips: list[Strip] | None = None
         self._hits: Hits = EMPTY_HITS
         self.focused_mark: Mark | None = None
-        self.selected_mark: Mark | None = None  # the storm the list has selected: drawn like the focus ring
-        self.select_first = False  # a click on a storm that is not selected selects it; the next click opens it
+        self.selected_mark: Mark | None = None  # the storm the list has selected: bold and underlined
+        self.selectable: frozenset[str] = frozenset()  # listed storms: click selects, next opens
         self._press: tuple[int, int] | None = None  # where the last drag step was, while the button is held
         self._dragged = False
 
@@ -211,10 +211,11 @@ class MapView(Widget, can_focus=True):
         strips = canvas_strips(canvas, view.cols)
         if self.focused_mark is not None and self.focused_mark not in self._hits.order:
             self.focused_mark = None  # the mark left the map
-        for mark in (self.selected_mark, self.focused_mark):
+        for mark, ring in ((self.selected_mark, False), (self.focused_mark, True)):
             cell = None if mark is None else self._hits.cell_of(mark)
             if cell is not None and 0 <= cell[1] < len(strips):
-                strips[cell[1]] = reverse_cell(strips[cell[1]], cell[0])  # reverse video survives NO_COLOR
+                # reverse video (the focus ring) and underline survive NO_COLOR; the ring wins on the same mark
+                strips[cell[1]] = reverse_cell(strips[cell[1]], cell[0], ring=ring)
         return strips
 
     def _rows(self) -> list[Strip]:
@@ -366,9 +367,14 @@ class MapView(Widget, can_focus=True):
             self.selected_mark = mark
             self._show()
 
+    def focus_mark(self, mark: Mark | None) -> None:
+        """Put the focus ring on a mark (or take it off)."""
+        self.focused_mark = mark
+        self._show()
+
     def _activate(self, mark: Mark) -> None:
         """A click: where a list selects, the first click on a storm selects it and the next opens it."""
-        if self.select_first and mark.kind == "storm" and mark != self.selected_mark:
+        if mark.kind == "storm" and mark.id in self.selectable and mark != self.selected_mark:
             self.selected_mark = mark
             self._show()
             self.post_message(self.MarkSelected(mark))
