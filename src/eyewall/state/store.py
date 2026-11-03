@@ -143,6 +143,7 @@ class Store:
             changes["radii_gis"] = radii_gis
         if track is not None:
             changes["track"] = track
+            events += ev.rapid_intensification_events(state.storm, track, now)
         if graphics is not None:
             changes["graphics"] = graphics
         self.storms[storm_id] = replace(state, **changes)  # type: ignore[arg-type]
