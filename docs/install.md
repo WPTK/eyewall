@@ -28,9 +28,21 @@ eyewall                # live data
 
 ## With Python 3.12 or newer
 
+Any one of these puts `eyewall` on your path:
+
 ```
+uv tool install git+https://github.com/WPTK/eyewall
 pipx install git+https://github.com/WPTK/eyewall
+python -m pip install git+https://github.com/WPTK/eyewall
 ```
+
+## Supported systems
+
+- **Windows:** Windows 11. CI runs on Windows Server 2022 and 2025 runners, which stand in for older console behaviour;
+  Windows 10 and earlier are not tested.
+- **Linux:** the binaries are built against glibc 2.31 and need that or newer (Debian 11 and Ubuntu 20.04 or later). Alpine and other musl systems are not supported: the binary will not start there. Use the Python route on
+  such a system at your own risk.
+- **macOS:** the binaries are built on GitHub's current Apple silicon runner and its last Intel runner (macOS 15).
 
 ## Checking an installation
 
