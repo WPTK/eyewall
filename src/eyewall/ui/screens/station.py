@@ -118,6 +118,7 @@ class StationScreen(ChromeScreen):
                 self.run_worker(self._load_series(), name="station-series", exit_on_error=False)
             self._ask_supplemental()
         else:
+            eye.poller.extra_gauges.add(self.station_id)
             self.run_worker(self._load_gauge(), name="station-gauge", exit_on_error=False)
         self._draw()
 
@@ -126,10 +127,13 @@ class StationScreen(ChromeScreen):
         others = [
             s
             for s in self.app.screen_stack
-            if s is not self and isinstance(s, StationScreen) and s.is_buoy and s.station_id == self.station_id
+            if s is not self
+            and isinstance(s, StationScreen)
+            and s.is_buoy == self.is_buoy
+            and s.station_id == self.station_id
         ]
         if not others:
-            self.eye.poller.extra_buoys.discard(self.station_id)
+            (self.eye.poller.extra_buoys if self.is_buoy else self.eye.poller.extra_gauges).discard(self.station_id)
 
     async def _load_series(self) -> None:
         self.series_error = await self.eye.fetch_series(self.station_id)

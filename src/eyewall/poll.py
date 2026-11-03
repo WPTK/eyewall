@@ -214,6 +214,7 @@ class Poller:
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
         self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
+        self.extra_gauges: set[str] = set()  # the same for tide gauges
         self.feed_deadline = FEED_DEADLINE
         self._partial: dict[str, list[Event]] = {}  # by feed: the events it produced before a deadline cut it off
 
@@ -300,7 +301,7 @@ class Poller:
         if feed == protocol.BUOYS:
             return bool(self.store.storms or self.store.config.watchlist.ndbc or self.extra_buoys)
         if feed == protocol.TIDES:
-            return bool(self.store.storms or self.store.config.watchlist.coops)
+            return bool(self.store.storms or self.store.config.watchlist.coops or self.extra_gauges)
         return bool(self.store.storms)
 
     # ---- running ----------------------------------------------------------------------------------------------
@@ -611,12 +612,15 @@ class Poller:
             "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
         )
         gauges: dict[str, TideStation] = {}
+        known = {g.id.upper(): g for g in self.store.tide_stations}
+        for station_id in sorted(self.extra_gauges):  # a gauge page that is open comes first
+            if (gauge := known.get(station_id.upper())) is not None and len(gauges) < MAX_TIDE_GAUGES:
+                gauges[gauge.id] = gauge
         ranked = [[e.station for e in self.store.nearby_tides(sid)] for sid in self.store.storms]
         for station in _by_rank(ranked):
             if len(gauges) >= MAX_TIDE_GAUGES:
                 break
             gauges[station.id] = station
-        known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
             gauge = known.get(station_id.upper())
             if gauge is not None and len(gauges) < MAX_TIDE_GAUGES:
@@ -635,6 +639,8 @@ class Poller:
 
         failures: list[Exception] = []
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
+        # A series nobody refreshes any more, or one whose newest level is long past, must not read as "No report".
+        self.store.prune_tides({g.upper() for g in gauges}, self.source.now())
         if gauges and (down := _feed_failure(failures, len(gauges))) is not None:
             raise down
         return []

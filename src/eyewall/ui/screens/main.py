@@ -268,7 +268,7 @@ class MainScreen(ChromeScreen):
 
     def _outlook_areas(self) -> int:
         eye = self.eye
-        return outlook_words.area_count(eye.store.outlook, eye.basin_view)
+        return outlook_words.area_count(eye.store.outlook, eye.basin_view, eye.now())
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Enter is offered only when it does something: a storm to open, or on a quiet day an area to read about."""

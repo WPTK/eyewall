@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from eyewall.geo import LatLon
 from eyewall.models.track import BestTrack
@@ -72,6 +72,12 @@ class OutlookSystem:
     point: LatLon | None = None
 
 
+# NHC issues the outlook every 6 hours, and the shapes are kept for a day or two after. Past two missed issues
+# (12 h) the shapes are shown with their age; past four (24 h) the text areas take over and the shapes are not drawn.
+GIS_NOTE_AFTER = timedelta(hours=12)
+GIS_DROP_AFTER = timedelta(hours=24)
+
+
 @dataclass(frozen=True, slots=True)
 class OutlookGis:
     issued: datetime | None
@@ -80,6 +86,15 @@ class OutlookGis:
     @property
     def empty(self) -> bool:
         return not self.systems
+
+    def age(self, now: datetime) -> timedelta | None:
+        """How long ago the shapes were issued, never negative; None when the zip carried no time."""
+        return None if self.issued is None else max(timedelta(0), now - self.issued)
+
+    def expired(self, now: datetime | None) -> bool:
+        """True when the shapes are too old to draw or to speak for the outlook."""
+        age = None if now is None else self.age(now)
+        return age is not None and age > GIS_DROP_AFTER
 
 
 @dataclass(frozen=True, slots=True)

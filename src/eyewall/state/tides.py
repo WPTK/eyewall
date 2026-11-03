@@ -16,6 +16,9 @@ from eyewall.models.obs import Prediction, TideSeries
 
 MATCH_TOLERANCE = timedelta(minutes=6)  # a prediction counts as "the same moment" within one 6-minute step
 SILENT_AFTER = timedelta(hours=2)
+# CO-OPS reports every 6 minutes, so 2 h is 20 missed readings (the gauge reads "silent"). A gauge quiet after 12 h
+# is not coming back this poll: its series is dropped rather than kept as a "No report for 12h" row.
+DROP_AFTER = timedelta(hours=12)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,3 +69,10 @@ def observation_age(series: TideSeries, now: datetime) -> timedelta | None:
 def is_silent(series: TideSeries, now: datetime) -> bool:
     age = observation_age(series, now)
     return age is not None and age > SILENT_AFTER
+
+
+def is_expired(series: TideSeries, now: datetime) -> bool:
+    """True when the newest water level is older than DROP_AFTER (a series with no level at all is kept: it is an
+    answer that the gauge has none)."""
+    age = observation_age(series, now)
+    return age is not None and age > DROP_AFTER

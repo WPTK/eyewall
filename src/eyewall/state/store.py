@@ -24,6 +24,7 @@ from eyewall.models.track import BestTrack
 from eyewall.models.watches import AlertsResult, WatchWarningAlert
 from eyewall.models.wind import WindRadiiGis
 from eyewall.state import events as ev
+from eyewall.state import tides
 from eyewall.state.alerts import tropical_alerts
 from eyewall.state.nearby import NearbyStation, TrackFix, nearby_stations
 from eyewall.state.trends import TENDENCY_MAX_AGE, PressureTendency, pressure_tendency
@@ -204,6 +205,12 @@ class Store:
     def apply_tide_series(self, series: TideSeries) -> None:
         self.tide_series[series.station_id] = series
         self.tide_errors.pop(series.station_id, None)
+
+    def prune_tides(self, keep: set[str], now: datetime) -> None:
+        """Drop the series of gauges nobody polls any more, and any whose newest level is past `DROP_AFTER`."""
+        for station_id, series in list(self.tide_series.items()):
+            if station_id.upper() not in keep or tides.is_expired(series, now):
+                del self.tide_series[station_id]
 
     def apply_tide_error(self, station_id: str, message: str) -> None:
         self.tide_errors[station_id] = message

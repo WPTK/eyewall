@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from eyewall.clock import format_age
 from eyewall.geo import LatLon
 from eyewall.models.forecast import ForecastAdvisory
 from eyewall.models.obs import Station, TideStation
-from eyewall.models.outlook import Outlook
+from eyewall.models.outlook import GIS_NOTE_AFTER, Outlook
 from eyewall.models.wind import QuadrantRadii
 from eyewall.render import layers as L
 from eyewall.state.store import Store, StormState
@@ -111,11 +112,14 @@ def storm_scene(state: StormState) -> L.StormScene:
     )
 
 
-def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
+def outlook_areas(outlook: Outlook | None, now: datetime | None = None) -> tuple[L.OutlookArea, ...]:
     """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance and its
-    span, so a number on the map is never bare."""
-    if outlook is None:
+    span, so a number on the map is never bare. Shapes past `GIS_NOTE_AFTER` carry their age (`40% in 7 days, 14h00m
+    old`) and shapes past `GIS_DROP_AFTER` are not drawn."""
+    if outlook is None or outlook.gis.expired(now):
         return ()
+    age = None if now is None else outlook.gis.age(now)
+    old = f", {format_age(age.total_seconds())} old" if age is not None and age > GIS_NOTE_AFTER else ""
     areas: list[L.OutlookArea] = []
     for system in outlook.gis.systems:
         if not system.polygons:
@@ -123,7 +127,8 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
         risks = [r for r in (system.risk_2day, system.risk_7day) if r]
         risk = max(risks, key=lambda r: _RISK_RANK.get(r.lower(), 0)) if risks else "low"
         days, chance = (7, system.prob_7day) if system.prob_7day is not None else (2, system.prob_2day)
-        areas.append(L.OutlookArea(system.polygons, risk, None if chance is None else f"{chance}% in {days} days"))
+        label = None if chance is None else f"{chance}% in {days} days{old}"
+        areas.append(L.OutlookArea(system.polygons, risk, label))
     return tuple(areas)
 
 
@@ -183,7 +188,7 @@ def map_scene(store: Store, now: datetime, selected: str | None, *, cursor: LatL
         buoys, tides = watchlist_marks(store, now)
     return L.MapScene(
         storms=storms,
-        outlook=outlook_areas(store.outlook),
+        outlook=outlook_areas(store.outlook, now),
         buoys=buoys,
         tide_gauges=tides,
         cursor=cursor,
