@@ -13,7 +13,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Bill Kane" }]
 keywords = ["hurricane", "tropical cyclone", "noaa", "nhc", "ndbc", "buoy", "tui", "terminal", "textual"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3.12",

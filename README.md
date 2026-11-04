@@ -4,7 +4,7 @@ eyewall is a terminal app that tracks tropical cyclones in the Atlantic, East Pa
 NOAA feeds, needs no account or key, and describes each storm, its watches and warnings, and the buoys and tide gauges
 near it in plain words.
 
-![The main screen at 140x42: the map with the forecast cone and track, and beside it the storm cards, watches and warnings, and nearby stations](docs/images/dashboard.png)
+![The main screen at 140x42: the map with the forecast cone and track, and beside it the storm cards, watches and warnings, and nearby stations](https://raw.githubusercontent.com/WPTK/eyewall/main/docs/images/dashboard.png)
 
 eyewall is not an official forecast or warning. For decisions about life or property, follow the National Hurricane
 Center and your local emergency officials.
