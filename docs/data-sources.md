@@ -1,11 +1,15 @@
 # Data sources
 
-Every feed below is public and keyless. Formats and URLs were checked against the live services on 2026-10-31, a day with no active storms, so a few details (marked in the text) are confirmed during the first live storm. Milestone sessions should treat this file as the reference and correct it when a feed disagrees.
+Every feed below is public and needs no key. Formats and URLs were checked against the live services on 2026-10-31, a day with no active storms. Details that need an active storm are marked in the text. If a feed disagrees with this file, fix the file in the same pull request.
 
-Every request sends `User-Agent: eyewall/<ver> (+https://github.com/WPTK/eyewall)` (api.weather.gov returns 403
-without one). Conditional GETs (`ETag`/`If-Modified-Since`; NDBC returned 304s) and gzip everywhere. Raw
-payloads cached under `platformdirs.user_cache_dir("eyewall")` so startup paints at once and offline shows
-last-known data marked stale. Zips and images are fetched only when a storm's advisory number changes.
+## How eyewall polls
+
+- Every request sends `User-Agent: eyewall/<ver> (+https://github.com/WPTK/eyewall)`. It carries no personal details, and api.weather.gov returns 403 without one.
+- Requests are conditional (`ETag`/`If-Modified-Since`; NDBC returns 304s) and ask for gzip.
+- eyewall caches raw payloads under `platformdirs.user_cache_dir("eyewall")`. Startup paints from the cache at once, and offline you see the last known data marked stale.
+- eyewall fetches a storm's zips when its advisory number changes, and a picture when you pick it.
+- The top bar shows how fresh the data is, and `D` lists each feed with its age and next refresh.
+- A daily workflow (`canary.yml`) checks that each feed still parses.
 
 ## Storms (NHC / CPHC / NWS)
 
