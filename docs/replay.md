@@ -18,24 +18,24 @@ implements, so the poller, the store, the alert engine and the interface cannot 
 have published at the clock's current time: the newest advisory at or before it, the best track rows up to it, the buoy
 and tide gauge rows up to it. Time advances only when the replay is playing, so a paused replay is still.
 
-With no storm active, the live app offers the bundled recording: press `R` on the map screen.
+With no storm active, the live app offers the bundled recording. Press `R` on the map screen.
 
-In the interface the Replay keys are: space pauses and resumes, `<` and `>` slow down and speed up, `[` and `]` jump to
-the previous and next advisory. Headless runs step the clock between polls and stop at `--until` (`+12h`, `+90m`, or an
+In the interface, `Space` pauses and resumes, `<` and `>` slow down and speed up, and `[` and `]` jump to the previous
+and next advisory. Headless runs step the clock between polls and stop at `--until` (`+12h`, `+90m`, or an
 ISO timestamp, counted from the bundle start).
 
-A replay never reads or writes your real seen-alert set; it keeps none unless you pass `--state-dir`.
+A replay never reads or writes your real seen-alert set. It keeps none unless you pass `--state-dir`.
 
 ## What a bundle holds
 
 A bundle is a directory. The layout is documented at the top of `src/eyewall/sources/bundle.py`: a `manifest.toml`, the
 best track, each advisory's text products and GIS zips, the recorded buoys' historical rows, the tide gauges' datagetter
-answers and a few cone stills. The replay serves no outlook, invests, alerts or satellite imagery.
+answers and a few cone stills. The replay serves no outlook, invests, alerts or satellite imagery. The Pictures screen shows only the recorded cone stills, and each appears once the replay reaches its advisory.
 
 ## Recording another storm
 
-`scripts/record_storm.py` builds a bundle from NOAA's archives. It needs the network, waits between requests, and takes a
-few minutes.
+`scripts/record_storm.py` builds a bundle from NOAA's archives. It needs the network and waits between requests, so it
+takes a few minutes. Run it from a clone (see `docs/development.md` for the setup).
 
 ```powershell
 .venv\Scripts\python scripts\record_storm.py AL052025 --from 2025-08-18T09:00 --to 2025-08-21T03:00 `
@@ -50,5 +50,5 @@ few minutes.
 - `--track-hours` (72) is how much best track before `--from` is kept; `--history-hours` (24) is the same for buoy rows.
 - `--graphics` (2) is how many cone stills to keep, `--name` sets the bundle name, `--delay` the pause between requests.
 
-Then replay it with `eyewall --replay recordings\erin`. Recording older seasons works as long as NHC's archive pages and
-the ATCF archive still hold the storm.
+Then replay it with `eyewall --replay recordings\erin`. You can record older seasons while NHC's archive pages and the
+ATCF archive still hold the storm.

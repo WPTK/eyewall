@@ -40,7 +40,7 @@ without comment, so a newer file still opens in an older build. The file is crea
     borders = true
     cone = true
     radii = true
-    glyph_set = "unicode"     # unicode or ascii (use ascii on the legacy Windows console)
+    glyph_set = "unicode"     # unicode or ascii; a terminal that cannot draw braille gets ascii
 
     [alerts]
     new_advisory = true

@@ -116,7 +116,7 @@ The config file lives in the platform config directory (on Windows, `%LOCALAPPDA
 ## Terminals
 
 Windows Terminal, iTerm2, Kitty and most modern terminals render the braille map and Unicode symbols. The legacy Windows
-console (conhost) does not, so use `--glyphs ascii` there. Inline images need a terminal that supports Sixel or the Kitty
+console (conhost) does not, so eyewall switches to the ASCII set there on its own. `--glyphs unicode` forces the Unicode set. Inline images need a terminal that supports Sixel or the Kitty
 graphics protocol; everywhere else eyewall falls back to a drawn approximation.
 
 ## Working on NOAA data
@@ -191,6 +191,6 @@ Before announcing a release, run the binary for each platform on a machine with 
 3. `eyewall --demo` opens at 80x24 and at 120x30: the map draws, Space pauses, `Enter` opens the Storm screen, `t`, `b`
    and `g` open the NHC text, Buoys and gauges and Pictures screens, a click on a buoy opens its Station screen, `?`
    shows help, `Esc` goes back and `q` restores the terminal. `eyewall --demo --summary` prints sentences and exits 0.
-4. Live, `eyewall` starts and either lists the active storms or says `No tropical cyclones`; out of season that is
-   correct. Offline it still opens and marks the feeds as waiting.
+4. Live, `eyewall` starts and either lists the active storms or says `No tropical storms in the Atlantic right now.` (naming the basins you watch); out of
+   season that is correct. Offline it still opens and marks the feeds as waiting.
 5. The binaries are not signed, so expect the SmartScreen and Gatekeeper prompts described in `install.md`.

@@ -1,4 +1,4 @@
-"""The README's command line, run for real in a subprocess: each flag does what it says, and bad input is a clean error."""
+"""The documented command line (docs/usage.md), run for real in a subprocess: each flag does what it says, and bad input is a clean error."""
 
 from __future__ import annotations
 
@@ -50,6 +50,33 @@ def test_help_lists_flags() -> None:
         "--state-dir",
     ):
         assert flag in out.stdout, flag
+
+
+def test_selftest() -> None:
+    out = run("--selftest")
+    assert out.returncode == 0 and "selftest ok" in out.stdout, out.stdout + out.stderr
+    clean(out)
+
+
+def test_diagnose_offline() -> None:
+    """--diagnose prints the file paths and says how many feeds answered; a dead proxy makes every feed fail fast."""
+    env = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "HTTP_PROXY": "http://127.0.0.1:9",
+        "HTTPS_PROXY": "http://127.0.0.1:9",
+    }
+    out = subprocess.run(
+        [sys.executable, "-m", "eyewall", "--diagnose"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=90,
+        env=env,
+        cwd=ROOT,
+    )
+    assert out.returncode == 0 and "config " in out.stdout and "feeds " in out.stdout, out.stdout + out.stderr
+    clean(out)
 
 
 def test_demo_summary() -> None:

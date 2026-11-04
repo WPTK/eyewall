@@ -1,6 +1,6 @@
-"""README claims as data: every key, flag and documented behaviour in the README maps to the proof that covers it.
+"""Documentation claims as data: every key, flag and documented behaviour in docs/usage.md maps to the proof that covers it.
 
-`test_claims_traceability` parses the README and fails when a key row or a command-line flag appears there that this table
+`test_claims_traceability` parses docs/usage.md and fails when a key row or a command-line flag appears there that this table
 does not know, or when a claim's proof does not exist. A proof is an inventory item id (`key:storm:left`; `*` matches any
 tail, so `click:crumb:*` means any crumb), or a test as `file.py::test_name`.
 
@@ -13,7 +13,7 @@ CLI = "tests/uat/test_cli_claims.py"
 MATRIX = "tests/uat/inventory/test_matrix.py"
 BOUND = "tests/uat/test_boundaries.py"
 
-# README key token -> (behaviour and expected result, proofs)
+# usage.md key token -> (behaviour and expected result, proofs)
 KEYS: dict[str, tuple[str, tuple[str, ...]]] = {
     "?": ("Help: every key. Opens the help dialog", ("key:main:question_mark", "key:help:question_mark")),
     "Ctrl+P": (
@@ -53,6 +53,7 @@ KEYS: dict[str, tuple[str, tuple[str, ...]]] = {
     "n": ("Step to the next storm, buoy or gauge", ("key:main:n",)),
     "N": ("Step to the previous storm, buoy or gauge", ("key:main:N",)),
     "l": ("Map layers dialog", ("key:main:l",)),
+    "w": ("Center the map on the next outlook area", ("key:main:w",)),
     "p": ("The chance of storm-force wind at named places", ("key:storm:p",)),
     "Left": ("Previous storm (Storm page) or product (NHC text)", ("key:storm:left", "key:text:left")),
     "Right": ("Next storm (Storm page) or product (NHC text)", ("key:storm:right", "key:text:right")),
@@ -68,8 +69,8 @@ KEYS: dict[str, tuple[str, tuple[str, ...]]] = {
     "<": ("Replay slower", ("key:main:less_than_sign",)),
     ">": ("Replay faster", ("key:main:greater_than_sign",)),
 }
-# README tokens that name the same key as another row, or that are not one key
-KEY_ALIASES = {"Page Up": "Left", "Page Down": "Left", "Arrow keys": "Left"}
+# usage.md tokens that name the same key as another row, or that are not one key
+KEY_ALIASES = {"=": "+", "Page Up": "Left", "Page Down": "Left", "Arrow keys": "Left"}
 
 FLAGS: dict[str, tuple[str, tuple[str, ...]]] = {
     "--demo": ("Replays the bundled Erin recording", (f"{CLI}::test_demo_summary",)),
@@ -88,6 +89,8 @@ FLAGS: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "--headless": ("No interface; prints events", (f"{CLI}::test_headless_until",)),
     "--until": ("Stops the headless run at the given time", (f"{CLI}::test_headless_until",)),
+    "--selftest": ("Replays the bundled storm for an hour and prints selftest ok", (f"{CLI}::test_selftest",)),
+    "--diagnose": ("Prints versions, file paths and feed reachability, then exits", (f"{CLI}::test_diagnose_offline",)),
     "--config": ("Reads the settings file at PATH", (f"{CLI}::test_config_path",)),
     "--no-config": ("Ignores the settings file", (f"{CLI}::test_no_config",)),
     "--state-dir": ("Where seen events are kept", (f"{CLI}::test_state_dir",)),
