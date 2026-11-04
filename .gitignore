@@ -16,14 +16,15 @@ dist/
 .coverage.*
 htmlcov/
 
-# Editors and local settings
+# Editors
 .vscode/
 .idea/
-.claude/settings.local.json
 
 # Local run data
 /cache/
 *.log
 
-# Local working rules for the maintainer's tooling
-CLAUDE.md
+# Environment and OS files
+.env
+.DS_Store
+Thumbs.db
