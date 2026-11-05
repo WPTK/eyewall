@@ -15,16 +15,24 @@ Center and your local emergency officials.
   rows. Use 100x30 or larger to see the column of storm cards beside the map.
 - Windows 11, Linux with glibc 2.31 or newer, or macOS. Alpine and other musl systems are not supported. The macOS
   binaries need macOS 14 on Apple silicon and macOS 15 on Intel. The pip routes below work on older versions.
-- For the pip routes, Python 3.12 or newer and `git`. The standalone binaries need neither.
+- For the PyPI routes, Python 3.12 or newer. The git routes also need `git`. The standalone binaries need none of these.
 - Network access to NOAA for live data. `--demo` works offline.
 
 ## Quickstart
 
-Install with any one of these commands. Each installs the default branch.
+Install from [PyPI](https://pypi.org/project/eyewall/) with any one of these commands:
 
 ```
-uv tool install git+https://github.com/WPTK/eyewall
+pipx install eyewall
+uv tool install eyewall
+python -m pip install eyewall
+```
+
+To try the development version instead, install from the default branch. This needs `git`:
+
+```
 pipx install git+https://github.com/WPTK/eyewall
+uv tool install git+https://github.com/WPTK/eyewall
 python -m pip install git+https://github.com/WPTK/eyewall
 ```
 

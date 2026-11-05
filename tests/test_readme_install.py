@@ -27,9 +27,10 @@ def test_install_doc_lists_every_built_asset() -> None:
 
 
 def test_install_names_every_python_route() -> None:
-    for route in ("uv tool install git+", "pipx install git+", "python -m pip install git+"):
-        assert route in QUICKSTART
-        assert route in INSTALL_DOC
+    for route in ("uv tool install", "pipx install", "python -m pip install"):
+        for text in (QUICKSTART, INSTALL_DOC):
+            assert f"{route} eyewall\n" in text
+            assert f"{route} git+https://github.com/WPTK/eyewall\n" in text
 
 
 def test_install_states_supported_systems() -> None:

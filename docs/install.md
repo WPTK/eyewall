@@ -40,11 +40,20 @@ macOS, the `xattr` command above clears the "unidentified developer" block.
 
 ## With Python 3.12 or newer
 
-You need `git`. Any one of these commands installs the default branch and puts `eyewall` on your path:
+Any one of these commands installs the latest release from [PyPI](https://pypi.org/project/eyewall/) and puts
+`eyewall` on your path:
 
 ```
-uv tool install git+https://github.com/WPTK/eyewall
+pipx install eyewall
+uv tool install eyewall
+python -m pip install eyewall
+```
+
+To try the development version, install from the default branch instead. You need `git` for this:
+
+```
 pipx install git+https://github.com/WPTK/eyewall
+uv tool install git+https://github.com/WPTK/eyewall
 python -m pip install git+https://github.com/WPTK/eyewall
 ```
 
