@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from eyewall.clock import format_age
 from eyewall.geo import LatLon
 from eyewall.models.forecast import ForecastAdvisory
 from eyewall.models.obs import Station, TideStation
-from eyewall.models.outlook import Outlook
+from eyewall.models.outlook import GIS_NOTE_AFTER, Outlook
 from eyewall.models.wind import QuadrantRadii
 from eyewall.render import layers as L
 from eyewall.state.store import Store, StormState
@@ -27,6 +28,10 @@ BASIN_BOUNDS: dict[str, tuple[LatLon, LatLon]] = {
     "EP": ((4.0, -140.0), (32.0, -84.0)),
     "CP": ((4.0, -180.0), (30.0, -130.0)),
 }
+# Where a quiet-day map looks first when the whole basin would be coarser than QUIET_MAX_DEG_PER_DOT: the busy part
+# of each basin (the Atlantic's is the Caribbean, Gulf and the Southeast coast out to Bermuda).
+BASIN_FOCUS: dict[str, LatLon] = {"AL": (22.0, -68.0), "EP": (16.0, -108.0), "CP": (15.0, -155.0)}
+QUIET_MAX_DEG_PER_DOT = 0.5  # the coarsest scale the quiet-day map is allowed
 MAX_MAP_STATIONS = 12
 _RISK_RANK = {"low": 1, "medium": 2, "high": 3}
 
@@ -44,6 +49,23 @@ def quiet_points(basins: tuple[str, ...]) -> list[LatLon]:
     another or switched it off), always. An outlook area outside it is not chased across the hemisphere: the panel
     says where it is and what its chances are."""
     return list(BASIN_BOUNDS.get(basins[0] if basins else "AL", BASIN_BOUNDS["AL"]))
+
+
+def quiet_focus(basins: tuple[str, ...], store: Store | None = None) -> LatLon:
+    """Where the quiet-day map is centered when the basin is too wide to show whole at QUIET_MAX_DEG_PER_DOT: the
+    middle of the active storms and outlook areas inside the basin, or the basin's busy spot when there are none."""
+    code = basins[0] if basins else "AL"
+    south_west, north_east = BASIN_BOUNDS.get(code, BASIN_BOUNDS["AL"])
+    found: list[LatLon] = []
+    if store is not None:
+        for state in store.storms.values():
+            if state.storm.lat is not None and state.storm.lon is not None:
+                found.append((state.storm.lat, state.storm.lon))
+        found += [centre for _, centre in outlook_centres(store.outlook)]
+    inside = [p for p in found if south_west[0] <= p[0] <= north_east[0] and south_west[1] <= p[1] <= north_east[1]]
+    if not inside:
+        return BASIN_FOCUS.get(code, BASIN_FOCUS["AL"])
+    return (sum(p[0] for p in inside) / len(inside), sum(p[1] for p in inside) / len(inside))
 
 
 def _quadrants(radii: QuadrantRadii | None) -> L.QuadrantRadii | None:
@@ -111,11 +133,14 @@ def storm_scene(state: StormState) -> L.StormScene:
     )
 
 
-def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
+def outlook_areas(outlook: Outlook | None, now: datetime) -> tuple[L.OutlookArea, ...]:
     """The outlook shapes colored by the higher of the 2 day and 7 day risk, labelled with the 7 day chance and its
-    span, so a number on the map is never bare."""
-    if outlook is None:
+    span, so a number on the map is never bare. Shapes past `GIS_NOTE_AFTER` carry their age (`40% in 7 days, 14h00m
+    old`) and shapes past `GIS_DROP_AFTER` are not drawn."""
+    if outlook is None or outlook.gis.expired(now):
         return ()
+    age = outlook.gis.age(now)
+    old = f", {format_age(age.total_seconds())} old" if age is not None and age > GIS_NOTE_AFTER else ""
     areas: list[L.OutlookArea] = []
     for system in outlook.gis.systems:
         if not system.polygons:
@@ -123,8 +148,32 @@ def outlook_areas(outlook: Outlook | None) -> tuple[L.OutlookArea, ...]:
         risks = [r for r in (system.risk_2day, system.risk_7day) if r]
         risk = max(risks, key=lambda r: _RISK_RANK.get(r.lower(), 0)) if risks else "low"
         days, chance = (7, system.prob_7day) if system.prob_7day is not None else (2, system.prob_2day)
-        areas.append(L.OutlookArea(system.polygons, risk, None if chance is None else f"{chance}% in {days} days"))
+        label = None if chance is None else f"{chance}% in {days} days{old}"
+        areas.append(L.OutlookArea(system.polygons, risk, label))
     return tuple(areas)
+
+
+def outlook_centres(outlook: Outlook | None) -> tuple[tuple[str, LatLon], ...]:
+    """Where each outlook area with a shape sits, as a plain label and the middle of its bounding box, in the order
+    the outlook lists them. The longitudes of a shape that crosses the antimeridian are taken on one side of it, and the
+    result is wrapped back into -180..180."""
+    if outlook is None:
+        return ()
+    found: list[tuple[str, LatLon]] = []
+    for system in outlook.gis.systems:
+        ring = [p for polygon in system.polygons for p in polygon]
+        if ring:
+            first = ring[0][1]
+            lons = [((p[1] - first + 180.0) % 360.0) - 180.0 for p in ring]
+            lat = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
+            lon = first + (min(lons) + max(lons)) / 2.0
+        elif system.point is not None:
+            lat, lon = system.point
+        else:
+            continue
+        label = f"{system.basin_label} area {system.area_id}".strip()
+        found.append((label, (lat, ((lon + 180.0) % 360.0) - 180.0)))
+    return tuple(found)
 
 
 def _wind_kt_of(store: Store, station_id: str, now: datetime) -> tuple[float | None, bool]:
@@ -183,7 +232,7 @@ def map_scene(store: Store, now: datetime, selected: str | None, *, cursor: LatL
         buoys, tides = watchlist_marks(store, now)
     return L.MapScene(
         storms=storms,
-        outlook=outlook_areas(store.outlook),
+        outlook=outlook_areas(store.outlook, now),
         buoys=buoys,
         tide_gauges=tides,
         cursor=cursor,

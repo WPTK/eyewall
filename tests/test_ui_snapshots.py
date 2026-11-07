@@ -21,7 +21,7 @@ def _ready(app_factory, keys: tuple[str, ...] = (), *, storm: bool = False):  # 
         await settle(pilot)
         if storm:
             await into_the_storm(pilot)
-            pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
+        pilot.app.clear_notifications()  # toasts expire on the wall clock; a picture must not depend on it
         # Feed ages and the replay clock follow the wall clock; pin the top bar's slot so the picture is repeatable.
         pilot.app.health = lambda: Health("●", "data ok", "ok", "3m", "")  # type: ignore[attr-defined, method-assign]
         pilot.app.top_bar_extras = lambda: [("pinned", None)]  # type: ignore[attr-defined, method-assign]
@@ -51,6 +51,11 @@ def test_storm_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped
 
 def test_quiet_main_screen_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
     assert snap_compare(scripted_app(), terminal_size=(140, 45), run_before=_ready(scripted_app))
+
+
+def test_quiet_main_screen_large_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]
+    # The quiet-day map at 200x50 draws the shore at its full detail (#152).
+    assert snap_compare(scripted_app(), terminal_size=(200, 50), run_before=_ready(scripted_app))
 
 
 def test_nhc_text_snapshot(snap_compare) -> None:  # type: ignore[no-untyped-def]

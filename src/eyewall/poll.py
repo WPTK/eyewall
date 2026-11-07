@@ -217,6 +217,7 @@ class Poller:
         self._stations_at: dict[str, float] = {}
         self.fetch_counts: dict[str, int] = {}
         self.extra_buoys: set[str] = set()  # stations an open screen wants polled, watchlisted or not
+        self.extra_gauges: set[str] = set()  # the same for tide gauges
         self.feed_deadline = FEED_DEADLINE
         self._partial: dict[str, list[Event]] = {}  # by feed: the events it produced before a deadline cut it off
 
@@ -303,7 +304,7 @@ class Poller:
         if feed == protocol.BUOYS:
             return bool(self.store.storms or self.store.config.watchlist.ndbc or self.extra_buoys)
         if feed == protocol.TIDES:
-            return bool(self.store.storms or self.store.config.watchlist.coops)
+            return bool(self.store.storms or self.store.config.watchlist.coops or self.extra_gauges)
         return bool(self.store.storms)
 
     # ---- running ----------------------------------------------------------------------------------------------
@@ -349,6 +350,7 @@ class Poller:
         results: list[PollResult] = []
         self.polling = True
         try:
+            self._prune_tides()
             first, *others = protocol.FEEDS  # storms first: its answer decides whether the others apply
             if self._due(first):
                 results.append(await self.poll_feed(first))
@@ -614,21 +616,36 @@ class Poller:
             raise latest_error
         return events
 
-    async def _poll_tides(self) -> list[Event]:
-        await self._refresh_catalog(
-            "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
-        )
+    def _wanted_gauges(self) -> dict[str, TideStation]:
+        """The gauges to poll: those of an open gauge page first, then the storms' nearest, then the watchlist's, all
+        under one cap."""
         gauges: dict[str, TideStation] = {}
+        known = {g.id.upper(): g for g in self.store.tide_stations}
+        for station_id in sorted(self.extra_gauges):
+            if (gauge := known.get(station_id.upper())) is not None and len(gauges) < MAX_TIDE_GAUGES:
+                gauges[gauge.id] = gauge
         ranked = [[e.station for e in self.store.nearby_tides(sid)] for sid in self.store.storms]
         for station in _by_rank(ranked):
             if len(gauges) >= MAX_TIDE_GAUGES:
                 break
             gauges[station.id] = station
-        known = {g.id.upper(): g for g in self.store.tide_stations}
         for station_id in self.store.config.watchlist.coops:
             gauge = known.get(station_id.upper())
             if gauge is not None and len(gauges) < MAX_TIDE_GAUGES:
                 gauges.setdefault(gauge.id, gauge)  # the storm's gauges and the watchlist share the same cap
+        return gauges
+
+    def _prune_tides(self, gauges: dict[str, TideStation] | None = None) -> None:
+        """Drop the series nobody refreshes any more, or whose newest level is long past, so they do not read as "No
+        report". An open gauge page keeps its series however old. Runs every tick, not only with the tides feed on."""
+        wanted = self._wanted_gauges() if gauges is None else gauges
+        self.store.prune_tides({g.upper() for g in wanted}, self.source.now(), {g.upper() for g in self.extra_gauges})
+
+    async def _poll_tides(self) -> list[Event]:
+        await self._refresh_catalog(
+            "coops", bool(self.store.tide_stations), self.source.coops_stations, self.store.apply_tide_stations
+        )
+        gauges = self._wanted_gauges()
         semaphore = asyncio.Semaphore(MAX_IN_FLIGHT)
 
         async def one(index: int, station: TideStation) -> None:
@@ -643,6 +660,7 @@ class Poller:
 
         failures: list[Exception] = []
         await asyncio.gather(*(one(i, g) for i, g in enumerate(gauges.values())))
+        self._prune_tides(gauges)
         if gauges and (down := _feed_failure(failures, len(gauges))) is not None:
             raise down
         return []

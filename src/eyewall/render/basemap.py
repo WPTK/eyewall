@@ -1,26 +1,32 @@
 """The base map: land, coastline and borders from the vendored Natural Earth data.
 
-Every view draws the Natural Earth 1:10 million data (simplified to 0.002 degrees) except basin-scale views (0.3
-degrees per dot or coarser), where a coarser copy of the same data (0.03 degrees, every island kept) is drawn instead.
-Borders, and the state and province lines with them, appear with the detailed data only. Land is a flat background
-tint of the cells inside it, so the coast stays a crisp line and no fill dots speckle the map. The raster for a
-viewport is kept, because a map that only gains a cursor or a new advisory should not redraw the coast.
+Every view draws the Natural Earth 1:10 million data in one of three simplifications of it: 0.002 degrees (about 220 m)
+below DETAIL_SWITCH degrees per dot, 0.009 (about 1 km, what linecast draws) up to MID_SWITCH, and 0.03 for a
+hemisphere. Each keeps every island. Borders, and the state and province lines with them, appear with the full tier
+only. Land is a flat background tint of the cells inside it; a cell the shore runs through shows its land-side dots
+instead (a part-cell glyph), so the shore follows the data to the dot and not to the cell. A tier whose files cannot be
+read is replaced by the next coarser one, with a warning in the log. The raster for a viewport is kept, because a map
+that only gains a cursor or a new advisory should not redraw the coast.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache, lru_cache
 
-from eyewall.mapdata.loader import KIND_STATE, MapLayer, MapPath, load_layer
+from eyewall.mapdata.loader import DATA_EAST, DATA_NORTH, DATA_SOUTH, KIND_STATE, MapLayer, MapPath, load_layer
 from eyewall.palette import BORDER, COAST, LAND, STATE_LINE
 from eyewall.render.canvas import Canvas, Dot, Mode, Priority
 from eyewall.render.projection import Bounds, Viewport
 
-# Degrees per dot at which the map switches from the detailed data to the coarse copy. A 120 by 40 cell view of the Gulf
-# of Mexico and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
+# Degrees per dot at which the map stops drawing borders and keeps only the lakes a few cells across. A 120 by 40 cell
+# view of the Gulf of Mexico and the Caribbean is about 0.16 degrees per dot; the whole basin is about one.
 DETAIL_SWITCH = 0.3
+# The 1 km tier takes over from the full one here, and the 0.03 degree tier from it at MID_SWITCH. Measured, an
+# uncached draw of a basin at 0.28 degrees per dot is 0.4 s on the full tier and 0.2 s on the 1 km one.
+MID_SWITCH = 0.6  # a quiet-day map is at most 0.5; the 0.03 degree tier is for a hemisphere
 MIN_LAKE_CELLS = 3  # at basin scale a lake narrower than this, in cells, is left out
 
 
@@ -33,11 +39,36 @@ class BasemapStyle:
 
 
 DEFAULT_STYLE = BasemapStyle()
+TIERS = ("", "_mid", "_lo")  # finest first
+log = logging.getLogger(__name__)
 
 
 def is_detailed(viewport: Viewport) -> bool:
     """Whether this zoom draws the full 10 m data rather than the coarse whole-basin copy."""
     return viewport.deg_per_dot < DETAIL_SWITCH
+
+
+def tier_suffix(viewport: Viewport) -> str:
+    """The layer-name suffix of the data tier this zoom draws: '' (full), '_mid' (1 km) or '_lo'."""
+    if viewport.deg_per_dot < DETAIL_SWITCH:
+        return ""
+    return "_mid" if viewport.deg_per_dot < MID_SWITCH else "_lo"
+
+
+@cache
+def usable_tier(suffix: str) -> str:
+    """The tier to draw when this one is wanted: itself, or the next coarser one whose three layers load."""
+    failure: Exception | None = None
+    for candidate in TIERS[TIERS.index(suffix) :]:
+        try:
+            for kind in ("coast", "land", "lakes"):
+                _indexed(kind + candidate)
+        except (ValueError, OSError) as error:
+            log.warning("map data tier %r cannot be read (%s); drawing a coarser one", candidate or "full", error)
+            failure = error
+            continue
+        return candidate
+    raise failure or ValueError("no map data tier")
 
 
 def ensure_matches(canvas: Canvas, viewport: Viewport) -> None:
@@ -65,6 +96,15 @@ def _visible(name: str, viewport: Viewport) -> list[MapPath]:
     return [path for bounds, path in _indexed(name)[1] if view.intersects(bounds)]
 
 
+def _cut_lines(viewport: Viewport) -> tuple[float, float, float]:
+    """Where the vendored data stops, in dots: the northern and southern cuts and the Atlantic-side cut."""
+    return (
+        viewport.to_dot(DATA_NORTH, 0.0)[1],
+        viewport.to_dot(DATA_SOUTH, 0.0)[1],
+        viewport.to_dot(0.0, DATA_EAST)[0],
+    )
+
+
 def _cells_across(ring: Sequence[Dot], canvas: Canvas) -> float:
     """The longer side of a ring's bounding box, in cells."""
     xs, ys = [p[0] for p in ring], [p[1] for p in ring]
@@ -83,17 +123,20 @@ def draw_basemap(
     """Draw land fill, coastline and borders onto a canvas, in that order."""
     ensure_matches(canvas, viewport)
     fine = is_detailed(viewport)
-    suffix = "" if fine else "_lo"
+    suffix = usable_tier(tier_suffix(viewport))
     # Lakes are rings inside the land, so the even-odd fill leaves them as holes. At basin scale only the lakes a few
     # cells across are kept: the rest would be dark pinpricks and stray dots in the land.
-    lakes = (
-        [viewport.project_path(path.points) for path in _visible("lakes" + suffix, viewport)] if land or coast else []
-    )
+    lakes = []
+    if land or coast:
+        lakes = [viewport.project_path(path.points) for path in _visible("lakes" + suffix, viewport)]
     if not fine:
         lakes = [ring for ring in lakes if _cells_across(ring, canvas) >= MIN_LAKE_CELLS]
     if land:
         canvas.tint_polygon(
-            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes, style.land
+            [viewport.project_path(path.points) for path in _visible("land" + suffix, viewport)] + lakes,
+            style.land,
+            style.coast if coast else None,
+            cut=_cut_lines(viewport),
         )
     if coast:
         for path in _visible("coast" + suffix, viewport):

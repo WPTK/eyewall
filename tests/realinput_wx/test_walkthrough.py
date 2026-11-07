@@ -75,7 +75,7 @@ def _click_palette(app: App, entry: str) -> None:
 
 
 MOUSE_SCREENS = [
-    ("Storm", lambda a: a.click_text("enter open ›"), lambda a: a.crumb() == ["Home", "Erin"]),
+    ("Storm", lambda a: a.click_text("open ›"), lambda a: a.crumb() == ["Home", "Erin"]),
     ("Buoys and gauges", lambda a: _click_cell(a, "b"), lambda a: a.crumb()[-1] == "Buoys and gauges"),
     ("NHC text", lambda a: _click_cell(a, "t"), lambda a: a.crumb()[-1].startswith("NHC text")),
     (
@@ -120,9 +120,14 @@ def test_reach_every_screen_by_mouse(app: App, checks) -> None:  # type: ignore[
         ok = app.crumb()[-1].startswith("Buoy 4")
     checks("mouse reaches Station by clicking a list row", ok, app.dump())
     home(app)
-    # M is "go to the map" (focus the Home map; the footer then shows esc back): the palette is the mouse path
+    # "Go to the map" from another screen returns to Home, whose footer then ends with q quit: the palette is the mouse path
+    app.key("b")
     _click_palette(app, "Go to the map")
-    checks("mouse reaches the map focus (palette: Go to the map)", "esc back" in app.lines()[-1], app.dump())
+    checks(
+        "mouse reaches the map (palette: Go to the map)",
+        app.crumb() == ["Home"] and app.lines()[-1].rstrip().endswith("q quit"),
+        app.dump(),
+    )
     home(app)
     checks("mouse walk: no contradictions", not app.violations, "\n".join(app.violations))
     checks.done()

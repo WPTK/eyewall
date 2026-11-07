@@ -17,6 +17,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
+from typing import Any
 
 from textual import events
 from textual.app import App
@@ -241,8 +242,17 @@ class EyewallApp(App[bool]):
 
     def on_resize(self, event: events.Resize) -> None:
         if too_small(*event.size) and not isinstance(self.screen, TooSmallScreen):
+            self.clear_notifications()  # a toast drawn over the size message would hide the size
             self.push_screen(TooSmallScreen())
         self.call_after_refresh(self._for_screens, "refresh_status")  # the one place every bar follows a resize
+
+    def notify(self, message: str, **kwargs: Any) -> None:
+        """Toasts are not shown while the terminal is too small: they would be drawn over the size message. A toast
+        dropped there is gone, not queued: the news is on the screens (the alert log, the cards) when the terminal
+        grows back."""
+        if self.screen_stack and isinstance(self.screen_stack[-1], TooSmallScreen):
+            return
+        super().notify(message, **kwargs)
 
     async def on_event(self, event: events.Event) -> None:
         if isinstance(event, events.Key | events.MouseEvent):
@@ -417,14 +427,24 @@ class EyewallApp(App[bool]):
             return
         self.push_screen(StationScreen(kind, station_id))
 
-    async def show_on_map(self, lat: float, lon: float, label: str) -> None:
-        """`m` on a station: back to the map, centred on it."""
+    async def show_on_map(self, lat: float, lon: float, label: str, mark: tuple[str, str] | None = None) -> None:
+        """`m` on a station: back to the map, centred on it, with its mark highlighted. `mark` is the station's kind
+        (`ndbc` or `coops`) and id."""
         while len(self.screen_stack) > 1:
             await self.pop_screen()
         root = self.screen
         if isinstance(root, MainScreen):
             root.show_map()
             root.map_view.center_on((lat, lon))
+            if mark is not None:
+                kind, station_id = ("buoy" if mark[0] == "ndbc" else "gauge"), mark[1].lower()
+                found = next(
+                    (m for m, _ in root.map_view.hits.drawn if m.kind == kind and m.id.lower() == station_id), None
+                )
+                root.map_view.focus_mark(found)
+                if found is None:
+                    self.notify(f"{label} is not drawn: turn its layer on with l.", timeout=4, markup=False)
+                    return
             self.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
 
     def open_graphics(self, storm_id: str | None) -> None:
@@ -760,6 +780,20 @@ class EyewallApp(App[bool]):
             self.replay_over = False
             self.poller.refresh()
             await self.poller.tick()
+            self._for_screens("refresh_status")  # the clock moved: redraw the text that shows its age
+
+
+def run_checked(app: App[Any]) -> Any:
+    """Run `app` and raise what crashed it. Textual handles an exception from a handler, widget or worker itself: it
+    prints its own traceback, sets the return code to 1 and lets `run()` return, so the caller's crash log never sees
+    it. Raising here sends that exception to the same place as one that leaves `run()`."""
+    result = app.run()
+    crashed = getattr(app, "_exception", None)
+    if crashed is not None:
+        raise crashed
+    if app.return_code:
+        raise RuntimeError(f"the app exited with code {app.return_code}")
+    return result
 
 
 def run_app(
@@ -775,28 +809,32 @@ def run_app(
     inline = (
         load_inline(config.graphics.inline) if inline_wanted(config.graphics.inline, config.map.glyph_set) else None
     )
-    wants_replay = EyewallApp(
-        config,
-        source,
-        inline=inline,
-        state_dir=state_dir,
-        closer=closer,
-        config_path=config_path,
-        file_config=file_config,
-        config_file_broken=config_file_broken,
-    ).run()
+    wants_replay = run_checked(
+        EyewallApp(
+            config,
+            source,
+            inline=inline,
+            state_dir=state_dir,
+            closer=closer,
+            config_path=config_path,
+            file_config=file_config,
+            config_file_broken=config_file_broken,
+        )
+    )
     if wants_replay:  # `R` on a quiet day: the live app has closed its feeds, now the recording gets the terminal
         try:
             demo = ReplaySource(resolve_bundle(DEMO))
         except BundleError as exc:
             print(f"eyewall: {exc}", file=sys.stderr)
             return
-        EyewallApp(
-            config,
-            demo,
-            inline=inline,
-            state_dir=None,  # a replay never reads or writes the real seen set
-            config_path=config_path,
-            file_config=file_config,
-            config_file_broken=config_file_broken,
-        ).run()
+        run_checked(
+            EyewallApp(
+                config,
+                demo,
+                inline=inline,
+                state_dir=None,  # a replay never reads or writes the real seen set
+                config_path=config_path,
+                file_config=file_config,
+                config_file_broken=config_file_broken,
+            )
+        )

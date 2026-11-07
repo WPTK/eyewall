@@ -42,6 +42,11 @@ is nearly certain about, so a report means a real leftover.
   whose memory passes 2 GB is killed with exit status 70 and no summary (a watcher thread in `tests/conftest.py`;
   `resource.setrlimit` does not exist on Windows). The full suite peaks under 700 MB and its slowest test takes about 11 s. `EYEWALL_TEST_RSS_MB=0` turns the memory
   watch off and `--timeout=0` the time limit.
+- `tests/test_chaos_ui.py` is a hypothesis state machine (keys, resizes, clicks, feed swaps) over the headless app. The
+  default run is short; `EYEWALL_FUZZ=long` runs about ten times more, unseeded, for tag time. Known defects it found
+  are strict xfails in `tests/test_chaos_known_ui.py` and `tests/test_chaos_faults.py`; delete the mark in the fix's PR.
+- `python scripts/soak.py --hours 6 [--source replay|wire]` runs the headless app on a fake clock and reports growth in
+  handles, sockets, threads, temp files and heap. It is not part of CI.
 - HTTP is mocked with `respx`. Time comes from `eyewall.clock.VirtualClock`, never from `sleep`.
 - Tests marked `live` call the real NOAA services and run only with `EYEWALL_LIVE=1`:
 
@@ -111,7 +116,7 @@ The config file lives in the platform config directory (on Windows, `%LOCALAPPDA
 ## Terminals
 
 Windows Terminal, iTerm2, Kitty and most modern terminals render the braille map and Unicode symbols. The legacy Windows
-console (conhost) does not, so use `--glyphs ascii` there. Inline images need a terminal that supports Sixel or the Kitty
+console (conhost) does not, so eyewall switches to the ASCII set there on its own. `--glyphs unicode` forces the Unicode set. Inline images need a terminal that supports Sixel or the Kitty
 graphics protocol; everywhere else eyewall falls back to a drawn approximation.
 
 ## Working on NOAA data
@@ -186,6 +191,6 @@ Before announcing a release, run the binary for each platform on a machine with 
 3. `eyewall --demo` opens at 80x24 and at 120x30: the map draws, Space pauses, `Enter` opens the Storm screen, `t`, `b`
    and `g` open the NHC text, Buoys and gauges and Pictures screens, a click on a buoy opens its Station screen, `?`
    shows help, `Esc` goes back and `q` restores the terminal. `eyewall --demo --summary` prints sentences and exits 0.
-4. Live, `eyewall` starts and either lists the active storms or says `No tropical cyclones`; out of season that is
-   correct. Offline it still opens and marks the feeds as waiting.
+4. Live, `eyewall` starts and either lists the active storms or says `No tropical storms in the Atlantic right now.` (naming the basins you watch); out of
+   season that is correct. Offline it still opens and marks the feeds as waiting.
 5. The binaries are not signed, so expect the SmartScreen and Gatekeeper prompts described in `install.md`.

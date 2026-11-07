@@ -10,10 +10,13 @@ from rich.segment import Segment
 from rich.style import Style as RichStyle
 from textual.strip import Strip
 
+from eyewall.palette import BACKGROUND
 from eyewall.render.canvas import Canvas
 from eyewall.render.canvas import Style as CanvasStyle
 
-PLAIN = RichStyle()
+# These widgets draw on the app's own background, never the terminal's, so every colour keeps its contrast on a light
+# terminal as well as a dark one.
+PLAIN = RichStyle(bgcolor=BACKGROUND)
 
 
 def blank(width: int) -> Strip:
@@ -37,16 +40,16 @@ def rich_style(style: CanvasStyle) -> RichStyle:
     """A canvas style as a rich one. Bold, underline and reverse survive `NO_COLOR`, so they carry cues color cannot."""
     return RichStyle(
         color=style.fg,
-        bgcolor=style.bg,
+        bgcolor=style.bg or BACKGROUND,
         bold=style.bold or None,
         underline=style.underline or None,
         reverse=style.reverse or None,
     )
 
 
-def reverse_cell(strip: Strip, col: int) -> Strip:
-    """The strip with one cell in reverse video: the focus ring on a mark. Reverse survives `NO_COLOR`."""
+def reverse_cell(strip: Strip, col: int, *, ring: bool = True) -> Strip:
+    """The strip with one cell marked: in reverse video for the focus ring, bold and underlined for the selected
+    storm. Both survive `NO_COLOR`."""
+    mark = RichStyle(reverse=True) if ring else RichStyle(bold=True, underline=True)
     before, cell, after = strip.divide([col, col + 1, strip.cell_length])
-    return Strip(
-        [*before, *(Segment(seg.text, (seg.style or PLAIN) + RichStyle(reverse=True)) for seg in cell), *after]
-    )
+    return Strip([*before, *(Segment(seg.text, (seg.style or PLAIN) + mark) for seg in cell), *after])

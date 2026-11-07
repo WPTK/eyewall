@@ -50,16 +50,8 @@ PANELS = (
 
 # (panel, mode or "*", check) -> issue: checks that fail today.
 XFAIL: dict[tuple[str, str, str], str] = {
-    ("tides", "*", "says"): "#170",  # gauge rows wait forever and never say why
-    ("pictures", "*", "says"): "#166",  # the Pictures screen is blank with no message
     **{
         (panel.name, mode, "retry"): "#164" for panel in PANELS for mode in ("timeout", "http-500", "bad-json", "empty")
-    },
-    **{
-        (panel, mode, check): "#171"
-        for panel in ("pictures",)
-        for mode in ("bad-json", "empty")
-        for check in ("header", "feeds", "retry")
     },
 }
 

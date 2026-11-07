@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.10.0] - 2026-11-03
+
+### Changed
+
+- Draw wind radii as geodesic shapes that stay correct across the antimeridian ([`94232ff`](https://github.com/WPTK/eyewall/commit/94232ff), [#196](https://github.com/WPTK/eyewall/pull/196))
+- Make the map and the card list agree on the selected storm, mark the station you came from on the map, and give the full-screen map and outlook areas outside the Atlantic a key, a footer cell and a menu entry ([`021fbc6`](https://github.com/WPTK/eyewall/commit/021fbc6), [#209](https://github.com/WPTK/eyewall/pull/209))
+- Make every drawn colour reach its contrast limit on any terminal ([`c1fd07f`](https://github.com/WPTK/eyewall/commit/c1fd07f), [#206](https://github.com/WPTK/eyewall/pull/206))
+- Add full jitter to the retry back-off for fetches so retries do not arrive together ([`b61216d`](https://github.com/WPTK/eyewall/commit/b61216d), [#194](https://github.com/WPTK/eyewall/pull/194))
+- Treat a response with no usable content as a failed fetch, not an empty answer ([`157c782`](https://github.com/WPTK/eyewall/commit/157c782), [#201](https://github.com/WPTK/eyewall/pull/201))
+- Let the refresh key cut through a failing feed's back-off, and say so when `--summary` finds a feed that failed ([`63aa784`](https://github.com/WPTK/eyewall/commit/63aa784), [#204](https://github.com/WPTK/eyewall/pull/204))
+- Add the platform install steps and the supported systems to the README, and fix the cold start ([`093c7b8`](https://github.com/WPTK/eyewall/commit/093c7b8), [#211](https://github.com/WPTK/eyewall/pull/211))
+- Check the wheel on every platform, include package data in the self-test and verify the published release ([`5b0b3ed`](https://github.com/WPTK/eyewall/commit/5b0b3ed), [#208](https://github.com/WPTK/eyewall/pull/208))
+- Test the dependency floors and Python 3.14, audit dependencies and check the changelog on every pull request ([`77c0743`](https://github.com/WPTK/eyewall/commit/77c0743), [#213](https://github.com/WPTK/eyewall/pull/213))
+- Fit the quiet Home map to the Atlantic, tint the land, name fewer places and show a short footer ([`2671fff`](https://github.com/WPTK/eyewall/commit/2671fff), [#154](https://github.com/WPTK/eyewall/pull/154)). Country borders no longer draw on the zoomed-out quiet Home map (0.3 degrees per dot or coarser), where they were a few dots wide
+- Make `eyewall --summary` exit 1 when any feed fails, not only the storm feed ([`63aa784`](https://github.com/WPTK/eyewall/commit/63aa784), [#204](https://github.com/WPTK/eyewall/pull/204))
+- Require `pyproj>=3.6.1` and `shapely>=2.0.6` (which brings in numpy) for the geodesic wind radii and map clipping, so the install is larger. The downloadable macOS binaries need macOS 14 or later, because the pyproj wheels they bundle do; a pip install works on older versions
+
+### Added
+
+- Flag rapid intensification ([`a1a0a4d`](https://github.com/WPTK/eyewall/commit/a1a0a4d), [#195](https://github.com/WPTK/eyewall/pull/195))
+- Count down to the next full NHC advisory in the top bar ([`0d847c5`](https://github.com/WPTK/eyewall/commit/0d847c5), [#198](https://github.com/WPTK/eyewall/pull/198))
+- Say what each basin expects on the quiet Home screen ([`f89e591`](https://github.com/WPTK/eyewall/commit/f89e591), [#200](https://github.com/WPTK/eyewall/pull/200))
+- Detect terminal capabilities once, restore the terminal cleanly after a crash, write a crash log and add `eyewall --diagnose`; `--glyphs unicode` forces Unicode when detection says the terminal cannot draw it ([`a1bae47`](https://github.com/WPTK/eyewall/commit/a1bae47), [#202](https://github.com/WPTK/eyewall/pull/202))
+- Add a 1 km map data tier so basin views meet the linecast bar ([`4478814`](https://github.com/WPTK/eyewall/commit/4478814), [#215](https://github.com/WPTK/eyewall/pull/215))
+- Add chaos tests for the UI state machine and NOAA faults, a soak script, and fuzz tests for the NHC, NDBC and CO-OPS parsers with a tag-time fuzz job ([`f6bc7d2`](https://github.com/WPTK/eyewall/commit/f6bc7d2), [#199](https://github.com/WPTK/eyewall/pull/199); [`76129d5`](https://github.com/WPTK/eyewall/commit/76129d5), [#212](https://github.com/WPTK/eyewall/pull/212))
+- Add the real-input test suite, the UAT input inventory and state matrix, and the tui-test kit with scripted checks ([`2a32dfa`](https://github.com/WPTK/eyewall/commit/2a32dfa), [#160](https://github.com/WPTK/eyewall/pull/160); [`4f8e833`](https://github.com/WPTK/eyewall/commit/4f8e833), [#161](https://github.com/WPTK/eyewall/pull/161); [`9f51c19`](https://github.com/WPTK/eyewall/commit/9f51c19), [#168](https://github.com/WPTK/eyewall/pull/168); [`cffea3c`](https://github.com/WPTK/eyewall/commit/cffea3c), [#176](https://github.com/WPTK/eyewall/pull/176))
+
+### Fixed
+
+- Drop stale CO-OPS tide series and show the age of an old outlook GIS answer ([`f4c7340`](https://github.com/WPTK/eyewall/commit/f4c7340), [#203](https://github.com/WPTK/eyewall/pull/203))
+- Say why the pictures and tide gauge rows are empty ([`f27387d`](https://github.com/WPTK/eyewall/commit/f27387d), [#205](https://github.com/WPTK/eyewall/pull/205))
+- Stop pyshp's method caches from keeping every parsed GIS zip in memory ([`cf40837`](https://github.com/WPTK/eyewall/commit/cf40837), [#207](https://github.com/WPTK/eyewall/pull/207))
+- Keep the alert log's cursor and scroll position across a poll ([`001b837`](https://github.com/WPTK/eyewall/commit/001b837), [#193](https://github.com/WPTK/eyewall/pull/193))
+- Keep focus on a visible widget on the Buoys and Station screens ([`4a32e5a`](https://github.com/WPTK/eyewall/commit/4a32e5a), [#191](https://github.com/WPTK/eyewall/pull/191))
+- Never open a screen over the too-small notice, and keep toasts off it ([`54433e7`](https://github.com/WPTK/eyewall/commit/54433e7), [#190](https://github.com/WPTK/eyewall/pull/190); [`c418ff6`](https://github.com/WPTK/eyewall/commit/c418ff6), [#210](https://github.com/WPTK/eyewall/pull/210))
+- Reject out-of-range coordinates and non-list containers in the NHC parsers ([`e04cfff`](https://github.com/WPTK/eyewall/commit/e04cfff), [#178](https://github.com/WPTK/eyewall/pull/178))
+- Draw sub-cell shorelines and keep a quiet-day map no coarser than 0.5 degrees per dot ([`ce1e132`](https://github.com/WPTK/eyewall/commit/ce1e132), [#214](https://github.com/WPTK/eyewall/pull/214))
+- Highlight the first layer when the layers menu opens, so `space` works before an arrow key, and redraw the Home storm text every second and on pause or step, so its age matches the Storm screen ([#218](https://github.com/WPTK/eyewall/pull/218))
+
 ## [0.9.0] - 2026-11-01
 
 ### Changed
@@ -149,6 +188,7 @@
 - Add `docs/install.md`, `docs/replay.md` and `docs/smoke-test.md`, and rewrite the README with screenshots from the replay ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 - Add `scripts/screenshots.py`, which writes the README screenshots from the recording ([`946af8c`](https://github.com/WPTK/eyewall/commit/946af8c), [#15](https://github.com/WPTK/eyewall/pull/15))
 
+[0.10.0]: https://github.com/WPTK/eyewall/releases/tag/v0.10.0
 [0.9.0]: https://github.com/WPTK/eyewall/releases/tag/v0.9.0
 [0.8.5]: https://github.com/WPTK/eyewall/releases/tag/v0.8.5
 [0.8.4]: https://github.com/WPTK/eyewall/releases/tag/v0.8.4

@@ -23,6 +23,7 @@ from textual.events import Resize
 from textual.widgets import Static
 
 from eyewall.clock import format_age
+from eyewall.render.hits import Mark
 from eyewall.sources import protocol
 from eyewall.state.events import current_adv
 from eyewall.state.store import StormState
@@ -34,7 +35,6 @@ from eyewall.ui.widgets.side_panel import Block, Line, SidePanel, View
 from eyewall.ui.words import outlook as outlook_words
 from eyewall.ui.words import storm as storm_words
 
-REFRESH_SECONDS = 30.0  # the ages on the cards move without a new poll
 MEDIUM_FROM = (100, 30)  # columns and rows at which the column beside the map fits
 LARGE_FROM = (160, 40)
 STRIP_ROWS = 4  # the most the strip under the map takes on a small terminal
@@ -172,6 +172,7 @@ class MainScreen(ChromeScreen):
         self._full_map = False
         self.tier = Tier.SMALL
         self.states: tuple[StormState, ...] = ()
+        self._area = ""  # the outlook area `w` last centred the map on
 
     @property
     def quiet(self) -> bool:
@@ -195,7 +196,6 @@ class MainScreen(ChromeScreen):
         self.query_one("#side", SidePanel).set_builder(lambda width: side_blocks(self._view(), width))
         self.query_one("#strip", SidePanel).set_builder(lambda width: strip_blocks(self._view(), width))
         self._apply_tier(self.size.width, self.size.height)
-        self.set_interval(REFRESH_SECONDS, self._paint)
         self.map_view.focus()
         self.refresh_data()
 
@@ -221,7 +221,17 @@ class MainScreen(ChromeScreen):
         ids = [s.storm.id for s in self.states]
         if eye.selected not in ids:
             eye.selected = ids[0] if ids else None
-        self.map_view.set_scene(adapt.map_scene(eye.store, eye.now(), eye.selected), self._fit_points())
+        self.map_view.set_scene(
+            adapt.map_scene(eye.store, eye.now(), eye.selected), self._fit_points(), quiet_focus=self._quiet_focus()
+        )
+        many = len(ids) > 1  # the list shows a selected row only then, so the map shows a selected mark only then
+        self.map_view.selectable = frozenset(ids) if many else frozenset()  # only listed storms select on a click
+        self.map_view.set_selected(Mark("storm", eye.selected) if many and eye.selected else None)
+        self._paint()
+
+    def refresh_status(self) -> None:
+        """The app calls this once a second and on pause or step: the bars and the storm text move with the clock."""
+        super().refresh_status()
         self._paint()
 
     def _paint(self) -> None:
@@ -231,6 +241,14 @@ class MainScreen(ChromeScreen):
         self.query_one("#lead", Static).update(lead_text(view))
         self.query_one("#side", SidePanel).repaint()
         self.query_one("#strip", SidePanel).repaint()
+
+    def _quiet_focus(self) -> tuple[float, float] | None:
+        """Where the quiet-day map centers when it cannot show its basin whole; None with a storm selected."""
+        eye = self.eye
+        state = eye.store.storms.get(eye.selected or "")
+        if state is not None and adapt.storm_scene(state).near_extent():
+            return None
+        return adapt.quiet_focus(eye.basin_view, eye.store)
 
     def _fit_points(self) -> list[tuple[float, float]]:
         eye = self.eye
@@ -253,6 +271,28 @@ class MainScreen(ChromeScreen):
         self.refresh_data()
         self.map_view.fit()
 
+    def on_map_view_mark_selected(self, message: MapView.MarkSelected) -> None:
+        """A click on a storm's mark selects it, so its card in the list is the highlighted one."""
+        message.stop()
+        self.eye.selected = message.mark.id
+        self.refresh_data()
+
+    def _areas(self) -> tuple[tuple[str, tuple[float, float]], ...]:
+        return adapt.outlook_centres(self.eye.store.outlook)
+
+    def action_area(self) -> None:
+        """`w`: centre the map on the next outlook area, wherever it is: an area outside the Atlantic view is otherwise
+        only text in the panel."""
+        areas = self._areas()
+        if not areas:
+            return
+        labels = [label for label, _ in areas]
+        index = (labels.index(self._area) + 1) % len(areas) if self._area in labels else 0
+        label, point = areas[index]
+        self._area = label
+        self.map_view.center_on(point)
+        self.eye.notify(f"{label} is at the centre of the map.", timeout=3, markup=False)
+
     def action_outlook(self) -> None:
         """`O`: the tropical weather outlook text, every area with its exact chances."""
         eye = self.eye
@@ -268,12 +308,14 @@ class MainScreen(ChromeScreen):
 
     def _outlook_areas(self) -> int:
         eye = self.eye
-        return outlook_words.area_count(eye.store.outlook, eye.basin_view)
+        return outlook_words.area_count(eye.store.outlook, eye.basin_view, eye.now())
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Enter is offered only when it does something: a storm to open, or on a quiet day an area to read about."""
         if action == "open_storm" and self.eye.selected is None:
             return self._outlook_areas() > 0
+        if action == "area":
+            return bool(self._areas())
         return super().check_action(action, parameters)
 
     def action_buoys(self) -> None:

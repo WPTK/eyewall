@@ -37,6 +37,7 @@ class LayerMenu(ModalScreen[MapOptions | None]):
         box = self.query_one("#layer-box")
         box.border_title = "Map layers"
         box.border_subtitle = "space toggles, enter applies"
+        self.query_one("#layer-list", SelectionList).highlighted = 0  # so space works before any arrow key
 
     def action_apply(self) -> None:
         chosen = set(self.query_one("#layer-list", SelectionList).selected)

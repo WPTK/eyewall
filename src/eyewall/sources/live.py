@@ -203,12 +203,9 @@ class LiveSource:
     async def satellite(self, storm: Storm) -> tuple[FloaterProduct, ...]:
         """The newest GEOCOLOR still and loop. The product listing is large, so only a storm NESDIS lists is asked."""
         async with self._feed(protocol.SATELLITE):
-            try:
-                if storm.id.upper() not in await self._floater_storms():
-                    return ()
-                product = await self._floater_product(storm.id, SATELLITE_PRODUCT)
-            except ParseError:
+            if storm.id.upper() not in await self._floater_storms():
                 return ()
+            product = await self._floater_product(storm.id, SATELLITE_PRODUCT)
             return () if product is None else (product,)
 
     async def satellite_product(self, storm: Storm, product: str) -> FloaterProduct | None:
@@ -307,7 +304,10 @@ class LiveSource:
 
     async def alerts(self) -> AlertsResult:
         async with self._feed(protocol.ALERTS):
-            return (await self.nhc.fetch_alerts()).value or AlertsResult()
+            response = await self.nhc.fetch_alerts()
+            if response.value is None:  # no body is a failed fetch, not "no alerts"
+                raise HttpError(response.fetched.url, response.fetched.status)
+            return response.value
 
     # ---- buoys and tide gauges --------------------------------------------------------------------------------
 

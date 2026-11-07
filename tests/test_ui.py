@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 from textual import events
-from textual.widgets import Tabs
+from textual.widgets import SelectionList, Tabs
 
 from eyewall.app import EyewallApp
 from eyewall.config import Config
@@ -125,6 +125,17 @@ async def test_overlay_screens_open_and_close() -> None:
         assert isinstance(app.screen, LayerMenu)
         await press(pilot, "escape")
         assert isinstance(app.screen, MainScreen)
+
+
+async def test_layer_menu_opens_with_a_row_highlighted_so_space_works_at_once() -> None:
+    app = replay_app()
+    async with running(app) as pilot:
+        await press(pilot, "l")
+        menu = app.screen.query_one("#layer-list", SelectionList)
+        assert menu.highlighted == 0
+        before = set(menu.selected)
+        await press(pilot, "space")
+        assert set(menu.selected) != before
 
 
 async def test_layer_menu_toggle_reaches_the_map() -> None:

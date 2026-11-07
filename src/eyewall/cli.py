@@ -6,11 +6,13 @@ import argparse
 import asyncio
 import contextlib
 import importlib.resources
+import signal
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
-from eyewall import __version__
+from eyewall import __version__, diagnostics, terminal
 from eyewall.config import BASINS, GLYPH_SETS, Config, LoadResult, apply_overrides, default_path, load_config
 from eyewall.models.events import Event
 
@@ -48,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="print what is happening in plain sentences once, then exit; works with --replay and --demo",
     )
     parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="print version, Python, OS, terminal capabilities, file locations and feed reachability, then exit",
+    )
+    parser.add_argument(
         "--until",
         metavar="WHEN",
         help="with --headless or --summary, stop at this moment: +12h, +90m or an ISO timestamp (replay: from the "
@@ -81,6 +88,39 @@ def _load(args: argparse.Namespace) -> LoadResult:
     return load_config(args.config, use_file=not args.no_config)
 
 
+MAPDATA_FILES = tuple(
+    f"{name}.bin"
+    for name in (
+        "coast",
+        "coast_mid",
+        "coast_lo",
+        "land",
+        "land_mid",
+        "land_lo",
+        "lakes",
+        "lakes_mid",
+        "lakes_lo",
+        "borders",
+        "places",
+    )
+)
+
+
+def missing_package_data() -> list[str]:
+    """The data files an installation must carry (map data, attribution, stylesheet, demo recording) not found."""
+    from eyewall.sources.bundle import BundleError, demo_bundle_path
+
+    root = importlib.resources.files("eyewall")
+    wanted = [("mapdata", name) for name in MAPDATA_FILES] + [("mapdata", "ATTRIBUTION.md"), ("ui", "app.tcss")]
+    missing = [f"{folder}/{name}" for folder, name in wanted if not root.joinpath(folder, name).is_file()]
+    try:
+        if not (demo_bundle_path() / "manifest.toml").is_file():
+            missing.append("demo/erin2025/manifest.toml")
+    except BundleError:
+        missing.append("demo/erin2025")
+    return missing
+
+
 def _selftest() -> int:
     """Parse the bundled recording, draw a map frame and a wind radii shape through the whole stack; 0 if all worked."""
     try:
@@ -92,8 +132,8 @@ def _selftest() -> int:
         from eyewall.sources.bundle import demo_bundle_path
         from eyewall.sources.replay import ReplaySource
 
-        if not (Path(str(importlib.resources.files("eyewall"))) / "ui" / "app.tcss").is_file():
-            raise RuntimeError("the packaged stylesheet ui/app.tcss is missing")
+        if missing := missing_package_data():
+            raise RuntimeError(f"package data is missing: {', '.join(missing)}")
         result = asyncio.run(run_replay(ReplaySource(demo_bundle_path()), Config(), None, "+1h"))
         frame = basemap_canvas(Viewport(25.0, -75.0, 0.05, 80, 24)).to_text()
         if radii_shape((20.0, 179.5), (150.0, 150.0, 150.0, 150.0)) is None:  # pyproj's PROJ data and shapely's GEOS
@@ -235,8 +275,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.selftest:
         return _selftest()
+    caps = terminal.detect()  # the one place the terminal's abilities are decided
     loaded = _load(args)
-    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=args.glyphs)
+    # Without an explicit --glyphs, a terminal that cannot draw braille and box characters gets the ASCII set.
+    glyphs = args.glyphs or (None if caps.unicode else "ascii")
+    config = apply_overrides(loaded.config, basins=args.basin, glyph_set=glyphs)
+    if args.diagnose:
+        try:
+            for line in diagnostics.diagnose_lines(caps, config, _config_path(args), loaded, args.state_dir):
+                print(line)
+        except KeyboardInterrupt:
+            return 130
+        return 0
     warnings = loaded.warnings
     for warning in warnings:
         print(f"eyewall: config: {warning}", file=sys.stderr)
@@ -255,4 +305,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 input("eyewall: press Enter to start with these settings ")
         except KeyboardInterrupt:
             return 130
-    return _run_app(args, config, loaded)
+    return _guarded(lambda: _run_app(args, config, loaded), caps)
+
+
+def _guarded(run: Callable[[], int], caps: terminal.Capabilities) -> int:
+    """Run the full-screen app; after an abnormal exit (crash, Ctrl-C, SIGTERM/SIGHUP) switch the terminal's modes
+    off once, and log an unexpected crash. A clean exit is left to Textual."""
+    terminal.apply(caps)
+    abnormal = True
+    previous: dict[int, Any] = {}
+    if sys.platform != "win32":
+
+        def terminate(signum: int, _frame: Any) -> None:
+            raise SystemExit(128 + signum)
+
+        for name in ("SIGTERM", "SIGHUP"):
+            with contextlib.suppress(ValueError, OSError):  # not the main thread
+                previous[getattr(signal, name)] = signal.signal(getattr(signal, name), terminate)
+    try:
+        code = run()
+        abnormal = False
+        return code
+    except KeyboardInterrupt:
+        return 130
+    except SystemExit:
+        raise
+    except BaseException as exc:  # includes asyncio.CancelledError: a crash log beats a bare traceback
+        print(diagnostics.crash_message(exc, diagnostics.write_crash_log(exc, caps)), file=sys.stderr)
+        return 1
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if abnormal:
+            terminal.restore()

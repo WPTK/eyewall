@@ -65,7 +65,7 @@ def test_live_resizes_recover(app: App, checks) -> None:  # type: ignore[no-unty
         )
         checks(
             f"Home {cols}x{rows}: side panel appears when wide enough",
-            (cols >= 100) == ("NAMED STORMS" in app.text()),
+            (cols >= 100) == ("Named storms" in app.text()),
             app.dump(),
         )
     ticks(app, 2.0)

@@ -1,6 +1,7 @@
 """The outlook sentences, from the saved gtwo shapefiles and outlook texts."""
 
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,6 +11,11 @@ from eyewall.providers.nhc.two import parse_gtwo_zip
 from eyewall.ui.words.outlook import outlook_sentences
 from tests.nhc_fixtures import gis_bytes, nhc_text
 from tests.words_support import assert_traces
+
+
+def at(outlook: Outlook | None) -> datetime:
+    """The moment the shapes were issued: the sentences are judged as the outlook arrives."""
+    return (outlook and outlook.gis.issued) or datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def gis(name: str) -> OutlookGis:
@@ -26,14 +32,14 @@ def texts(outlook: Outlook, words):
 
 def test_one_area_reads_as_a_single_sentence_with_an_before_80():
     outlook = Outlook(gis=gis("gtwo_20250926.zip"))
-    assert texts(outlook, outlook_sentences(outlook, ("AL", "EP", "CP"))) == [
+    assert texts(outlook, outlook_sentences(outlook, ("AL", "EP", "CP"), at(outlook))) == [
         "NHC is watching 1 area in the Atlantic: a 90% chance it forms within 7 days, and 80% within 2 days."
     ]
 
 
 def test_several_areas_get_a_lead_and_a_line_each():
     outlook = Outlook(gis=gis("gtwo_20250919.zip"))
-    assert texts(outlook, outlook_sentences(outlook, ("AL", "EP", "CP"))) == [
+    assert texts(outlook, outlook_sentences(outlook, ("AL", "EP", "CP"), at(outlook))) == [
         "NHC is watching 3 areas.",
         "Atlantic area 1: a 20% chance it forms within 7 days, and 0% within 2 days.",
         "Pacific area 1: a 60% chance it forms within 7 days, and 60% within 2 days.",
@@ -43,15 +49,15 @@ def test_several_areas_get_a_lead_and_a_line_each():
 
 def test_only_areas_in_the_enabled_basins_are_counted():
     outlook = Outlook(gis=gis("gtwo_20250919.zip"))
-    assert texts(outlook, outlook_sentences(outlook, ("AL",))) == [
+    assert texts(outlook, outlook_sentences(outlook, ("AL",), at(outlook))) == [
         "NHC is watching 1 area in the Atlantic: a 20% chance it forms within 7 days, and 0% within 2 days."
     ]
-    assert texts(outlook, outlook_sentences(outlook, ("CP",)))[0] == "NHC is watching 2 areas."
+    assert texts(outlook, outlook_sentences(outlook, ("CP",), at(outlook)))[0] == "NHC is watching 2 areas."
 
 
 def test_with_no_area_the_outlook_summary_is_said_as_issued():
     outlook = Outlook(texts=two("at_20261031"), gis=gis("gtwo_20261031.zip"))
-    assert texts(outlook, outlook_sentences(outlook, ("AL",))) == [
+    assert texts(outlook, outlook_sentences(outlook, ("AL",), at(outlook))) == [
         "Tropical cyclone formation is not expected during the next 7 days."
     ]
 
@@ -59,20 +65,20 @@ def test_with_no_area_the_outlook_summary_is_said_as_issued():
 def test_the_same_summary_is_not_said_twice():
     one = two("at_20261031")[0]
     outlook = Outlook(texts=(one, replace(one, office="again")))
-    assert len(outlook_sentences(outlook, ("AL",))) == 1
+    assert len(outlook_sentences(outlook, ("AL",), at(outlook))) == 1
 
 
 def test_when_the_shapes_did_not_arrive_the_text_areas_are_used():
     outlook = Outlook(texts=two("ep_20261031"))
-    assert texts(outlook, outlook_sentences(outlook, ("EP",))) == [
+    assert texts(outlook, outlook_sentences(outlook, ("EP",), at(outlook))) == [
         "NHC is watching 1 area in the East Pacific: a 40% chance it forms within 7 days, and 0% within 2 days."
     ]
 
 
 def test_text_areas_of_a_basin_that_is_off_are_left_out():
     outlook = Outlook(texts=two("at_special_20261021"))
-    assert texts(outlook, outlook_sentences(outlook, ("EP",))) == ["No outlook has been issued yet."]
-    both = texts(outlook, outlook_sentences(outlook, ("AL",)))
+    assert texts(outlook, outlook_sentences(outlook, ("EP",), at(outlook))) == ["No outlook has been issued yet."]
+    both = texts(outlook, outlook_sentences(outlook, ("AL",), at(outlook)))
     assert both[0] == "NHC is watching 2 areas."
     assert both[1] == "Atlantic area 1: a 70% chance it forms within 7 days, and 70% within 2 days."
 
@@ -85,4 +91,4 @@ def test_text_areas_of_a_basin_that_is_off_are_left_out():
     ],
 )
 def test_no_outlook_yet(outlook, expected):
-    assert [w.text for w in outlook_sentences(outlook, ("AL",))] == [expected]
+    assert [w.text for w in outlook_sentences(outlook, ("AL",), at(outlook))] == [expected]

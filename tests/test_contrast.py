@@ -8,10 +8,8 @@ lines, braille map dots, marks) are decorative and need 3:1. `dim` text is blend
 
 The command palette and search overlays are left out: a modal dims the screen under it on purpose.
 
-A style below its limit that exists today is listed in `KNOWN` against its issue (`LIGHT_ISSUE` for the whole light
-profile without a background). `test_no_new_low_contrast_style` fails for any other, and `test_a_known_style_still_fails`
-fails when a listed one no longer does, so the entry gets removed
-with the fix (a strict xfail in two halves, since the set of styles is found by rendering, not written down).
+Every style must reach its limit on both profiles. The map, charts and picture gallery paint the app's own background, so
+the terminal's never shows through and the two profiles agree. The only exception is in `EXEMPT`, with its reason.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ import asyncio
 
 import pytest
 
+from eyewall import palette
 from tests.uat.inventory.registry import World
 from tests.uat.inventory.worlds import SCREEN_NAMES, launch
 
@@ -28,27 +27,12 @@ PROFILES = {"dark": (0, 0, 0), "light": (255, 255, 255)}
 TEXT, DECORATIVE = 4.5, 3.0
 IMAGE_CELLS = set("▀▄█ ")  # half and full blocks: how a picture is drawn without graphics support
 RGB = tuple[int, int, int]
-Style = tuple[RGB | None, RGB | None, bool, str]  # foreground, background, dim, kind ("text" or "glyph")
+Style = tuple[RGB | None, RGB | None, bool, str]  # foreground, background, dim, kind ("text", "glyph" or "edge")
 
-# (foreground, background) -> issue; a background of None is the terminal's own. Explicit backgrounds are the same on
-# both profiles, so one entry covers both.
-KNOWN: dict[tuple[RGB, RGB | None], str] = {
-    ((125, 138, 153), (55, 65, 78)): "#172",  # secondary text in the selected buoy row
-    ((125, 138, 153), (28, 36, 46)): "#172",
-    ((154, 164, 178), (58, 70, 88)): "#172",  # place names on the map
-    ((155, 77, 255), (13, 17, 23)): "#172",  # Storm Surge Warning in the legend
-    ((12, 20, 30), (18, 26, 36)): "#173",  # rules, tracks and dim map layers
-    ((18, 26, 36), (28, 36, 46)): "#173",
-    ((12, 20, 30), (23, 33, 45)): "#173",
-    ((34, 39, 45), (13, 17, 23)): "#173",
-    ((74, 86, 104), (58, 70, 88)): "#173",
-    ((43, 53, 68), None): "#173",
-    ((110, 127, 148), (58, 70, 88)): "#173",
-    ((46, 94, 145), (18, 26, 36)): "#173",
-    ((43, 90, 139), (13, 17, 23)): "#173",
-}
-# Any style drawn without a background of its own on the light profile: the colours were picked for dark terminals.
-LIGHT_ISSUE: str = "#174"
+# The half-block edges of a layer checkbox are decoration: the box's state is its X and the row's highlight. Scoped to the
+# layers screen and those two glyphs, so the same colours anywhere else are still held to the limit.
+EDGE_SCREEN, EDGE_GLYPHS = "layers", set("▐▌")
+STATES = ("demo", "quiet", "stale", "busy", "error")
 
 
 def luminance(rgb: RGB) -> float:
@@ -77,7 +61,7 @@ def contrast(style: Style, profile: str) -> float:
 
 
 def limit(style: Style) -> float:
-    return TEXT if style[3] == "text" else DECORATIVE
+    return {"text": TEXT, "glyph": DECORATIVE}.get(style[3], 0.0)
 
 
 def _rgb(colour) -> RGB:  # type: ignore[no-untyped-def]
@@ -87,7 +71,7 @@ def _rgb(colour) -> RGB:  # type: ignore[no-untyped-def]
 
 async def _collect() -> dict[Style, str]:
     styles: dict[Style, str] = {}
-    for state in ("demo", "quiet"):
+    for state in STATES:
         async with launch(World(state, (120, 40))) as w:
             for name in SCREENS:
                 screen = await w.goto(name)
@@ -95,12 +79,15 @@ async def _collect() -> dict[Style, str]:
                     for seg in strip:
                         st = seg.style
                         text = seg.text.strip()
-                        if not text or st is None or st.color is None:
+                        if not text or st is None:
                             continue
                         if set(text) <= IMAGE_CELLS:  # picture pixels (half-cell fallback), not text
                             continue
                         kind = "text" if any(ch.isalnum() for ch in text) else "glyph"
-                        key: Style = (_rgb(st.color), _rgb(st.bgcolor) if st.bgcolor else None, bool(st.dim), kind)
+                        if name == EDGE_SCREEN and set(text) <= EDGE_GLYPHS:
+                            kind = "edge"
+                        fg = _rgb(st.color) if st.color else _hex(palette.FOREGROUND)  # unset: the theme's text colour
+                        key: Style = (fg, _rgb(st.bgcolor) if st.bgcolor else None, bool(st.dim), kind)
                         styles.setdefault(key, f"{state}:{name} {text[:16]!r}")
     return styles
 
@@ -112,14 +99,6 @@ def styles() -> dict[Style, str]:
     if not _STYLES:
         _STYLES.update(asyncio.run(_collect()))
     return _STYLES
-
-
-def issue_of(profile: str, style: Style) -> str | None:
-    fg, bg = style[0], style[1]
-    assert fg is not None
-    if profile == "light" and bg is None:
-        return LIGHT_ISSUE
-    return KNOWN.get((fg, bg))
 
 
 def failing(profile: str) -> dict[Style, float]:
@@ -138,23 +117,106 @@ def _colour(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
 
 
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(900)
 @pytest.mark.parametrize("profile", sorted(PROFILES))
 def test_no_new_low_contrast_style(profile: str) -> None:
-    new = {s: c for s, c in failing(profile).items() if issue_of(profile, s) is None}
+    new = failing(profile)
     assert not new, "\n".join(describe(profile, new))
 
 
-@pytest.mark.timeout(300)
-def test_a_known_style_still_fails() -> None:
-    low = {(s[0], s[1]) for profile in PROFILES for s in failing(profile)}
-    fixed = [f"{key} ({issue}) now passes: remove it from KNOWN" for key, issue in KNOWN.items() if key not in low]
-    if not any(s[1] is None for s in failing("light")):
-        fixed.append(f"no style without a background fails on light: remove LIGHT_ISSUE ({LIGHT_ISSUE})")
-    assert not fixed, fixed
+def _contrast_of(fg: str, bg: str | None = None) -> list[float]:
+    """The ratios of every rendered style with this foreground (and background, when given), on both profiles."""
+    want_fg = _hex(fg)
+    return [
+        contrast(s, profile)
+        for s in styles()
+        for profile in PROFILES
+        if s[0] == want_fg and (bg is None or s[1] == _hex(bg))
+    ]
+
+
+def _hex(value: str) -> RGB:
+    return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+
+
+@pytest.mark.timeout(900)
+def test_172_secondary_text_place_names_and_surge_legend() -> None:
+    # Secondary text (selected and other buoy rows), place names on land, and the Storm Surge Warning legend entry.
+    for colour in (palette.DIM, palette.MAP_LABEL, palette.WATCH_WARNING_COLORS[palette.WatchWarning.SURGE_WARNING]):
+        ratios = _contrast_of(colour)
+        assert ratios, f"{colour} is no longer drawn: update this test"
+        assert min(ratios) >= TEXT, (colour, min(ratios))
+    # The selected buoy row is a lighter background than the app's: DIM is drawn there too.
+    assert any(s[1] not in (None, _hex(palette.BACKGROUND)) for s in styles() if s[0] == _hex(palette.DIM))
+    assert ratio(_hex(palette.MAP_LABEL), _hex(palette.LAND)) >= TEXT  # place names over land
+
+
+@pytest.mark.timeout(900)
+def test_173_rules_tracks_and_map_lines_reach_3_to_1() -> None:
+    for colour in (palette.STATE_LINE, palette.BORDER, palette.CHART_GRID):
+        ratios = _contrast_of(colour)
+        assert ratios, f"{colour} is no longer drawn: update this test"
+        assert min(ratios) >= DECORATIVE, (colour, min(ratios))
+    for profile in PROFILES:
+        low = [s for s in styles() if s[3] == "glyph" and contrast(s, profile) < DECORATIVE]
+        assert low == [], profile
+
+
+@pytest.mark.timeout(900)
+def test_174_nothing_depends_on_the_terminal_background() -> None:
+    bare = [s for s in styles() if s[1] is None]
+    assert not bare, [f"{s[0]} {styles()[s]}" for s in bare]
+    assert {s: contrast(s, "dark") for s in styles()} == {s: contrast(s, "light") for s in styles()}
 
 
 def test_the_ratio_matches_the_wcag_examples() -> None:
     assert ratio((0, 0, 0), (255, 255, 255)) == pytest.approx(21.0)
     assert ratio((119, 119, 119), (255, 255, 255)) == pytest.approx(4.48, abs=0.01)  # #777 on white: just short of AA
     assert ratio((255, 255, 255), (255, 255, 255)) == pytest.approx(1.0)
+
+
+# Each palette colour against every background it is drawn on, at the limit its use needs (text 4.5, a mark 3).
+SURFACES = {"background": palette.BACKGROUND, "surface": palette.SURFACE, "panel": palette.PANEL}
+TEXT_COLOURS = {
+    "FOREGROUND": palette.FOREGROUND,
+    "DIM": palette.DIM,
+    "HEADING": palette.HEADING,
+    "NEUTRAL": palette.NEUTRAL,
+    "GOOD": palette.GOOD,
+    "WARN": palette.WARN,
+    "BAD": palette.BAD,
+    "INFO": palette.INFO,
+    "STALE": palette.STALE,  # a stale station's id label
+    "MAP_LABEL": palette.MAP_LABEL,
+    **{f"{k.value}": c for k, c in palette.WATCH_WARNING_COLORS.items()},
+    **{f"{k.value}": c for k, c in palette.CATEGORY_COLORS.items()},
+    **{f"risk {k}": c for k, c in palette.RISK_COLORS.items()},
+    **{f"freshness {k}": cue.color for k, cue in palette.FRESHNESS_CUES.items()},
+}
+MAP_BACKGROUNDS = {"background": palette.BACKGROUND, "land": palette.LAND}
+MARK_COLOURS = {
+    "STALE": palette.STALE,
+    "STATE_LINE": palette.STATE_LINE,
+    "BORDER": palette.BORDER,
+    "COAST": palette.COAST,
+    "FIELD_EDGE": palette.FIELD_EDGE,
+    "BUOY": palette.BUOY,
+    "TIDE_GAUGE": palette.TIDE_GAUGE,
+}
+
+
+@pytest.mark.parametrize("surface", sorted(SURFACES))
+@pytest.mark.parametrize("name", sorted(TEXT_COLOURS))
+def test_text_colour_reaches_4_5_on_every_surface(name: str, surface: str) -> None:
+    assert ratio(_hex(TEXT_COLOURS[name]), _hex(SURFACES[surface])) >= TEXT
+
+
+@pytest.mark.parametrize("surface", sorted(MAP_BACKGROUNDS))
+@pytest.mark.parametrize("name", sorted(MARK_COLOURS))
+def test_mark_colour_reaches_3_on_the_map(name: str, surface: str) -> None:
+    assert ratio(_hex(MARK_COLOURS[name]), _hex(MAP_BACKGROUNDS[surface])) >= DECORATIVE
+
+
+@pytest.mark.parametrize("name", ["CHART_GRID"])
+def test_chart_furniture_reaches_3_on_the_background(name: str) -> None:
+    assert ratio(_hex(getattr(palette, name)), _hex(palette.BACKGROUND)) >= DECORATIVE

@@ -77,7 +77,7 @@ def card(state: StormState, view: View, width: int, *, selected: bool, lead: boo
 
 
 def card_blocks(view: View, width: int) -> list[Block]:
-    """The NAMED STORMS heading and one card per storm. The selected storm's card is the last to be dropped; the other
+    """The Named storms heading and one card per storm. The selected storm's card is the last to be dropped; the other
     cards go before the first warning does."""
     if not view.states:
         return []

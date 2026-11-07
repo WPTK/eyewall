@@ -1,0 +1,78 @@
+name: Install docs
+
+# The README install routes, run as written on a clean runner per OS. The git URL routes install this exact commit
+# instead of the default branch; everything else is the README command. The binary route runs only when a release
+# asset exists, so it is not required before the first release.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['README.md', 'docs/install.md', 'pyproject.toml', '.github/workflows/install-docs.yml']
+  push:
+    branches: [main]
+    paths: ['README.md', 'docs/install.md', 'pyproject.toml', '.github/workflows/install-docs.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  routes:
+    name: Install routes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    env:
+      SPEC: git+https://github.com/${{ github.repository }}@${{ github.sha }}
+    steps:
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: pip route
+        shell: bash
+        run: |
+          python -m venv pipenv
+          pipenv/*/python -m pip install "$SPEC"
+          pipenv/*/eyewall --selftest
+      - name: uv tool route
+        shell: bash
+        run: |
+          python -m pip install uv
+          uv tool install "$SPEC"
+          uv tool run --from "$SPEC" eyewall --version
+          "$(uv tool dir --bin)/eyewall" --selftest
+      - name: pipx route
+        shell: bash
+        run: |
+          python -m pip install pipx
+          pipx install "$SPEC"
+          pipx run --spec "$SPEC" eyewall --version
+          "$HOME/.local/bin/eyewall" --selftest
+      - name: binary route, when a release asset exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Windows-*) asset=eyewall-windows-x86_64.exe ;;
+            Linux-X64) asset=eyewall-linux-x86_64.tar.gz ;;
+            macOS-ARM64) asset=eyewall-macos-arm64.tar.gz ;;
+            *) echo "no binary for this runner"; exit 0 ;;
+          esac
+          mkdir eyewall-bin
+          if ! gh release download --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir eyewall-bin; then
+            echo "no release asset yet: skipped"
+            exit 0
+          fi
+          if [ "$RUNNER_OS" = Windows ]; then
+            eyewall-bin/"$asset" --selftest
+          else
+            tar -C eyewall-bin -xzf eyewall-bin/"$asset"
+            eyewall-bin/eyewall --selftest
+          fi

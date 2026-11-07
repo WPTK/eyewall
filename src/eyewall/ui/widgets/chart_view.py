@@ -11,7 +11,7 @@ from textual.message import Message
 from textual.strip import Strip
 from textual.widget import Widget
 
-from eyewall.palette import DIM
+from eyewall.palette import BACKGROUND, DIM
 from eyewall.render.canvas import Mode
 from eyewall.render.chart import ChartSeries, Tick, gutter_width, render_chart
 from eyewall.ui.widgets.strips import blank, canvas_strips
@@ -86,7 +86,7 @@ class ChartView(Widget):
         if not self._has_data():
             empty = blank(width)
             message = f" {self._title}: {self._empty}"[:width]
-            line = Strip([Segment(message, RichStyle(color=DIM))], width)
+            line = Strip([Segment(message, RichStyle(color=DIM, bgcolor=BACKGROUND))], width)
             return [line] + [empty] * (height - 1)
         canvas = render_chart(
             self._series,

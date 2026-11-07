@@ -41,7 +41,7 @@ BACKGROUND = "#0d1117"
 SURFACE = "#121a24"
 PANEL = "#17212d"
 FOREGROUND = "#e6edf5"
-DIM = "#7d8a99"
+DIM = "#aab4c0"
 ACCENT = "#ffa63d"
 GOOD = "#3ddc84"
 WARN = "#ffe94a"
@@ -53,19 +53,20 @@ NEUTRAL = "#9aa4b2"
 # Map tones that carry no meaning of their own.
 LAND = "#3a4658"
 COAST = "#9fb3c8"
-BORDER = "#6e7f94"
-STATE_LINE = "#4a5668"
+BORDER = "#9ba9bb"
+STATE_LINE = "#8794a6"
 CONE_FILL = "#66758a"
 CONE_EDGE = "#e6edf5"
 MAP_LABEL = "#c9d3de"
 BUOY = "#8fd3ff"
 TIDE_GAUGE = "#5eead4"
-STALE = "#566273"
+STALE = "#a9b6c6"
 CURSOR = "#ffffff"
+FIELD_EDGE = "#8fb5df"  # the edge of an unfocused input or list; Textual's own is a shade off the field
 
 # Chart furniture and series.
 CHART_AXIS = "#8b98a9"
-CHART_GRID = "#2b3544"
+CHART_GRID = "#667487"
 CHART_TEXT = "#c9d3de"
 PRESSURE_SERIES = INFO
 WIND_SERIES = GOOD
@@ -157,7 +158,7 @@ WATCH_WARNING_CUES: dict[WatchWarning, Cue] = {
     WatchWarning.HURRICANE_WATCH: Cue("#ff8fcf", "Hurricane Watch", "Hurr watch", pattern=DASHED),
     WatchWarning.HURRICANE_WARNING: Cue("#ff4d4d", "Hurricane Warning", "Hurr warning"),
     WatchWarning.SURGE_WATCH: Cue("#c8a8ff", "Storm Surge Watch", "Surge watch", pattern=SPARSE),
-    WatchWarning.SURGE_WARNING: Cue("#9b4dff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
+    WatchWarning.SURGE_WARNING: Cue("#ac63ff", "Storm Surge Warning", "Surge warning", pattern=DOTTED),
 }
 WATCH_WARNING_COLORS: dict[WatchWarning, str] = {kind: cue.color for kind, cue in WATCH_WARNING_CUES.items()}
 

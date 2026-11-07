@@ -42,8 +42,8 @@ async def test_no_orphan_checks() -> None:
 
 
 def readme_keys() -> set[str]:
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-    section = text.split("## Mouse and keyboard")[1].split("## First run")[0]
+    text = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    section = text.split("## Mouse and keyboard")[1].split("## Command line")[0]
     tokens: set[str] = set()
     for line in section.splitlines():
         if not line.startswith("|") or set(line) <= set("|- "):
@@ -59,8 +59,8 @@ def readme_keys() -> set[str]:
 
 
 def readme_flags() -> set[str]:
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-    section = text.split("## Command line")[1].split("## Replay")[0]
+    text = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    section = text.split("## Command line")[1].split("## Color and glyphs")[0]
     return set(re.findall(r"(?<![\w-])(--[a-z][a-z-]*)", section))
 
 
@@ -81,10 +81,10 @@ async def test_claims_traceability() -> None:
     for token in sorted(readme_keys()):
         token = claims.KEY_ALIASES.get(token, token)
         if f"key-{token}" not in table:
-            problems.append(f"README key `{token}` has no claim in tests/uat/inventory/claims.py")
+            problems.append(f"docs/usage.md key `{token}` has no claim in tests/uat/inventory/claims.py")
     for flag in sorted(readme_flags()):
         if f"flag-{flag}" not in table:
-            problems.append(f"README flag {flag} has no claim")
+            problems.append(f"docs/usage.md flag {flag} has no claim")
     for cid, (_, proofs) in table.items():
         if not proofs:
             problems.append(f"claim {cid} has no proof")

@@ -22,7 +22,6 @@ from eyewall.palette import (
     CURSOR,
     FORECAST_DASH,
     MAP_LABEL,
-    NEUTRAL,
     RING_PATTERNS,
     STALE,
     TIDE_GAUGE,
@@ -187,7 +186,7 @@ class MapStyle:
     cone_shade: Shade = Shade.SPARSE
     cone_edge: str = CONE_EDGE
     label: str = MAP_LABEL
-    place: str = NEUTRAL
+    place: str = MAP_LABEL
     buoy: str = BUOY
     tide_gauge: str = TIDE_GAUGE
     stale: str = STALE

@@ -1,0 +1,32 @@
+name: Changelog
+
+# CHANGELOG.md must agree with the code: its newest release is __version__, with entries and a release link
+# (scripts/check_changelog.py, the same check release.yml runs at the tag). This is a consistency check only; it does not
+# require a pull request to touch the changelog, because the entry is written in the release pull request.
+# It is its own workflow so that it runs for a change to CHANGELOG.md alone, which ci.yml skips with its Markdown filter.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python scripts/check_changelog.py

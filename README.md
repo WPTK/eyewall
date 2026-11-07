@@ -1,193 +1,113 @@
 # eyewall
 
 eyewall is a terminal app that tracks tropical cyclones in the Atlantic, East Pacific and Central Pacific. It reads free
-NOAA feeds, so it needs no account or key. It opens on a map of the storms, says in plain words what each one is doing,
-and shows the buoys and tide gauges near it.
+NOAA feeds, needs no account or key, and describes each storm, its watches and warnings, and the buoys and tide gauges
+near it in plain words.
 
-![The main screen at 140x42: the map with the forecast cone and track, and beside it the storm cards, watches and warnings, and nearby stations](docs/images/dashboard.png)
+![The main screen at 140x42: the map with the forecast cone and track, and beside it the storm cards, watches and warnings, and nearby stations](https://raw.githubusercontent.com/WPTK/eyewall/main/docs/images/dashboard.png)
 
 eyewall is not an official forecast or warning. For decisions about life or property, follow the National Hurricane
 Center and your local emergency officials.
 
-## What you see
+## Prerequisites
 
-The map is the first screen, at every terminal size. Active storms are drawn on it with their forecast cone, track, wind
-rings and the watches and warnings along the coast. Beside it (or under it, on a small terminal) are a card for each
-named storm, the watches and warnings in the National Hurricane Center's own words, what NHC is watching in the outlook,
-and the stations near the storm. With no storm active it says so in a sentence, shows the outlook areas and your own
-stations, and offers a replay of Hurricane Erin.
+- A terminal that draws Unicode, such as Windows Terminal, iTerm2, kitty or GNOME Terminal, at least 60 columns by 16
+  rows. Use 100x30 or larger to see the column of storm cards beside the map.
+- Windows 11, Linux with glibc 2.31 or newer, or macOS. Alpine and other musl systems are not supported. The macOS
+  binaries need macOS 14 on Apple silicon and macOS 15 on Intel. The pip routes below work on older versions.
+- For the PyPI routes, Python 3.12 or newer. The git routes also need `git`. The standalone binaries need none of these.
+- Network access to NOAA for live data. `--demo` works offline.
 
-From the map you reach six more screens. Each is a click or a key away, and `Esc` goes back.
+## Quickstart
 
-- **Storm** (`Enter` on a storm): a lead sentence, the watches and warnings and what they mean, wind, size, the forecast,
-  the chance of strong wind, when the next advisory is due and how old the data is.
-- **NHC text** (`t`): the public advisory, discussion, forecast/advisory, wind chances, outlook and past track, with the
-  issue time, the advisory number and a banner when the text is out of date.
-- **Buoys and gauges** (`b`): two tabs, the stations near the storm and the stations you follow. Sort by distance, wind
-  or name, and follow the ones you care about.
-- **Station** (open a buoy or tide gauge): a plain sentence, trends, pressure, wind and wave charts over 24, 48 or 72
-  hours, and a table of readings.
-- **Pictures** (`g`): NOAA's cone and satellite pictures for the storm, with loops.
-- **Help** (`?`): every key, and what the top bar says about the health of the feeds.
+Install from [PyPI](https://pypi.org/project/eyewall/) with any one of these commands:
 
-![Pressure, wind and wave charts for buoy 41001 with its latest readings](docs/images/buoy.png)
+```
+pipx install eyewall
+uv tool install eyewall
+python -m pip install eyewall
+```
 
-## Mouse and keyboard
-
-Everything can be clicked: a storm, a buoy or gauge on the map (with a chooser when marks overlap), a card's `open >`
-link, a row in a list, the breadcrumb in the top bar, every key in the footer and the feed-health slot. Drag the map to
-pan it. Everything can also be done from the keyboard. `Ctrl+P` opens a menu that lists every screen, action, storm and
-station, so you can find anything by typing part of its name.
-
-| Key | What it does |
-| --- | --- |
-| `?` | Help: every key |
-| `Ctrl+P` | The menu: every screen, action, storm and station |
-| `Esc`, `Backspace` | Go back one screen; close a dialog; leave the full-screen map |
-| `q` | Quit, from the first screen only |
-| `m` | Go to the map |
-| `D` | Feed health: each feed, its age and the next refresh |
-| `/` | Find a buoy or tide gauge by name or id |
-| `g` | Pictures for the selected storm |
-| `A` | The alert log |
-| `S` | Settings |
-| `r` | Refresh every feed now |
-| `u` | Cycle the units |
-
-On the map:
-
-| Key | What it does |
-| --- | --- |
-| `j`, `k`, `Enter` | Previous or next storm; open its page |
-| `1`, `2`, `3`, `a` | Atlantic, East Pacific, Central Pacific, all |
-| `b` | Buoys and tide gauges near the storm (your stations when there is none) |
-| `t` | The NHC text for the storm (the outlook when there is none) |
-| `O` | The tropical weather outlook text: each area and its chances |
-| `M` | Full-screen map; `Esc` leaves it |
-| `R` | Replay Hurricane Erin (only when nothing is active) |
-| `+`, `-` | Zoom in and out |
-| Arrow keys | Pan the map |
-| `f`, `c` | Fit the storm, center on it |
-| `n`, `N`, `Enter` | Step to the next or previous storm, buoy or gauge; open the marked one |
-| `l` | Map layers |
-
-On the other screens:
-
-| Screen | Key | What it does |
-| --- | --- | --- |
-| Storm | `b`, `t`, `g` | Buoys and gauges, NHC text, pictures |
-| Storm | `p` | The chance of storm-force wind at named places |
-| Storm | `Left`, `Right` | Previous or next storm |
-| NHC text | `Left`, `Right` | Previous or next product; Page Up and Page Down scroll |
-| Buoys and gauges | `Enter` | Open the highlighted station |
-| Buoys and gauges | `f`, `s`, `Tab` | Follow or stop following; change the order; switch tabs |
-| Station | `f`, `m` | Follow or stop following; show the station on the map |
-| Station | `Tab` | On a short screen, show the next chart |
-| Station | `h`, `r`, `i` | 24, 48 or 72 hours; charts or readings; how buoy winds differ from the storm's |
-| Pictures | `o`, `y` | Open the picture's address in a browser; copy it |
-| Pictures | `[`, `]`, `Space` | Step through a loop; play or pause |
-
-In a replay: `Space` pauses or resumes, `<` and `>` change the speed, and `[` and `]` step between advisories.
-
-The footer shows the keys that work on the current screen and always ends with `? help`.
-
-## Install
-
-Standalone binaries for Windows, Linux (x86_64 and arm64) and macOS (Apple silicon and Intel) are on the
-[releases page](https://github.com/WPTK/eyewall/releases). They need no Python and are not signed, so Windows and macOS
-may warn on first run; `docs/install.md` covers that and the checksums.
-
-With Python 3.12 or newer you can install from the repository:
+To try the development version instead, install from the default branch. This needs `git`:
 
 ```
 pipx install git+https://github.com/WPTK/eyewall
+uv tool install git+https://github.com/WPTK/eyewall
+python -m pip install git+https://github.com/WPTK/eyewall
 ```
 
-Or from a clone:
+If you prefer a standalone binary, download the file for your platform from the
+[releases page](https://github.com/WPTK/eyewall/releases). `docs/install.md` lists the file names, the checksums and
+the first-run warnings on Windows and macOS.
+
+Then run it:
 
 ```
-python -m venv .venv
-.venv/bin/python -m pip install -e .        # Windows: .venv\Scripts\python
-.venv/bin/python -m eyewall --demo
+eyewall --selftest     # check the installation; prints "selftest ok"
+eyewall --demo         # replay Hurricane Erin (August 2025); works offline
+eyewall                # live data
 ```
 
-`eyewall --selftest` checks an installation: it replays an hour of the bundled storm and prints `selftest ok`.
+If no storm is active when you run `eyewall`, it says so, and `R` starts the same Erin replay. In the demo, press
+`Enter` on the storm, then `t` for the NHC text and `b` for the buoys. To work on eyewall itself, read
+`docs/development.md`.
 
-## First run
+## Configuration
 
-Use a terminal that draws Unicode, such as Windows Terminal, iTerm2, kitty or GNOME Terminal, at least 60 columns by 16
-rows. At 80x24 the map fills the screen with a line about the storm and a line of warnings under it. At 100x30 or larger
-the column of cards appears beside the map. A smaller terminal gets a message that says what size eyewall needs instead
-of a broken screen.
+eyewall runs without a config file. To change a default, pass a flag or write `config.toml` in your user config
+directory. The first save from the settings screen (`S`, then `Ctrl+S`) creates the file. It lives at
+`%LOCALAPPDATA%\eyewall\config.toml` on Windows, `~/.config/eyewall/config.toml` on Linux (`$XDG_CONFIG_HOME` applies)
+and `~/Library/Application Support/eyewall/config.toml` on macOS. Flags override the file and are never saved.
+`docs/configuration.md` lists every key.
 
-```
-eyewall --demo
-```
+| Variable or flag | Default | Description |
+| --- | --- | --- |
+| `--config PATH` | the user config file | Read this settings file instead. |
+| `--no-config` | off | Ignore the settings file and use the built-in defaults. |
+| `--basin {AL,EP,CP}` | all three | Show one basin. Repeat the flag for more. |
+| `--glyphs {unicode,ascii}` | `unicode`, or `ascii` on a terminal that cannot draw braille | Symbol set for the map. |
+| `--state-dir DIR` | the user data directory | Where eyewall keeps the set of alerts it has shown. |
+| `NO_COLOR` | unset | Set it to draw without color. Every color cue also has a word, glyph or line pattern. |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY` | unset | Route NOAA requests through a proxy. |
+| `[poll]` | 5 to 30 minutes per feed | File only. Seconds between polls; the defaults are also the shortest allowed. |
+| `[units] preset` | `nautical` | `nautical`, `us` or `metric`. The `u` key cycles them. |
+| `[watchlist]` | three buoys, one tide gauge | Stations that always show, storm or no storm. |
+| `[alerts]` | all on except `bell` | Which events raise an alert. |
 
-Most of the year nothing is active, so `--demo` replays a recording of Hurricane Erin (August 2025) and is the quickest
-way to look around. Press `Enter` on the storm, then `t`, `b` and `g` to visit the other screens. Run `eyewall` with no
-flags for live data. If no storm is active it says so, and `R` starts the same Erin replay.
-
-## Command line
+## Usage and controls
 
 ```
 eyewall                           # live data
 eyewall --demo                    # the bundled Erin recording
 eyewall --replay DIR              # a recording of your own
 eyewall --basin AL                # only the Atlantic; repeat the flag for EP and CP
-eyewall --summary                 # print what is happening in plain sentences, then exit
 eyewall --glyphs ascii            # plain symbols for terminals that cannot draw braille
+eyewall --summary                 # print the situation in plain sentences, then exit
 eyewall --headless --until +12h   # no interface; print events as they happen
+eyewall --diagnose                # versions, terminal abilities, file paths and feed reachability
 ```
 
-Other flags: `--config PATH` and `--no-config` for the settings file, `--state-dir DIR` for where seen events are kept,
-`--version`, and `--help` for the full list.
+`--summary` exits 0 on success, 1 if any feed failed (stderr names it) and 2 for a bad argument or an unreadable
+replay. `eyewall --help` lists every flag.
 
-`eyewall --summary` prints the current storms, their watches and warnings, the nearby buoy and tide gauge reports and
-the outlook as plain sentences, once, and exits. It needs no terminal interface, so it works in a script, over SSH or
-with a screen reader. When any feed (storms, outlook, alerts, buoys, tide gauges, satellite) could not be fetched it
-says which data is unavailable, and exits with status 1, instead of reporting a quiet day. What was fetched is
-still printed on stdout, and a line on stderr names the feeds that failed. Status 2 means a bad argument or an
-unreadable replay. It also works with `--demo` and `--replay`, which fetch nothing and so report no failed feeds.
+You can click a storm, a buoy, a card or a footer key, and drag the map to pan it. The footer shows the keys that work
+on the current screen.
 
-## Replay
+| Key | What it does |
+| --- | --- |
+| `?` | Help: every key |
+| `Ctrl+P` | The menu: every screen, action, storm and station |
+| `Enter` | Open the selected storm, buoy or gauge |
+| `t`, `b`, `g` | NHC text, buoys and gauges, pictures |
+| `1`, `2`, `3`, `a` | Atlantic, East Pacific, Central Pacific, all enabled basins |
+| `+`, `-`, arrow keys | Zoom and pan the map |
+| `r` | Refresh every feed now |
+| `D`, `A` | Feed health, alert log |
+| `Esc` | Go back |
+| `q` | Quit, from the first screen only |
 
-`eyewall --demo` and `eyewall --replay DIR` drive the same screens from a recording, with the clock under your control.
-`docs/replay.md` explains how replays work and how to record another storm.
-
-## Colour
-
-Colour never carries a meaning alone. Every colour cue also has a word, a glyph, a line pattern or bold, underline or
-reverse video, so the screens read the same with `NO_COLOR` set: wind rings are dotted, dashed and solid for 34, 50 and
-64 knots, watches and warnings use different line styles, and the selected row has a pointer. The map key names each
-pattern. Use `--glyphs ascii` on terminals that cannot draw braille.
-
-Inline pictures need Sixel or the Kitty graphics protocol; elsewhere eyewall draws an approximation.
-
-## Data sources
-
-Everything comes from public NOAA services:
-
-- NHC and CPHC: advisories, forecast discussions, GIS products and storm graphics
-- NWS: watches, warnings and other alerts
-- NDBC: buoy observations
-- CO-OPS: tide gauge water levels
-- NESDIS: satellite imagery
-
-None of them needs a key. eyewall identifies itself with a User-Agent that carries no personal details, makes
-conditional requests, honors `Retry-After` and polls no faster than each feed allows. It fetches zips and pictures only
-when a storm's advisory number changes. The top bar shows how fresh the data is, and `D` lists each feed with its age.
-`docs/data-sources.md` lists the feeds, their formats and the polling cadence. A daily workflow checks that each feed
-still parses.
-
-## Documentation
-
-- `docs/install.md`: binaries, pipx, settings and the config file
-- `docs/replay.md`: replaying and recording storms
-- `docs/data-sources.md`: the NOAA feeds
-- `docs/development.md`: setup, checks, tests and releases
-
-Bugs and ideas go in the [issues](https://github.com/WPTK/eyewall/issues).
+`docs/usage.md` describes each screen and lists every key. `docs/replay.md` explains replays and how to record another
+storm. `docs/data-sources.md` lists the NOAA feeds.
 
 ## License
 

@@ -47,8 +47,8 @@ def parse_footer(line: str, y: int) -> list[FooterCell]:
 
 
 def parse_crumb(line: str) -> list[tuple[str, int]]:
-    """Segments of the breadcrumb in row 0 as (text, start column). The crumb ends at the first run of 3+ spaces."""
-    head = re.split(r"\s{3,}", line.strip("\x00"), maxsplit=1)[0] if line.strip() else ""
+    """Segments of the breadcrumb in row 0 as (text, start column). The crumb ends at the first run of 2+ spaces."""
+    head = re.split(r"\s{2,}", line.strip("\x00"), maxsplit=1)[0] if line.strip() else ""
     out, pos = [], 0
     for part in head.split(CRUMB_SEP):
         start = line.find(part, pos)
@@ -210,7 +210,7 @@ class App:
 
     def header_status(self) -> str:
         line = self.lines()[0]
-        parts = re.split(r"\s{3,}", line.strip(), maxsplit=1)
+        parts = re.split(r"\s{2,}", line.strip(), maxsplit=1)
         return parts[1].strip() if len(parts) > 1 else ""
 
     def has_dialog(self) -> bool:

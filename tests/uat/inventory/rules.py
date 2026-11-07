@@ -216,7 +216,7 @@ def storms_sentence(w: W, name: str, screen: Screen[Any], text: str) -> list[Vio
             name_ = s.storm.name.title() if s.storm.name else s.storm.id.upper()
             if name_ not in flat and not w.screen._full_map:
                 out.append(("storm-listed", f"{name_} is in the store but not on the Home screen"))
-        if not states and ("NAMED STORMS" in flat):
+        if not states and ("Named storms" in flat):
             out.append(("storm-listed", "a storm card heading with no storm"))
     return out
 

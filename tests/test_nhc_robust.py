@@ -7,7 +7,7 @@ import gzip
 import json
 
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from eyewall.providers.base import ParseError
@@ -17,7 +17,7 @@ from eyewall.providers.nhc.tcm import parse_tcm
 from eyewall.providers.nhc.text import parse_pws, parse_tcd, parse_tcp, parse_two
 from tests.nhc_fixtures import gis_bytes, nhc_bytes, nhc_text
 
-SETTINGS = settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+SETTINGS = settings()  # examples and deadline come from the profile in conftest.py
 
 TEXT_CASES = [
     (parse_tcm, "tcm/erin_030.txt"),
@@ -135,9 +135,12 @@ def test_a_zip_directory_with_an_unsupported_version_is_a_parse_error():
 @given(page=st.text(max_size=400))
 def test_graphics_pages_of_any_text_do_not_crash(page):
     graphics.parse_graphics_page(page, "https://www.nhc.noaa.gov/graphics_at1.shtml")
-    graphics.parse_floater_storms(page)
-    graphics.parse_floater_products(page)
-    graphics.parse_floater_listing(page, "al052025", "GEOCOLOR")
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_storms(page)
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_products(page)
+    with contextlib.suppress(ParseError):
+        graphics.parse_floater_listing(page, "al052025", "GEOCOLOR")
 
 
 @SETTINGS
