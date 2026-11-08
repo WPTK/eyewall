@@ -1,12 +1,14 @@
 name: Binaries
 
-# Builds the one-file binary on each platform with PyInstaller and runs `--selftest` against it. Called by release.yml on a
-# tag; also runs by hand (workflow_dispatch) and on pull requests that touch the build, so a broken spec shows up before
-# a release rather than during one. Nothing here publishes anything.
+# Builds the one-file binary on each platform with PyInstaller and runs it. Called by release.yml on a tag; also runs by
+# hand (workflow_dispatch) and on pull requests that touch the build, so a broken spec shows up before a release rather
+# than during one. Nothing here publishes anything.
 #
-# Dependencies install with the pins in scripts/binary-constraints.txt (regenerate it with
-# scripts/update_constraints.py). Artifacts lose file modes, so the Linux and macOS binaries are tar.gz archives that
-# keep the executable bit; the archive holds one file named `eyewall`. Windows ships the bare exe.
+# The matrix, the smoke test, the glibc check and the naming live in WPTK/release-workflows (build-binaries.yml); this
+# file only says how eyewall installs, builds and runs. Dependencies install with the pins in
+# scripts/binary-constraints.txt (regenerate it with scripts/update_constraints.py). Artifacts lose file modes, so the
+# Linux and macOS binaries are tar.gz archives that keep the executable bit; the archive holds one file named `eyewall`.
+# Windows ships the bare exe. The asset names carry no version.
 #
 #   eyewall-windows-x86_64.exe      windows-latest
 #   eyewall-linux-x86_64.tar.gz     ubuntu-latest, built inside python:3.12-bullseye so the glibc floor is 2.31
@@ -35,88 +37,22 @@ concurrency:
   group: binaries-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: "3.12"
-
 jobs:
+  # The two Linux builds run inside python:3.12-bullseye, pinned by digest (multi-arch index, checked 2026-10-31), so the
+  # binaries need only glibc 2.31. Bullseye is past Debian's LTS window, kept on purpose for that floor; move the pin
+  # deliberately, and update the glibc note in docs/development.md with it. macos-x86_64 is GitHub's last Intel image.
+  # tzdata is a Windows-only dependency of the package; a standalone binary may land on a minimal system with no zone
+  # files, so every binary bundles its own.
   binary:
-    name: Binary (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
-    # Empty for the jobs that run straight on the runner; GitHub treats '' as "no container".
-    container: ${{ matrix.container }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: windows-x86_64
-            os: windows-latest
-            asset: eyewall-windows-x86_64.exe
-            ext: .exe
-          # python:3.12-bullseye, pinned by digest (multi-arch index, checked 2026-10-31). Bullseye is past Debian's LTS
-          # window, kept on purpose for the glibc 2.31 floor; move the pin deliberately, and update the glibc note in docs/development.md with it.
-          - name: linux-x86_64
-            asset: eyewall-linux-x86_64.tar.gz
-            os: ubuntu-latest
-            container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
-          - name: linux-arm64
-            asset: eyewall-linux-arm64.tar.gz
-            os: ubuntu-24.04-arm
-            container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
-          - name: macos-arm64
-            asset: eyewall-macos-arm64.tar.gz
-            os: macos-latest
-          - name: macos-x86_64
-            asset: eyewall-macos-x86_64.tar.gz
-            os: macos-15-intel
-    env:
-      ASSET: ${{ matrix.asset }}
-      BUILT: dist/eyewall${{ matrix.ext }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: matrix.container == ''
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: scripts/binary-constraints.txt
-
-      # tzdata is a Windows-only dependency of the package; a standalone binary may land on a minimal system with no zone
-      # files, so every binary bundles its own.
-      - name: Install
-        shell: bash
-        run: python -m pip install -c scripts/binary-constraints.txt -e . tzdata textual-image "pyinstaller==$(cat scripts/pyinstaller-version.txt)"
-
-      - name: Build
-        shell: bash
-        run: python -m PyInstaller --noconfirm --clean --workpath .pyi-build eyewall.spec
-
-      - name: Run the binary's self-test
-        shell: bash
-        run: |
-          ls -la "$BUILT"
-          "./$BUILT" --version
-          "./$BUILT" --selftest || { echo "--selftest failed: the frozen app is missing something"; exit 1; }
-          "./$BUILT" --replay demo --headless --until +1h
-
-      # Artifacts drop the executable bit, so Linux and macOS ship a tar.gz, which keeps it. Windows ships the exe.
-      - name: Package the binary for its platform
-        shell: bash
-        run: |
-          if [ "${ASSET%.tar.gz}" = "$ASSET" ]; then
-            mv "$BUILT" "dist/$ASSET"
-          else
-            tar -C dist -czf "dist/$ASSET" eyewall
-            listing=$(tar -tvzf "dist/$ASSET")
-            echo "$listing"
-            case "$listing" in -rwx*) ;; *) echo "the archive lost the executable bit"; exit 1 ;; esac
-          fi
-          ls -la "dist/$ASSET"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: binary-${{ matrix.name }}
-          path: dist/${{ env.ASSET }}
-          if-no-files-found: error
-          retention-days: 7
+    name: Binary
+    uses: WPTK/release-workflows/.github/workflows/build-binaries.yml@48ad720b496558ebdf47c0a0529475b6bf3b4517 # v0.1.0
+    with:
+      app: eyewall
+      asset-prefix: eyewall
+      linux-container: python:3.12-bullseye@sha256:7cc929040c5e8cf6036c5099d62a83708427c131fb7a7c965b5ba51e995eea1c
+      install-command: python -m pip install -c scripts/binary-constraints.txt -e . tzdata textual-image "pyinstaller==$(cat scripts/pyinstaller-version.txt)"
+      build-command: python -m PyInstaller --noconfirm --clean --workpath .pyi-build eyewall.spec
+      smoke-command: |
+        "$BIN" --version
+        "$BIN" --selftest || { echo "--selftest failed: the frozen app is missing something"; exit 1; }
+        "$BIN" --replay demo --headless --until +1h

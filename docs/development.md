@@ -174,9 +174,16 @@ git push origin v0.1.0
 
 `release.yml` then checks that the tag, `__version__` and the changelog heading agree, builds the wheel and source
 distribution and the five standalone binaries (`binaries.yml`, which also runs on pull requests that touch the build and
-can be started by hand as a dry run), hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog
-section as its notes. The Linux and macOS binaries are built to ship as `.tar.gz` archives so they keep the executable
-bit. The binaries are built with the pins in `scripts/binary-constraints.txt`; refresh them with
+can be started by hand as a dry run), checks that exactly the seven expected files exist and the tag still points at the
+built commit, hashes them into `SHA256SUMS`, and creates the GitHub release using that changelog section as its notes
+(a draft, then the upload, then published; it refuses a tag that already has a release, so after a partial failure delete
+that release before re-running). Then it downloads what was published, checks it against `SHA256SUMS` and runs each
+binary on a runner of its own kind, and only after that uploads the wheel and sdist to PyPI. The binary build, the file-set
+check, the release and the published-files check are shared workflows from
+[WPTK/release-workflows](https://github.com/WPTK/release-workflows), pinned by commit SHA in `binaries.yml` and
+`release.yml`; to take a change, move the SHA in both together. The release has no build attestation. The Linux and macOS
+binaries are built to ship as `.tar.gz` archives so they keep the executable bit, and the asset names carry no version.
+The binaries are built with the pins in `scripts/binary-constraints.txt`; refresh them with
 `python scripts/update_constraints.py` (`--check` shows drift; Dependabot does not touch that file) before a release. The Linux x86_64 binary is built inside
 `python:3.12-bullseye` so it runs on glibc 2.31 or newer. `canary.yml` is a scheduled workflow, which GitHub disables
 after 60 days without repository activity; run it by hand to re-enable it. It runs daily and never on pull
