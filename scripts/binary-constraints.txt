@@ -17,7 +17,7 @@ numpy==2.5.4
 packaging==26.3
 pefile==2024.8.26
 pillow==13.0.0
-platformdirs==4.14.3
+platformdirs==4.14.5
 pygments==2.21.0
 pyinstaller-hooks-contrib==2026.9
 pyproj==3.8.0
