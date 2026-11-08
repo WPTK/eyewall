@@ -14,9 +14,10 @@ QUICKSTART = README.split("## Quickstart", 1)[1].split("\n## ", 1)[0]
 
 
 def built_assets() -> list[str]:
-    """The release files binaries.yml builds: the one list the docs must match."""
-    workflow = (ROOT / ".github" / "workflows" / "binaries.yml").read_text(encoding="utf-8")
-    return re.findall(r"^\s+asset: (\S+)$", workflow, re.MULTILINE)
+    """The binaries release.yml expects (its expected-files list): the one list the docs must match."""
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    names = re.findall(r"^\s+(eyewall-(?:windows|linux|macos)-\S+)$", workflow, re.MULTILINE)
+    return sorted(set(names))
 
 
 def test_install_doc_lists_every_built_asset() -> None:
